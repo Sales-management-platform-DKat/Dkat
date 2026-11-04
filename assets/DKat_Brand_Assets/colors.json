@@ -1,0 +1,22 @@
+{
+  "brand": "DKat",
+  "slogan": "Digital Key To All",
+  "modes": {
+    "light": {
+      "primary": "#3156CF",
+      "accent": "#FB923C",
+      "text": "#172138",
+      "tagline": "#64748B",
+      "background": "#F5F7FD",
+      "surface": "#FFFFFF"
+    },
+    "dark": {
+      "primary": "#26C7A7",
+      "accent": "#8BE5D0",
+      "text": "#F7FAFF",
+      "tagline": "#9AABBC",
+      "background": "#0B1422",
+      "surface": "#172638"
+    }
+  }
+}
