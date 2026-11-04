@@ -256,3 +256,17 @@ small,.small{font-size:14px}
   .variant-details>span:last-child{grid-column:span 2}
   .login form{padding:28px 20px}
 }
+
+.demo-role-form .field{font-size:15px}
+.demo-role-form .field select{min-height:54px;padding:12px 14px;font-size:16px}
+.demo-role-form .role-description{margin:4px 0 24px;padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.demo-role-form .role-description strong{font-size:16px}
+.demo-role-form .role-description p{margin-top:7px;color:var(--muted);font-size:14px;line-height:1.7}
+.demo-role-form .btn{width:100%;justify-content:space-between;font-size:15px}
+.demo-role-form .pill{margin-bottom:20px}
+@media(max-width:700px){
+  .demo-role-page>section{min-height:280px}
+  .demo-role-page>section .logo{margin-bottom:20px}
+  .demo-role-page h1{font-size:38px}
+  .demo-role-form{max-width:520px!important}
+}
