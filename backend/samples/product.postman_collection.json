@@ -1,0 +1,132 @@
+{
+  "info": {
+    "name": "DKat Product",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "productId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Product",
+      "item": [
+        {
+          "name": "OWNER tạo sản phẩm",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/products",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": 1,\n  \"name\": \"Sản phẩm kiểm thử\",\n  \"productCode\": \"TEST-{{$guid}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "pm.collectionVariables.set('productId', pm.response.json().productId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "OWNER sửa sản phẩm",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/products/{{productId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": 1,\n  \"name\": \"Sản phẩm đã sửa\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "OWNER ngừng kinh doanh",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/products/{{productId}}/status",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INACTIVE\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(200);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "EMPLOYEE hoặc MANAGER tạo sản phẩm (đổi DKAT_DEV_USER_ID trước)",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/products",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"categoryId\": 1,\n  \"name\": \"Sản phẩm kiểm thử\",\n  \"productCode\": \"TEST-{{$guid}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(403);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

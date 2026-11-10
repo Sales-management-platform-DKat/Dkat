@@ -1,0 +1,96 @@
+{
+  "info": {
+    "name": "DKat Category",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "categoryId",
+      "value": ""
+    },
+    {
+      "key": "expectedCreateStatus",
+      "value": "201"
+    }
+  ],
+  "item": [
+    {
+      "name": "Category",
+      "item": [
+        {
+          "name": "Danh sách đang hoạt động",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/categories?status=ACTIVE"
+          }
+        },
+        {
+          "name": "OWNER tạo danh mục hoặc EMPLOYEE nhận 403",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/categories",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Danh mục thử {{$guid}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(Number(pm.collectionVariables.get('expectedCreateStatus')));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set('categoryId', pm.response.json().categoryId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "OWNER sửa danh mục",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/categories/{{categoryId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Danh mục đã sửa {{$guid}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "OWNER ngừng danh mục",
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/categories/{{categoryId}}/status",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INACTIVE\"\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
