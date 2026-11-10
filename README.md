@@ -30,7 +30,8 @@ Mở URL Local mà Vite in ra. Dừng bằng Ctrl+C. Build production: `npm run 
 
 - `/`: landing page giới thiệu DKat, tính năng, luồng preorder, FAQ và CTA vào demo.
 - `/#/track/<token>`: kết quả và theo dõi đơn, lựa chọn nhận hàng khi đã thanh toán.
-- `/#/login`: form đăng nhập dành cho cửa hàng đã đăng ký DKat; cần kết nối backend xác thực.
+- `/#/login`: đăng nhập qua API FastAPI; chủ cửa hàng dùng tên gốc, quản lý thêm `:manager`, nhân viên thêm `:staff`.
+- `/#/platform-admin`: màn hình quản trị hệ thống cấp tài khoản chủ cửa hàng và thời hạn gói đăng ký.
 - `/#/admin/dashboard`, products, inventory, pos, orders, preorders, customers, employees, reports, branches, notifications, settings.
 - Bản demo vào thẳng màn quản trị, không cần tên đăng nhập hoặc mật khẩu.
 - Các form CRUD, nhập/xuất/kiểm kê, chi tiết giao dịch và hủy/hoàn dùng dialog.
@@ -44,6 +45,23 @@ Mở URL Local mà Vite in ra. Dừng bằng Ctrl+C. Build production: `npm run 
 5. Trong POS, thêm sản phẩm còn hàng, ghi nhận phương thức thanh toán và kiểm tra lịch sử đơn.
 6. Báo cáo theo dõi doanh thu và khoản trả trước chưa giao riêng biệt.
 
+## Backend FastAPI: cấp tài khoản và đăng nhập
+
+Backend tự đọc `backend/.env` và dùng kết nối TiDB/MySQL được cấu hình ở đó (TLS xác minh chứng chỉ). File này không được commit; `.env.example` chỉ chứa giá trị mẫu. Nếu không cấu hình `DB_HOST`, backend dùng SQLite cục bộ làm phương án dự phòng. Đảm bảo `DKAT_ADMIN_TOKEN` trong `.env` là chuỗi ngẫu nhiên đủ mạnh, sau đó cài và chạy:
+
+```powershell
+python -m pip install -r requirements.txt
+uvicorn app.main:app --reload
+```
+
+Mã quản trị phải dài ít nhất 32 ký tự. Tạo mã mới bằng `python -c "import secrets; print(secrets.token_urlsafe(48))"` rồi lưu vào `DKAT_ADMIN_TOKEN` trong `backend/.env`. Mở `/#/platform-admin` trong frontend, nhập mã đó, rồi tạo cửa hàng, chọn gói và thời hạn, cấp tên đăng nhập cùng mật khẩu ban đầu cho chủ doanh nghiệp. Mã quản trị chỉ được gửi tới API và không lưu trong trình duyệt. Mật khẩu tài khoản được băm PBKDF2; API không trả lại mật khẩu. Gửi mật khẩu khởi tạo cho chủ doanh nghiệp qua kênh riêng an toàn.
+
+Backend ánh xạ cửa hàng và người dùng vào các bảng `stores` và `users` đã có trong DB; khi khởi động, chỉ tạo thêm `store_subscriptions` và `auth_sessions` nếu chúng chưa tồn tại. Không xóa hay ghi đè các bảng nghiệp vụ hiện có.
+
+Đăng nhập tại `/#/login`. Tài khoản không có hậu tố được xác thực với vai trò chủ cửa hàng; hậu tố `:manager` và `:staff` lần lượt chọn tài khoản quản lý và nhân viên. Tên đăng nhập là duy nhất; mỗi nhân sự có tên đăng nhập và mật khẩu riêng. Chủ cửa hàng có thể cấp tài khoản nhân sự qua `POST /api/v1/users` bằng bearer token. API kiểm tra vai trò, trạng thái tài khoản và thời hạn gói trên server. Bảng quyền giao diện hiện tại: chủ cửa hàng có toàn quyền; quản lý không vào Chi nhánh/Cài đặt; nhân viên chỉ vào Sản phẩm, Kho, POS, Đơn bán, Đặt trước, Khách hàng và Thông báo.
+
+Tạo/ghi dữ liệu nghiệp vụ của các màn hình bán hàng hiện vẫn là demo lưu trong localStorage; cần tích hợp các API nghiệp vụ tương ứng trước khi dùng dữ liệu khách hàng thực tế. Có thể đặt `DKAT_DATABASE_URL` để dùng SQLite hoặc database khác; luôn dùng HTTPS và giới hạn quyền truy cập mã quản trị.
+
 ## Phân chia mã nguồn
 
 - `src/main.jsx`: màn hình, reusable UI và dialog. Các feature nằm trong các hàm có tên để nhóm dễ tách ra thư mục features sau khi chốt UI.
@@ -56,7 +74,7 @@ Mở URL Local mà Vite in ra. Dừng bằng Ctrl+C. Build production: `npm run 
 
 ## Giới hạn cần biết trước khi nối backend
 
-- Backend xác thực chưa được kết nối. Form đăng nhập cửa hàng chỉ là giao diện; bản demo vào thẳng quản trị và phân quyền chỉ mô phỏng trên trình duyệt.
+- API FastAPI đã hỗ trợ cấp tài khoản, đăng nhập, phiên bearer và phân quyền theo vai trò. Các màn hình nghiệp vụ vẫn là bản demo localStorage và chưa được kết nối API.
 - Không gửi SMS/email hoặc xác minh ngân hàng, không hỗ trợ thao tác nhiều nhân viên đồng thời. Chống tranh chấp phải triển khai ở backend transaction.
 - Link preorder chỉ hoạt động trên trình duyệt đã tạo dữ liệu demo. Token thật phải lưu hash và được xác minh tại server.
 - UI sản phẩm hiển thị biến thể theo từng dòng SKU; backend cần nối products/product_variants/attributes thay cho danh sách phẳng này.
@@ -67,4 +85,4 @@ Mở URL Local mà Vite in ra. Dừng bằng Ctrl+C. Build production: `npm run 
 
 ## Kiểm tra
 
-`npm test` và `npm run build`. Đã kiểm tra trình duyệt landing, login, Dashboard và POS trong môi trường phát triển. Cần test API/E2E lại khi tích hợp backend thật.
+Frontend: `npm test` và `npm run build`. Backend (từ thư mục `backend`): `python -m unittest discover -s tests -v`. Cần test API nghiệp vụ/E2E lại khi tích hợp các màn hình bán hàng với backend.
