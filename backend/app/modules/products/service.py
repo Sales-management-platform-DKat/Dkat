@@ -5,29 +5,56 @@ from sqlalchemy.exc import IntegrityError
 from app.modules.products.category_service import get_category, lock_store
 from app.modules.products.catalog_transaction import CatalogConflict, CatalogNotFound
 from app.modules.products.schemas import (
-    Product, ProductCreate, ProductInput, ProductRecord, ProductStatus, ProductVariant,
+    Product, ProductCreate, ProductDetail, ProductInput, ProductRecord, ProductSort,
+    ProductStatus, ProductVariant, VariantAttribute, VariantDetail,
 )
+
+PRODUCT_ORDER = {
+    "id": "p.product_id ASC",
+    "-id": "p.product_id DESC",
+    "name": "p.name ASC, p.product_id ASC",
+    "-name": "p.name DESC, p.product_id ASC",
+    "createdAt": "p.created_at ASC, p.product_id ASC",
+    "-createdAt": "p.created_at DESC, p.product_id ASC",
+}
 
 
 def list_products(
-    connection: Connection, store_id: int, limit: int, offset: int
+    connection: Connection, store_id: int, limit: int, offset: int, *,
+    keyword: str | None = None, category_id: int | None = None,
+    status: ProductStatus = "ACTIVE", sort: ProductSort = "id",
 ) -> list[Product]:
+    term = (keyword or "").strip()
+    pattern = "%" + term.replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%"
+    order = PRODUCT_ORDER[sort]
     rows = connection.execute(
-        text("""
+        text(f"""
             SELECT p.product_id, p.category_id, p.product_code, p.name,
                    v.variant_id, v.sku, v.variant_name, v.price
             FROM (
-                SELECT product_id, category_id, product_code, name
-                FROM products
-                WHERE store_id = :store_id AND status = 'ACTIVE'
-                ORDER BY product_id
+                SELECT p.product_id, p.category_id, p.product_code, p.name, p.created_at
+                FROM products AS p
+                WHERE p.store_id = :store_id AND p.status = :status
+                  AND (:category_id IS NULL OR p.category_id = :category_id)
+                  AND (:pattern IS NULL
+                    OR p.name LIKE :pattern ESCAPE '!'
+                    OR p.product_code LIKE :pattern ESCAPE '!'
+                    OR EXISTS (
+                        SELECT 1 FROM product_variants AS matched
+                        WHERE matched.product_id = p.product_id
+                          AND matched.sku LIKE :pattern ESCAPE '!'
+                    ))
+                ORDER BY {order}
                 LIMIT :limit OFFSET :offset
             ) AS p
             LEFT JOIN product_variants AS v
                 ON v.product_id = p.product_id AND v.status = 'ACTIVE'
-            ORDER BY p.product_id, v.variant_id
+            ORDER BY {order}, v.variant_id
         """),
-        {"store_id": store_id, "limit": limit, "offset": offset},
+        {
+            "store_id": store_id, "limit": limit, "offset": offset, "status": status,
+            "category_id": category_id, "pattern": pattern if term else None,
+        },
     ).mappings()
 
     products: dict[int, Product] = {}
@@ -65,6 +92,32 @@ def get_product_record(db: Connection, store_id: int, product_id: int) -> Produc
     if row is None:
         raise CatalogNotFound("Product not found")
     return ProductRecord.model_validate(row)
+
+
+def get_product_detail(db: Connection, store_id: int, product_id: int) -> ProductDetail:
+    product = get_product_record(db, store_id, product_id)
+    rows = db.execute(
+        text("""
+            SELECT v.variant_id, v.sku, v.variant_name, v.price, v.barcode, v.status,
+                   a.attribute_id, a.name, a.data_type, av.value
+            FROM product_variants AS v
+            JOIN products AS p ON p.product_id = v.product_id AND p.store_id = :store
+            LEFT JOIN variant_attribute_values AS av ON av.variant_id = v.variant_id
+            LEFT JOIN attributes AS a ON a.attribute_id = av.attribute_id AND a.store_id = :store
+            WHERE v.product_id = :id
+            ORDER BY v.variant_id, a.attribute_id
+        """),
+        {"id": product_id, "store": store_id},
+    ).mappings()
+    variants: dict[int, VariantDetail] = {}
+    for row in rows:
+        variant = variants.get(row["variant_id"])
+        if variant is None:
+            variant = VariantDetail.model_validate(row)
+            variants[variant.variant_id] = variant
+        if row["attribute_id"] is not None:
+            variant.attributes.append(VariantAttribute.model_validate(row))
+    return ProductDetail(**product.model_dump(), variants=list(variants.values()))
 
 
 def create_product(db: Connection, store_id: int, user_id: int, data: ProductCreate) -> ProductRecord:

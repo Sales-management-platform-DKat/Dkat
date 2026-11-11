@@ -67,7 +67,9 @@ def save_category(
     duplicate = db.execute(
         text("""
             SELECT 1 FROM categories
-            WHERE store_id = :store AND parent_category_id <=> :parent AND name = :name
+            WHERE store_id = :store
+              AND (parent_category_id = :parent OR (parent_category_id IS NULL AND :parent IS NULL))
+              AND name = :name
               AND (:id IS NULL OR category_id <> :id)
             LIMIT 1
         """),

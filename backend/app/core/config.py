@@ -5,6 +5,14 @@ from dotenv import load_dotenv
 from sqlalchemy import URL
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+ADMIN_TOKEN = os.getenv("DKAT_ADMIN_TOKEN", "")
+CORS_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "DKAT_CORS_ORIGINS", "http://127.0.0.1:5173,http://localhost:5173"
+    ).split(",")
+    if origin.strip()
+]
 
 
 def database_url() -> URL:

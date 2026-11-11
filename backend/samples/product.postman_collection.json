@@ -11,6 +11,10 @@
     {
       "key": "productId",
       "value": ""
+    },
+    {
+      "key": "accessToken",
+      "value": ""
     }
   ],
   "item": [
@@ -100,7 +104,7 @@
           ]
         },
         {
-          "name": "EMPLOYEE hoặc MANAGER tạo sản phẩm (đổi DKAT_DEV_USER_ID trước)",
+          "name": "EMPLOYEE hoặc MANAGER tạo sản phẩm (đổi accessToken trước)",
           "request": {
             "method": "POST",
             "url": "{{baseUrl}}/products",
@@ -128,5 +132,15 @@
         }
       ]
     }
-  ]
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  }
 }

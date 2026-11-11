@@ -1,12 +1,53 @@
-import os
+from datetime import timezone
 from dataclasses import dataclass
-from typing import Annotated
 
-from fastapi import Depends, HTTPException, Request
-from sqlalchemy import text
-from sqlalchemy.exc import SQLAlchemyError
+from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from app.db.session import engine
+from app.core.security import hash_access_token
+from app.db.session import get_db
+from app.modules.auth.models import AuthSession, User
+from app.modules.auth.service import subscription_is_active, utcnow
+
+
+bearer_scheme = HTTPBearer(auto_error=False)
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    if credentials is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Vui lòng đăng nhập.")
+
+    session = db.scalar(
+        select(AuthSession).where(
+            AuthSession.token_hash == hash_access_token(credentials.credentials),
+            AuthSession.revoked.is_(False),
+        )
+    )
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Phiên đăng nhập không hợp lệ.")
+
+    expires_at = session.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    user = session.user
+    if expires_at <= utcnow() or user.status != "ACTIVE" or not subscription_is_active(user.shop):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Phiên đăng nhập đã hết hạn.")
+    return user
+
+
+def require_roles(*roles: str):
+    def dependency(user: User = Depends(get_current_user)) -> User:
+        role = {"OWNER": "owner", "MANAGER": "manager", "EMPLOYEE": "staff"}[user.role]
+        if role not in roles:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bạn không có quyền thực hiện thao tác này.")
+        return user
+
+    return dependency
 
 
 @dataclass(frozen=True)
@@ -16,33 +57,9 @@ class Actor:
     user_id: int
 
 
-def require_auth(request: Request) -> Actor:
-    # Local development adapter. Replace with the team's authenticated principal.
-    user_id = os.getenv("DKAT_DEV_USER_ID", "")
-    if (
-        request.client is None
-        or request.client.host not in {"127.0.0.1", "::1"}
-        or not user_id.isascii()
-        or not user_id.isdecimal()
-        or len(user_id) > 19
-        or not 0 < int(user_id) <= 9223372036854775807
-    ):
-        raise HTTPException(401, "Authentication required")
-
-    try:
-        with engine.connect() as db:
-            user = db.execute(
-                text("SELECT store_id, role FROM users WHERE user_id = :id AND status = 'ACTIVE'"),
-                {"id": int(user_id)},
-            ).mappings().one_or_none()
-    except SQLAlchemyError:
-        raise HTTPException(503, "Database unavailable") from None
-    if user is None:
-        raise HTTPException(401, "Authentication required")
-    return Actor(user["store_id"], user["role"], int(user_id))
+def require_auth(user: User = Depends(get_current_user)) -> Actor:
+    return Actor(store_id=user.shop_id, role=user.role, user_id=user.id)
 
 
-def require_owner(actor: Annotated[Actor, Depends(require_auth)]) -> Actor:
-    if actor.role != "OWNER":
-        raise HTTPException(403, "OWNER role required")
-    return actor
+def require_owner(user: User = Depends(require_roles("owner"))) -> Actor:
+    return Actor(store_id=user.shop_id, role=user.role, user_id=user.id)

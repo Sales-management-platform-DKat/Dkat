@@ -1,41 +1,46 @@
-import logging
-import os
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.exc import SQLAlchemyError
+from fastapi import APIRouter, Depends, Query
 
-from app.core.permissions import Actor, require_owner
-from app.db.session import engine
+from app.core.permissions import Actor, require_auth, require_owner
 from app.modules.products import service
 from app.modules.products.catalog_transaction import catalog_transaction
 from app.modules.products.schemas import (
-    Product, ProductCreate, ProductId, ProductInput, ProductRecord, ProductStatusInput,
+    Product, ProductCreate, ProductDetail, ProductId, ProductInput, ProductRecord,
+    ProductSort, ProductStatus, ProductStatusInput,
 )
 
-logger = logging.getLogger(__name__)
 router = APIRouter(tags=["products"])
 Owner = Annotated[Actor, Depends(require_owner)]
+Reader = Annotated[Actor, Depends(require_auth)]
 
 
 @router.get("/products", response_model=list[Product])
 def get_products(
+    actor: Reader,
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0, le=2147483647),
+    keyword: str | None = Query(default=None, max_length=200),
+    category_id: ProductId | None = Query(default=None, alias="categoryId"),
+    status: ProductStatus = "ACTIVE",
+    page: int | None = Query(default=None, ge=1, le=21474836),
+    size: int | None = Query(default=None, ge=1, le=100),
+    sort: ProductSort = "id",
 ) -> list[Product]:
-    try:
-        store_id = int(os.getenv("DKAT_DEV_STORE_ID", "0"))
-    except ValueError:
-        store_id = 0
-    if store_id <= 0:
-        raise HTTPException(status_code=503, detail="Dev store is not configured")
+    if page is not None or size is not None:
+        limit = size or 50
+        offset = ((page or 1) - 1) * limit
+    with catalog_transaction() as db:
+        return service.list_products(
+            db, actor.store_id, limit, offset,
+            keyword=keyword, category_id=category_id, status=status, sort=sort,
+        )
 
-    try:
-        with engine.connect() as connection:
-            return service.list_products(connection, store_id, limit, offset)
-    except SQLAlchemyError:
-        logger.warning("Product query failed")
-        raise HTTPException(status_code=503, detail="Database unavailable") from None
+
+@router.get("/products/{product_id}")
+def get_product(product_id: ProductId, actor: Reader) -> ProductDetail:
+    with catalog_transaction() as db:
+        return service.get_product_detail(db, actor.store_id, product_id)
 
 
 @router.post("/products", status_code=201)
