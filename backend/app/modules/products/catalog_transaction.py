@@ -14,6 +14,10 @@ class CatalogConflict(Exception):
     pass
 
 
+class CatalogInvalid(Exception):
+    pass
+
+
 @contextmanager
 def catalog_transaction():
     try:
@@ -23,5 +27,7 @@ def catalog_transaction():
         raise HTTPException(404, str(error)) from None
     except CatalogConflict as error:
         raise HTTPException(409, str(error)) from None
+    except CatalogInvalid as error:
+        raise HTTPException(422, str(error)) from None
     except SQLAlchemyError:
         raise HTTPException(503, "Database unavailable") from None

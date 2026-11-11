@@ -22,17 +22,19 @@ class Product(BaseModel):
 ProductId = Annotated[int, Field(gt=0, le=9223372036854775807)]
 ProductStatus = Literal["ACTIVE", "INACTIVE"]
 ProductSort = Literal["id", "-id", "name", "-name", "createdAt", "-createdAt"]
+AttributeDataType = Literal["TEXT", "NUMBER", "BOOLEAN"]
 
 
 class VariantAttribute(BaseModel):
     attribute_id: int
     name: str
-    data_type: Literal["TEXT", "NUMBER", "BOOLEAN"]
+    data_type: AttributeDataType
     value: str
 
 
 class VariantDetail(ProductVariant):
     barcode: str | None
+    cost_price: Decimal | None
     status: ProductStatus
     attributes: list[VariantAttribute] = Field(default_factory=list)
 

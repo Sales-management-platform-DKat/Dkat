@@ -41,3 +41,26 @@ Postman collection nằm trong samples. Điền biến accessToken bằng token 
 ```
 
 Các test dùng SQLite trong bộ nhớ. Khóa SELECT FOR UPDATE được giả lập trong test danh mục/sản phẩm. Cần kiểm tra migration, quyền MySQL và thao tác đồng thời trên MySQL đích.
+
+## Thử API biến thể và thuộc tính PBI 56
+
+1. Nếu backend dùng tài khoản MySQL `dkat_app`, chạy các lệnh sau trong Workbench bằng kết nối quản trị. Quyền đọc schema và quyền khóa dòng `stores` dùng lại từ phần thiết lập backend.
+
+   ```sql
+   GRANT INSERT ON dkat.attributes TO 'dkat_app'@'127.0.0.1';
+   GRANT INSERT, UPDATE ON dkat.product_variants TO 'dkat_app'@'127.0.0.1';
+   GRANT INSERT, DELETE ON dkat.variant_attribute_values TO 'dkat_app'@'127.0.0.1';
+   GRANT INSERT ON dkat.inventory TO 'dkat_app'@'127.0.0.1';
+   ```
+
+2. Đăng nhập OWNER. Import `samples/variant.postman_collection.json`, điền `accessToken` và `productId` của sản phẩm thuộc cửa hàng đó, rồi chạy thư mục Variant. Bạn cũng có thể dùng Swagger. OWNER được tạo thuộc tính và ghi biến thể. MANAGER và EMPLOYEE xem thuộc tính và chi tiết sản phẩm trong cửa hàng của mình.
+3. Sau request tạo biến thể, lấy `variant_id` trả về và kiểm tra tồn kho khi cửa hàng có chi nhánh ACTIVE.
+
+   ```sql
+   SELECT b.branch_id, b.branch_code, i.quantity
+   FROM dkat.inventory AS i
+   JOIN dkat.branches AS b ON b.branch_id = i.branch_id
+   WHERE i.variant_id = 123; -- Thay 123 bằng variant_id vừa tạo.
+   ```
+
+Mỗi chi nhánh ACTIVE thuộc cửa hàng có một dòng với `quantity = 0`. POST nhận `sku` nhập tay. PUT giữ SKU cũ nếu bỏ qua `sku` và thay toàn bộ danh sách thuộc tính theo `attributes`. Gửi `[]` hoặc bỏ qua `attributes` để xóa các giá trị cũ. TEXT nhận chuỗi có nội dung, NUMBER nhận số hoặc chuỗi số, BOOLEAN nhận boolean hoặc chuỗi true/false. SKU trùng trả HTTP 409 với `{"detail":"DUPLICATE_SKU"}`.

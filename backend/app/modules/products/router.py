@@ -3,12 +3,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Query
 
 from app.core.permissions import Actor, require_auth, require_owner
-from app.modules.products import service
+from app.modules.products import service, variant_service
 from app.modules.products.catalog_transaction import catalog_transaction
 from app.modules.products.schemas import (
     Product, ProductCreate, ProductDetail, ProductId, ProductInput, ProductRecord,
-    ProductSort, ProductStatus, ProductStatusInput,
+    ProductSort, ProductStatus, ProductStatusInput, VariantDetail,
 )
+from app.modules.products.variant_schemas import AttributeInput, AttributeRecord, VariantCreate, VariantInput
 
 router = APIRouter(tags=["products"])
 Owner = Annotated[Actor, Depends(require_owner)]
@@ -59,3 +60,33 @@ def update_product(product_id: ProductId, data: ProductInput, actor: Owner) -> P
 def update_product_status(product_id: ProductId, data: ProductStatusInput, actor: Owner) -> ProductRecord:
     with catalog_transaction() as db:
         return service.change_product_status(db, actor.store_id, product_id, data.status)
+
+
+@router.get("/attributes")
+def get_attributes(actor: Reader) -> list[AttributeRecord]:
+    with catalog_transaction() as db:
+        return variant_service.list_attributes(db, actor.store_id)
+
+
+@router.post("/attributes", status_code=201)
+def create_attribute(data: AttributeInput, actor: Owner) -> AttributeRecord:
+    with catalog_transaction() as db:
+        return variant_service.create_attribute(db, actor.store_id, data)
+
+
+@router.post("/products/{product_id}/variants", status_code=201)
+def create_variant(product_id: ProductId, data: VariantCreate, actor: Owner) -> VariantDetail:
+    with catalog_transaction() as db:
+        return variant_service.save_variant(db, actor.store_id, data, product_id=product_id)
+
+
+@router.put("/variants/{variant_id}")
+def update_variant(variant_id: ProductId, data: VariantInput, actor: Owner) -> VariantDetail:
+    with catalog_transaction() as db:
+        return variant_service.save_variant(db, actor.store_id, data, variant_id=variant_id)
+
+
+@router.patch("/variants/{variant_id}/status")
+def update_variant_status(variant_id: ProductId, data: ProductStatusInput, actor: Owner) -> VariantDetail:
+    with catalog_transaction() as db:
+        return variant_service.change_variant_status(db, actor.store_id, variant_id, data.status)

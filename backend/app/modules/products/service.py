@@ -6,8 +6,9 @@ from app.modules.products.category_service import get_category, lock_store
 from app.modules.products.catalog_transaction import CatalogConflict, CatalogNotFound
 from app.modules.products.schemas import (
     Product, ProductCreate, ProductDetail, ProductInput, ProductRecord, ProductSort,
-    ProductStatus, ProductVariant, VariantAttribute, VariantDetail,
+    ProductStatus, ProductVariant,
 )
+from app.modules.products.variant_service import list_variant_details
 
 PRODUCT_ORDER = {
     "id": "p.product_id ASC",
@@ -96,28 +97,7 @@ def get_product_record(db: Connection, store_id: int, product_id: int) -> Produc
 
 def get_product_detail(db: Connection, store_id: int, product_id: int) -> ProductDetail:
     product = get_product_record(db, store_id, product_id)
-    rows = db.execute(
-        text("""
-            SELECT v.variant_id, v.sku, v.variant_name, v.price, v.barcode, v.status,
-                   a.attribute_id, a.name, a.data_type, av.value
-            FROM product_variants AS v
-            JOIN products AS p ON p.product_id = v.product_id AND p.store_id = :store
-            LEFT JOIN variant_attribute_values AS av ON av.variant_id = v.variant_id
-            LEFT JOIN attributes AS a ON a.attribute_id = av.attribute_id AND a.store_id = :store
-            WHERE v.product_id = :id
-            ORDER BY v.variant_id, a.attribute_id
-        """),
-        {"id": product_id, "store": store_id},
-    ).mappings()
-    variants: dict[int, VariantDetail] = {}
-    for row in rows:
-        variant = variants.get(row["variant_id"])
-        if variant is None:
-            variant = VariantDetail.model_validate(row)
-            variants[variant.variant_id] = variant
-        if row["attribute_id"] is not None:
-            variant.attributes.append(VariantAttribute.model_validate(row))
-    return ProductDetail(**product.model_dump(), variants=list(variants.values()))
+    return ProductDetail(**product.model_dump(), variants=list_variant_details(db, store_id, product_id))
 
 
 def create_product(db: Connection, store_id: int, user_id: int, data: ProductCreate) -> ProductRecord:
