@@ -1,48 +1,57 @@
-from datetime import datetime
-from typing import Literal
+"""Request/response schemas for /auth (JSON uses camelCase)."""
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic.alias_generators import to_camel
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
-from typing_extensions import Annotated
+from app.core.security import BCRYPT_MAX_BYTES
 
-
-Username = Annotated[
-    str,
-    StringConstraints(
-        min_length=3,
-        max_length=32,
-        pattern=r"^[a-zA-Z0-9._-]+$",
-        strip_whitespace=True,
-    ),
-]
+MIN_PASSWORD_LENGTH = 8
 
 
-class LoginRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=40)
-    password: str = Field(min_length=1, max_length=256)
+class CamelModel(BaseModel):
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
 
-class UserCreate(BaseModel):
-    username: Username
-    full_name: str = Field(min_length=1, max_length=120, strip_whitespace=True)
-    password: str = Field(min_length=12, max_length=128)
-    role: Literal["manager", "staff"]
+class LoginIn(BaseModel):
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=200)
+
+    @field_validator("username")
+    @classmethod
+    def strip_username(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("Username must not be blank")
+        return v
 
 
-class UserInfo(BaseModel):
-    model_config = ConfigDict(from_attributes=True)
+class ChangePasswordIn(CamelModel):
+    old_password: str = Field(min_length=1, max_length=200)
+    new_password: str = Field(min_length=MIN_PASSWORD_LENGTH, max_length=BCRYPT_MAX_BYTES)
 
+    @field_validator("new_password")
+    @classmethod
+    def check_bcrypt_limit(cls, v: str) -> str:
+        if len(v.encode("utf-8")) > BCRYPT_MAX_BYTES:
+            raise ValueError(f"Password must be at most {BCRYPT_MAX_BYTES} bytes")
+        return v
+
+
+class BranchBrief(CamelModel):
     id: int
-    shop_id: int
-    username: str
+    name: str
+
+
+class AuthUserOut(CamelModel):
+    id: int
     full_name: str
-    role: Literal["owner", "manager", "staff"]
-    shop_name: str
-    plan: str
-    subscription_expires_at: datetime
+    username: str
+    role: str
+    store_id: int
+    branches: list[BranchBrief]
 
 
-class LoginResponse(BaseModel):
-    access_token: str
-    token_type: Literal["bearer"] = "bearer"
-    expires_at: datetime
-    user: UserInfo
+class LoginOut(CamelModel):
+    token: str
+    token_type: str = "Bearer"
+    expires_in: int  # seconds
+    user: AuthUserOut

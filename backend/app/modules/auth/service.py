@@ -1,118 +1,88 @@
-from datetime import datetime, timedelta, timezone
-from uuid import uuid4
+"""Login, current user, logout, change password (FR-01.1, FR-01.2, FR-01.5)."""
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from app.core.config import settings
+from app.core.exceptions import AppError
+from app.core.permissions import CurrentUser
+from app.core.security import create_access_token, hash_password, verify_password
+from app.db.session import transaction
+from app.modules.auth import repository
+from app.modules.auth.schemas import AuthUserOut, BranchBrief, ChangePasswordIn, LoginIn, LoginOut
+from app.modules.users.models import User
+from app.utils.logger import get_logger
 
-from app.core.security import (
-    create_access_token,
-    hash_password,
-    verify_password,
-)
-from app.modules.auth.models import AuthSession, Shop, StoreSubscription, User
+logger = get_logger("app.auth")
 
-
-SESSION_DURATION = timedelta(hours=12)
-STORAGE_ROLES = {"owner": "OWNER", "manager": "MANAGER", "staff": "EMPLOYEE"}
-
-
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+# Same message for "unknown username" and "wrong password": never reveal which one was wrong
+INVALID_CREDENTIALS_MESSAGE = "Tên đăng nhập hoặc mật khẩu không đúng"
 
 
-def subscription_is_active(shop: Shop, now: datetime | None = None) -> bool:
-    subscription = shop.subscriptions[-1] if shop.subscriptions else None
-    if subscription is None or subscription.status != "ACTIVE":
-        return False
-    expires_at = subscription.subscription_expires_at
-    current_time = now or utcnow()
-    if expires_at.tzinfo is None:
-        return expires_at > current_time.replace(tzinfo=None)
-    if current_time.tzinfo is None:
-        current_time = current_time.replace(tzinfo=timezone.utc)
-    return expires_at > current_time
-
-
-def parse_login_name(value: str) -> tuple[str, str]:
-    parts = value.strip().split(":")
-    if len(parts) == 1:
-        username, role = parts[0], "owner"
-    elif len(parts) == 2:
-        username, suffix = parts
-        role = {"manager": "manager", "staff": "staff"}.get(suffix.casefold(), "")
-    else:
-        return "", ""
-    return username.casefold(), role
-
-
-def user_info(user: User) -> dict:
-    subscription = user.shop.subscriptions[-1] if user.shop.subscriptions else None
-    if subscription is None:
-        raise ValueError("Tài khoản chưa có gói đăng ký.")
-    return {
-        "id": user.id,
-        "shop_id": user.shop_id,
-        "username": user.username,
-        "full_name": user.full_name,
-        "role": {value: key for key, value in STORAGE_ROLES.items()}[user.role],
-        "shop_name": user.shop.name,
-        "plan": subscription.plan,
-        "subscription_expires_at": subscription.subscription_expires_at,
-    }
-
-
-def create_user(
-    db: Session,
-    *,
-    shop: Shop,
-    username: str,
-    full_name: str,
-    password: str,
-    role: str,
-) -> User:
-    user = User(
-        shop_id=shop.id,
-        full_name=full_name.strip(),
-        username=username.strip(),
-        email=None,
-        phone=None,
-        password_hash=hash_password(password),
-        role=STORAGE_ROLES[role],
-        status="ACTIVE",
-        created_at=utcnow(),
+async def _build_user_out(db: AsyncSession, user: User) -> AuthUserOut:
+    branches = await repository.list_user_branches(db, user)
+    return AuthUserOut(
+        id=user.user_id,
+        full_name=user.full_name,
+        username=user.username,
+        role=user.role,
+        store_id=user.store_id,
+        branches=[BranchBrief(id=b.branch_id, name=b.name) for b in branches],
     )
-    db.add(user)
-    return user
 
 
-def authenticate(db: Session, username: str, password: str):
-    normalized_username, role = parse_login_name(username)
-    user = db.scalar(
-        select(User).where(
-            User.username == normalized_username,
-            User.role == STORAGE_ROLES.get(role, ""),
-        )
-    ) if normalized_username and role else None
-    if (
-        user is None
-        or user.status != "ACTIVE"
-        or not subscription_is_active(user.shop)
-        or not verify_password(password, user.password_hash)
-    ):
-        return None
+async def login(db: AsyncSession, body: LoginIn, client_ip: str | None) -> LoginOut:
+    user = await repository.get_user_by_username(db, body.username)
 
-    token, token_hash = create_access_token()
-    expires_at = utcnow() + SESSION_DURATION
-    if expires_at.tzinfo is not None:
-        expires_at = expires_at.replace(tzinfo=None)
-    db.add(
-        AuthSession(
-            id=str(uuid4()),
-            user_id=user.id,
-            token_hash=token_hash,
-            expires_at=expires_at,
-            revoked=False,
-        )
+    # Always run bcrypt (dummy hash if user missing) so timing does not reveal valid usernames
+    password_ok = await verify_password(body.password, user.password_hash if user else None)
+    if not password_ok:
+        reason = "unknown_username" if user is None else "wrong_password"
+        logger.warning("LOGIN_FAILED username=%r ip=%s reason=%s", body.username, client_ip, reason)
+        raise AppError(401, "INVALID_CREDENTIALS", INVALID_CREDENTIALS_MESSAGE)
+
+    # Lock status is only revealed to someone who already knows the correct password
+    if user.status == "LOCKED":
+        logger.warning("LOGIN_FAILED username=%r ip=%s reason=account_locked", body.username, client_ip)
+        raise AppError(403, "ACCOUNT_LOCKED", "Tài khoản đã bị khóa. Vui lòng liên hệ quản lý cửa hàng")
+
+    user_out = await _build_user_out(db, user)
+    token = create_access_token(
+        user_id=user.user_id,
+        role=user.role,
+        store_id=user.store_id,
+        branch_ids=[b.id for b in user_out.branches],
     )
-    db.commit()
-    return {"access_token": token, "expires_at": expires_at, "user": user_info(user)}
+    logger.info("LOGIN_OK user_id=%s username=%r ip=%s", user.user_id, user.username, client_ip)
+    return LoginOut(token=token, expires_in=settings.JWT_EXPIRE_HOURS * 3600, user=user_out)
+
+
+async def get_me(db: AsyncSession, current: CurrentUser) -> AuthUserOut:
+    user = await repository.get_user_by_id(db, current.id)
+    if user is None:  # deleted between require_auth and here
+        raise AppError.unauthorized("Phiên đăng nhập không hợp lệ")
+    return await _build_user_out(db, user)
+
+
+def logout(current: CurrentUser, client_ip: str | None) -> None:
+    # JWT is stateless: the client deletes the token. We only record the event.
+    logger.info("LOGOUT user_id=%s ip=%s", current.id, client_ip)
+
+
+async def change_password(db: AsyncSession, current: CurrentUser, body: ChangePasswordIn, client_ip: str | None) -> None:
+    user = await repository.get_user_by_id(db, current.id)
+    if user is None:
+        raise AppError.unauthorized("Phiên đăng nhập không hợp lệ")
+
+    # 400 (not 401) so the frontend does not treat it as an expired session
+    if not await verify_password(body.old_password, user.password_hash):
+        logger.warning("CHANGE_PASSWORD_FAILED user_id=%s ip=%s reason=wrong_old_password", user.user_id, client_ip)
+        raise AppError(400, "INVALID_OLD_PASSWORD", "Mật khẩu hiện tại không đúng")
+    if body.new_password == body.old_password:
+        raise AppError.validation(
+            "Mật khẩu mới phải khác mật khẩu hiện tại",
+            [{"field": "newPassword", "message": "Must differ from oldPassword", "type": "same_as_old"}],
+        )
+
+    new_hash = await hash_password(body.new_password)
+    async with transaction(db):
+        await repository.update_password_hash(db, user.user_id, new_hash)
+    logger.info("CHANGE_PASSWORD_OK user_id=%s ip=%s", user.user_id, client_ip)

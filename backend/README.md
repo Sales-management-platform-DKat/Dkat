@@ -1,0 +1,103 @@
+# DKat Backend
+
+Python 3.12+ · FastAPI · SQLAlchemy 2 (async) · MySQL (aiomysql)
+
+## Chạy
+
+```powershell
+cd backend
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env        # sửa DB_USER / DB_PASSWORD / DB_NAME
+uvicorn app.main:app --reload # hoặc: python -m app.main
+```
+
+- Health: `GET http://127.0.0.1:8000/api/v1/health` → 200
+- Swagger: `http://127.0.0.1:8000/docs` (tắt khi `APP_ENV=production`)
+
+## Cấu trúc
+
+```
+app/
+  main.py                    create_app(): CORS, logger, exception handlers, /api/v1
+  core/
+    config.py                Settings đọc từ .env
+    exceptions.py            AppError + handler lỗi tập trung
+    permissions.py           require_auth / require_role / require_branch_access
+    security.py              JWT (PyJWT, HS256), hash mật khẩu (bcrypt)
+  db/
+    base.py                  Base cho model SQLAlchemy
+    session.py               engine + pool, get_db(), transaction(), standalone_transaction()
+  middlewares/
+    request_logger.py        log method, url, status, thời gian
+  utils/
+    response.py              ok(data), error_response(...), SuccessResponse[T]
+    logger.py
+  api/v1/router.py           gom router các module
+  modules/<module>/
+    router.py                route + controller (nhận request, gọi service, trả ok())
+    schemas.py               Pydantic in/out
+    service.py               nghiệp vụ, mở transaction
+    repository.py            truy vấn SQL
+    models.py                bảng SQLAlchemy
+  workers/
+scripts/seed.py
+```
+
+Luồng: `router → service → repository → DB`. Router không viết SQL, repository không chứa nghiệp vụ.
+
+## Định dạng phản hồi
+
+- Thành công: `{"success": true, "data": ...}` → trong router: `return ok(data)`
+- Lỗi: `{"success": false, "error": {"code", "message", "details"}}` → `raise AppError.not_found("...")`
+
+| Trường hợp | HTTP | code |
+|---|---|---|
+| `AppError.*` | theo lỗi | `NOT_FOUND`, `FORBIDDEN`, `CONFLICT`... |
+| Route không tồn tại | 404 | `NOT_FOUND` |
+| Sai method | 405 | `METHOD_NOT_ALLOWED` |
+| Body sai schema | 422 | `VALIDATION_ERROR` (details: field, message) |
+| Body không phải JSON | 400 | `INVALID_JSON` |
+| Trùng khóa / sai khóa ngoại | 409 | `CONFLICT` |
+| Mất kết nối DB | 503 | `DATABASE_UNAVAILABLE` |
+| Lỗi khác | 500 | `INTERNAL_ERROR` (ẩn chi tiết ở production) |
+
+## Transaction
+
+```python
+from app.db.session import get_db, transaction
+
+@router.post("/sales")
+async def create_sale(body: SaleIn, db: AsyncSession = Depends(get_db)):
+    async with transaction(db):          # commit khi xong, rollback nếu có exception
+        await inventory_repo.decrease(db, ...)
+        sale = await sale_repo.create(db, ...)
+    return ok(sale)
+```
+
+Ngoài request (worker, seed): `async with standalone_transaction() as db: ...`
+
+## Xác thực (JWT)
+
+| Endpoint | Mô tả |
+|---|---|
+| `POST /api/v1/auth/login` `{username, password}` | → `{token, tokenType, expiresIn, user:{id, fullName, username, role, storeId, branches:[{id,name}]}}`. 401 `INVALID_CREDENTIALS` (sai user hoặc mật khẩu, cùng thông báo), 403 `ACCOUNT_LOCKED`, 422 thiếu trường |
+| `GET /api/v1/auth/me` | User hiện tại (khôi phục phiên khi reload) |
+| `POST /api/v1/auth/logout` | Ghi log; client tự xóa token |
+| `POST /api/v1/auth/change-password` `{oldPassword, newPassword}` | 400 `INVALID_OLD_PASSWORD`, 422 mật khẩu mới < 8 ký tự hoặc trùng mật khẩu cũ |
+
+- Gửi token: header `Authorization: Bearer <token>`. Hạn 8 giờ (`JWT_EXPIRE_HOURS`). 401 `TOKEN_EXPIRED` / `INVALID_TOKEN`.
+- `.env` phải có `JWT_SECRET` riêng (xem `.env.example`). bcrypt cost = `BCRYPT_ROUNDS` (mặc định 12, tối thiểu 10).
+- Payload JWT: `sub`, `user_id`, `role`, `store_id`, `branch_ids`. OWNER được tất cả chi nhánh ACTIVE của cửa hàng; MANAGER/EMPLOYEE theo `user_branches`.
+- Mỗi request có token sẽ đọc lại user từ DB: tài khoản bị khóa bị chặn ngay (403) dù token chưa hết hạn.
+- Dữ liệu test: `python -m scripts.seed_auth` (owner01, manager01, staff01, locked01 — mật khẩu `Dkat@1234`).
+- Postman: import `postman/DKat_Auth.postman_collection.json`.
+
+## Phân quyền
+
+```python
+@router.post("", dependencies=[Depends(require_role("OWNER", "MANAGER"))])
+@router.get("/branches/{branch_id}/inventory")
+async def handler(branch_id: int, user = Depends(require_branch_access())): ...
+```

@@ -1,49 +1,93 @@
-from datetime import timezone
+"""Authentication / authorization dependencies.
 
-from fastapi import Depends, HTTPException, status
+Usage in a router:
+    @router.post("", dependencies=[Depends(require_role("OWNER", "MANAGER"))])
+
+    @router.get("/branches/{branch_id}/inventory")
+    async def list_inventory(branch_id: int, user=Depends(require_branch_access())): ...
+
+require_auth reads `Authorization: Bearer <token>`, verifies the JWT, then reloads the user from DB
+so a LOCKED or deleted account is rejected immediately even if its token has not expired.
+"""
+from dataclasses import dataclass, field
+
+import jwt
+from fastapi import Depends, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.security import hash_access_token
+from app.core.exceptions import AppError
+from app.core.security import decode_access_token
 from app.db.session import get_db
-from app.modules.auth.models import AuthSession, User
-from app.modules.auth.service import subscription_is_active, utcnow
+from app.modules.auth import repository as auth_repo
+
+_bearer = HTTPBearer(auto_error=False)  # auto_error=False -> we return our own 401 format
 
 
-bearer_scheme = HTTPBearer(auto_error=False)
+@dataclass
+class CurrentUser:
+    id: int | None = None
+    role: str | None = None
+    store_id: int | None = None
+    branch_ids: list[int] = field(default_factory=list)
 
 
-def get_current_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
-    db: Session = Depends(get_db),
-) -> User:
-    if credentials is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Vui lòng đăng nhập.")
+async def require_auth(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    db: AsyncSession = Depends(get_db),
+) -> CurrentUser:
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise AppError.unauthorized("Thiếu token đăng nhập")
+    try:
+        payload = decode_access_token(credentials.credentials)
+        user_id = int(payload["sub"])
+    except jwt.ExpiredSignatureError:
+        raise AppError(401, "TOKEN_EXPIRED", "Phiên đăng nhập đã hết hạn")
+    except (jwt.PyJWTError, KeyError, ValueError, TypeError):
+        raise AppError(401, "INVALID_TOKEN", "Token không hợp lệ")
 
-    session = db.scalar(
-        select(AuthSession).where(
-            AuthSession.token_hash == hash_access_token(credentials.credentials),
-            AuthSession.revoked.is_(False),
-        )
+    user = await auth_repo.get_user_by_id(db, user_id)
+    if user is None:
+        raise AppError(401, "INVALID_TOKEN", "Token không hợp lệ")
+    if user.status == "LOCKED":
+        raise AppError(403, "ACCOUNT_LOCKED", "Tài khoản đã bị khóa. Vui lòng liên hệ quản lý cửa hàng")
+
+    branches = await auth_repo.list_user_branches(db, user)
+    current = CurrentUser(
+        id=user.user_id,
+        role=user.role,
+        store_id=user.store_id,
+        branch_ids=[b.branch_id for b in branches],
     )
-    if session is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Phiên đăng nhập không hợp lệ.")
-
-    expires_at = session.expires_at
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
-    user = session.user
-    if expires_at <= utcnow() or user.status != "ACTIVE" or not subscription_is_active(user.shop):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Phiên đăng nhập đã hết hạn.")
-    return user
+    request.state.user = current
+    return current
 
 
-def require_roles(*roles: str):
-    def dependency(user: User = Depends(get_current_user)) -> User:
-        role = {"OWNER": "owner", "MANAGER": "manager", "EMPLOYEE": "staff"}[user.role]
-        if role not in roles:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Bạn không có quyền thực hiện thao tác này.")
+def require_role(*roles: str):
+    """Example: Depends(require_role("OWNER", "MANAGER"))."""
+
+    async def checker(user: CurrentUser = Depends(require_auth)) -> CurrentUser:
+        if user.role not in roles:
+            raise AppError.forbidden("Bạn không có quyền thực hiện thao tác này")
         return user
 
-    return dependency
+    return checker
+
+
+def require_branch_access(param: str = "branch_id"):
+    """Reads branch_id from path or query (name set by `param`); 403 if the user is not assigned to it."""
+
+    async def checker(request: Request, user: CurrentUser = Depends(require_auth)) -> CurrentUser:
+        raw = request.path_params.get(param) or request.query_params.get(param)
+        if raw is None:
+            return user
+        try:
+            branch_id = int(raw)
+        except ValueError:
+            raise AppError.bad_request(f"Invalid {param}")
+        if branch_id not in user.branch_ids:
+            raise AppError.forbidden("Bạn không được phân công tại chi nhánh này")
+        return user
+
+    return checker

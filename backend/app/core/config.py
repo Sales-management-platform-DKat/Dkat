@@ -1,54 +1,53 @@
-import os
-from pathlib import Path
+"""Read configuration from environment variables / the .env file."""
+from functools import lru_cache
+from urllib.parse import quote_plus
 
-import certifi
-from dotenv import load_dotenv
-from sqlalchemy.engine import URL
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
-ADMIN_TOKEN = os.getenv("DKAT_ADMIN_TOKEN", "")
-CORS_ORIGINS = [
-    origin.strip()
-    for origin in os.getenv(
-        "DKAT_CORS_ORIGINS",
-        "http://127.0.0.1:5173,http://localhost:5173",
-    ).split(",")
-    if origin.strip()
-]
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
-_database_fields = {
-    "DB_HOST": os.getenv("DB_HOST"),
-    "DB_PORT": os.getenv("DB_PORT"),
-    "DB_USER": os.getenv("DB_USER"),
-    "DB_PASSWORD": os.getenv("DB_PASSWORD"),
-    "DB_NAME": os.getenv("DB_NAME"),
-}
-_configured_fields = {key for key, value in _database_fields.items() if value}
+    # ---- App ----
+    APP_NAME: str = "DKat API"
+    APP_ENV: str = "development"  # development | production
+    APP_HOST: str = "127.0.0.1"
+    APP_PORT: int = 8000
+    API_V1_PREFIX: str = "/api/v1"
+    CORS_ORIGINS: list[str] = ["http://127.0.0.1:5173", "http://localhost:5173"]
 
-if _configured_fields and len(_configured_fields) != len(_database_fields):
-    missing = ", ".join(sorted(set(_database_fields) - _configured_fields))
-    raise RuntimeError(f"Thiếu cấu hình database bắt buộc: {missing}")
+    # ---- MySQL ----
+    DB_HOST: str = "127.0.0.1"
+    DB_PORT: int = 3306
+    DB_USER: str = "root"
+    DB_PASSWORD: str = ""
+    DB_NAME: str = "dkat"
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 5
+    DB_POOL_RECYCLE: int = 1800  # seconds; must be shorter than MySQL wait_timeout
+    DB_ECHO: bool = False  # True = print SQL statements
 
-if _configured_fields:
-    DATABASE_URL = URL.create(
-        "mysql+pymysql",
-        username=_database_fields["DB_USER"],
-        password=_database_fields["DB_PASSWORD"],
-        host=_database_fields["DB_HOST"],
-        port=int(_database_fields["DB_PORT"]),
-        database=_database_fields["DB_NAME"],
-    )
-    DATABASE_CONNECT_ARGS = {
-        "ssl_ca": os.getenv("DB_SSL_CA", certifi.where()),
-        "ssl_verify_cert": True,
-        "ssl_verify_identity": True,
-        "connect_timeout": 10,
-    }
-else:
-    DATABASE_URL = os.getenv("DKAT_DATABASE_URL", "sqlite:///./dkat.db")
-    DATABASE_CONNECT_ARGS = (
-        {"check_same_thread": False}
-        if DATABASE_URL.startswith("sqlite")
-        else {}
-    )
+    # ---- Auth ----
+    JWT_SECRET: str = "dev-only-change-me-please-32-bytes-min"  # MUST be overridden in .env for production
+    JWT_ALGORITHM: str = "HS256"
+    JWT_EXPIRE_HOURS: int = 8
+    BCRYPT_ROUNDS: int = 12  # cost factor, >= 10
+
+    @property
+    def is_production(self) -> bool:
+        return self.APP_ENV.lower() == "production"
+
+    @property
+    def database_url(self) -> str:
+        return (
+            f"mysql+aiomysql://{quote_plus(self.DB_USER)}:{quote_plus(self.DB_PASSWORD)}"
+            f"@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}?charset=utf8mb4"
+        )
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()
