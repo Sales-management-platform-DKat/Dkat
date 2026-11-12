@@ -58,16 +58,27 @@ def build_app():
     return app
 
 
-async def load_ids() -> tuple[dict[str, int], int, int]:
+async def load_ids() -> tuple[dict[str, int], int, int, list[int]]:
     async with standalone_transaction() as db:
         rows = (await db.execute(text("SELECT branch_code, branch_id FROM branches WHERE branch_code IN ('CN01','CN02','CN03')"))).all()
         branches = {code: bid for code, bid in rows}
         category_id = (await db.execute(text("SELECT category_id FROM categories WHERE status = 'ACTIVE' ORDER BY category_id LIMIT 1"))).scalar()
         locked_id = (await db.execute(text("SELECT user_id FROM users WHERE username = 'locked01'"))).scalar()
+        # OWNER sees every branch of the store, including branches created later via POST /branches
+        store_branch_ids = list(
+            (
+                await db.execute(
+                    text(
+                        "SELECT branch_id FROM branches WHERE store_id = "
+                        "(SELECT store_id FROM users WHERE username = 'owner01') ORDER BY branch_id"
+                    )
+                )
+            ).scalars()
+        )
     missing = {"CN01", "CN02", "CN03"} - set(branches)
     if missing or category_id is None or locked_id is None:
         sys.exit(f"Missing seed data ({sorted(missing) or 'category/locked01'}). Run: python -m scripts.seed_auth")
-    return branches, category_id, locked_id
+    return branches, category_id, locked_id, store_branch_ids
 
 
 async def cleanup() -> None:
@@ -76,7 +87,7 @@ async def cleanup() -> None:
 
 
 async def main() -> int:
-    branches, category_id, locked_id = await load_ids()
+    branches, category_id, locked_id, store_branch_ids = await load_ids()
     cn1, cn2, cn3 = branches["CN01"], branches["CN02"], branches["CN03"]
     transport = httpx.ASGITransport(app=build_app())
 
@@ -115,7 +126,7 @@ async def main() -> int:
                 return got == expected, f"branchIds={got}"
             return check
 
-        expected_ids = {"OWNER": [cn1, cn2, cn3], "MANAGER": [cn1, cn2], "EMPLOYEE": [cn1]}
+        expected_ids = {"OWNER": store_branch_ids, "MANAGER": [cn1, cn2], "EMPLOYEE": [cn1]}
         # route -> {role: expected status}
         matrix = [
             ("R1 GET /auth/me", lambda r: client.get(f"{API}/auth/me", headers=h(r)), {"OWNER": 200, "MANAGER": 200, "EMPLOYEE": 200}),

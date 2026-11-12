@@ -10,6 +10,8 @@ Accounts (password for all: Dkat@1234):
 
 Branch CN03 is assigned to nobody (only OWNER sees it): used to test the RBAC branch scope.
 Category "Danh mục mẫu" is used to test POST /products.
+Product SP-MAU-01 (2 ACTIVE variants) and pre-order PO-SEED-0001 (WAITING_STOCK at CN01) are used
+to test the branch API (inventory rows for a new branch, refusing to deactivate CN01).
 """
 import asyncio
 
@@ -26,12 +28,67 @@ BRANCHES = [
     ("CN03", "Chi nhánh Hải Châu", "45 Bạch Đằng, Hải Châu, Đà Nẵng"),
 ]
 CATEGORY_NAME = "Danh mục mẫu"
+PRODUCT_CODE = "SP-MAU-01"
+VARIANTS = [("SP-MAU-01-S", "Áo thun mẫu - Size S"), ("SP-MAU-01-M", "Áo thun mẫu - Size M")]
+PREORDER_CODE = "PO-SEED-0001"
 USERS = [
     ("owner01", "Nguyễn Văn Chủ", "OWNER", "ACTIVE", []),
     ("manager01", "Trần Thị Quản Lý", "MANAGER", "ACTIVE", ["CN01", "CN02"]),
     ("staff01", "Lê Văn Nhân Viên", "EMPLOYEE", "ACTIVE", ["CN01"]),
     ("locked01", "Phạm Bị Khóa", "EMPLOYEE", "LOCKED", ["CN01"]),
 ]
+
+
+async def _seed_catalog_and_preorder(db, store_id: int, branch_ids: dict[str, int]) -> None:
+    """Sample product with 2 ACTIVE variants (stock 10 at CN01-CN03) and one open pre-order at CN01.
+
+    Used by the branch API tests: a new branch must get inventory rows for these variants, and
+    CN01 cannot be deactivated while PO-SEED-0001 is WAITING_STOCK.
+    """
+    owner_id = (await db.execute(text("SELECT user_id FROM users WHERE username = 'owner01'"))).scalar_one()
+    category_id = (
+        await db.execute(
+            text("SELECT category_id FROM categories WHERE store_id = :s AND name = :n"), {"s": store_id, "n": CATEGORY_NAME}
+        )
+    ).scalar_one()
+
+    product_id = (
+        await db.execute(text("SELECT product_id FROM products WHERE store_id = :s AND product_code = :c"), {"s": store_id, "c": PRODUCT_CODE})
+    ).scalar()
+    if product_id is None:
+        product_id = (
+            await db.execute(
+                text(
+                    "INSERT INTO products (store_id, category_id, product_code, name, created_by) VALUES (:s, :cat, :c, :n, :u)"
+                ),
+                {"s": store_id, "cat": category_id, "c": PRODUCT_CODE, "n": "Áo thun mẫu", "u": owner_id},
+            )
+        ).lastrowid
+        print(f"create product {PRODUCT_CODE}")
+
+    for sku, variant_name in VARIANTS:
+        await db.execute(
+            text(
+                "INSERT IGNORE INTO product_variants (product_id, sku, variant_name, price) VALUES (:p, :sku, :n, 150000)"
+            ),
+            {"p": product_id, "sku": sku, "n": variant_name},
+        )
+        variant_id = (await db.execute(text("SELECT variant_id FROM product_variants WHERE sku = :sku"), {"sku": sku})).scalar_one()
+        for branch_id in branch_ids.values():
+            await db.execute(
+                text("INSERT IGNORE INTO inventory (branch_id, variant_id, quantity) VALUES (:b, :v, 10)"),
+                {"b": branch_id, "v": variant_id},
+            )
+
+    result = await db.execute(
+        text(
+            "INSERT IGNORE INTO preorders (preorder_code, branch_id, customer_name, customer_phone, total_amount, status) "
+            "VALUES (:c, :b, :n, '0900000000', 150000, 'WAITING_STOCK')"
+        ),
+        {"c": PREORDER_CODE, "b": branch_ids["CN01"], "n": "Khách đặt trước mẫu"},
+    )
+    if result.rowcount:
+        print(f"create preorder {PREORDER_CODE} (WAITING_STOCK at CN01)")
 
 
 async def main() -> None:
@@ -93,6 +150,8 @@ async def main() -> None:
             if role == "OWNER":
                 await db.execute(text("UPDATE stores SET owner_user_id = :u WHERE store_id = :s"), {"u": user_id, "s": store_id})
             print(f"create {username} ({role}, {status})")
+
+        await _seed_catalog_and_preorder(db, store_id, branch_ids)
 
         await db.execute(text("SET FOREIGN_KEY_CHECKS = 1"))
     await close_engine()

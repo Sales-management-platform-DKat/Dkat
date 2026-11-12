@@ -106,3 +106,18 @@ ids = get_accessible_branch_ids(user)   # lọc danh sách theo chi nhánh user 
 - `require_role`: sai vai trò → 403 `FORBIDDEN`.
 - `require_branch_access`: lấy `branch_id`/`branchId` từ path, query, JSON body. OWNER qua mọi chi nhánh của cửa hàng; MANAGER/EMPLOYEE chỉ chi nhánh được phân công, khác → 403.
 - Ma trận quyền thực tế: [docs/rbac-matrix.md](../docs/rbac-matrix.md). Kiểm tra lại: `python -m scripts.check_rbac`.
+
+## Chi nhánh (FR-02)
+
+| Endpoint | Quyền | Ghi chú |
+|---|---|---|
+| `GET /api/v1/branches?status=` | mọi vai trò | OWNER: cả cửa hàng (kể cả INACTIVE); MANAGER/EMPLOYEE: chi nhánh được phân công |
+| `GET /api/v1/branches/{id}` | mọi vai trò | ngoài phạm vi → 403, OWNER id không tồn tại → 404 |
+| `POST /api/v1/branches` `{branchCode, name, address, phone?}` | OWNER | 201 + `inventoryRowsCreated` (tồn kho = 0 cho biến thể ACTIVE); thiếu trường → 422; trùng mã → 409 `DUPLICATE_BRANCH_CODE` |
+| `PUT /api/v1/branches/{id}` | OWNER | thay toàn bộ mã/tên/địa chỉ/SĐT; trùng mã → 409 |
+| `PATCH /api/v1/branches/{id}/status` `{status}` | OWNER | `ACTIVE`/`INACTIVE`; còn đơn đặt trước WAITING_STOCK/READY/NOTIFIED → 409 `BRANCH_HAS_OPEN_PREORDERS` |
+
+- Không có DELETE (405): chi nhánh chỉ chuyển INACTIVE. MANAGER/EMPLOYEE mất quyền vào chi nhánh INACTIVE.
+- `branchCode` được chuyển thành chữ hoa; so trùng không phân biệt hoa/thường.
+- Mở lại chi nhánh (ACTIVE) sẽ bổ sung dòng tồn kho còn thiếu cho biến thể tạo trong lúc đóng.
+- Postman: `postman/DKat_Branches.postman_collection.json` (40 request, chạy theo thứ tự; cần `python -m scripts.seed_auth`).
