@@ -49,7 +49,7 @@ class ProductInput(BaseModel):
 
 
 class ProductCreate(ProductInput):
-    productCode: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)]
+    productCode: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)] | None = None
 
 
 class ProductStatusInput(BaseModel):

@@ -19,9 +19,12 @@ class CatalogInvalid(Exception):
 
 
 @contextmanager
-def catalog_transaction():
+def catalog_transaction(*, read_committed: bool = False):
+    bind = engine
+    if read_committed and engine.dialect.name == "mysql":
+        bind = engine.execution_options(isolation_level="READ COMMITTED")
     try:
-        with engine.begin() as db:
+        with bind.begin() as db:
             yield db
     except CatalogNotFound as error:
         raise HTTPException(404, str(error)) from None

@@ -63,4 +63,9 @@ Các test dùng SQLite trong bộ nhớ. Khóa SELECT FOR UPDATE được giả 
    WHERE i.variant_id = 123; -- Thay 123 bằng variant_id vừa tạo.
    ```
 
-Mỗi chi nhánh ACTIVE thuộc cửa hàng có một dòng với `quantity = 0`. POST nhận `sku` nhập tay. PUT giữ SKU cũ nếu bỏ qua `sku` và thay toàn bộ danh sách thuộc tính theo `attributes`. Gửi `[]` hoặc bỏ qua `attributes` để xóa các giá trị cũ. TEXT nhận chuỗi có nội dung, NUMBER nhận số hoặc chuỗi số, BOOLEAN nhận boolean hoặc chuỗi true/false. SKU trùng trả HTTP 409 với `{"detail":"DUPLICATE_SKU"}`.
+Mỗi chi nhánh ACTIVE thuộc cửa hàng có một dòng với `quantity = 0`. PUT giữ SKU cũ nếu bỏ qua `sku` và thay toàn bộ danh sách thuộc tính theo `attributes`. Gửi `[]` hoặc bỏ qua `attributes` để xóa các giá trị cũ. TEXT nhận chuỗi có nội dung, NUMBER nhận số hoặc chuỗi số, BOOLEAN nhận boolean hoặc chuỗi true/false.
+
+## Sinh mã sản phẩm và SKU PBI 57
+
+- Gọi `POST /products` ba lần với `{"categoryId": 1, "name": "Áo mẫu"}`, thay `1` bằng ID danh mục đang hoạt động. Nếu danh mục là Áo thun và chưa có mã theo tiền tố đó, API trả `AOT-0001`, `AOT-0002`, `AOT-0003`. Số thứ tự tính theo tiền tố trong từng cửa hàng và tiếp nối mã có sẵn, kể cả sản phẩm ngừng kinh doanh. Cấu hình tiền tố trong `app/modules/products/code_config.py`. Danh mục chưa có cấu hình lấy chữ đầu các từ hoặc tối đa ba ký tự nếu tên chỉ có một từ.
+- Khi gọi `POST /products/{product_id}/variants`, có thể bỏ trường `sku`. API ghép mã sản phẩm với giá trị thuộc tính theo thứ tự ID thuộc tính, viết hoa và bỏ dấu. Ví dụ `AOT-0001-M-DEN`. Nếu SKU đã được dùng, API thử hậu tố `-2`, `-3` tiếp theo. Khi tạo hoặc sửa với SKU nhập tay, SKU trùng trả HTTP 409 với `{"detail":"DUPLICATE_SKU"}`.

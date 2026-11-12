@@ -4,6 +4,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.modules.products.category_service import get_category, lock_store
 from app.modules.products.catalog_transaction import CatalogConflict, CatalogNotFound
+from app.modules.products.codes import generate_product_code
 from app.modules.products.schemas import (
     Product, ProductCreate, ProductDetail, ProductInput, ProductRecord, ProductSort,
     ProductStatus, ProductVariant,
@@ -75,9 +76,11 @@ def list_products(
     return list(products.values())
 
 
-def require_active_category(db: Connection, store_id: int, category_id: int) -> None:
-    if get_category(db, store_id, category_id).status != "ACTIVE":
+def require_active_category(db: Connection, store_id: int, category_id: int) -> str:
+    category = get_category(db, store_id, category_id)
+    if category.status != "ACTIVE":
         raise CatalogConflict("Product category is inactive")
+    return category.name
 
 
 def get_product_record(db: Connection, store_id: int, product_id: int) -> ProductRecord:
@@ -102,7 +105,8 @@ def get_product_detail(db: Connection, store_id: int, product_id: int) -> Produc
 
 def create_product(db: Connection, store_id: int, user_id: int, data: ProductCreate) -> ProductRecord:
     lock_store(db, store_id)
-    require_active_category(db, store_id, data.categoryId)
+    category_name = require_active_category(db, store_id, data.categoryId)
+    code = data.productCode or generate_product_code(db, store_id, category_name)
     try:
         result = db.execute(
             text("""
@@ -110,7 +114,7 @@ def create_product(db: Connection, store_id: int, user_id: int, data: ProductCre
                     (store_id, category_id, product_code, name, description, image_url, status, created_by)
                 VALUES (:store, :categoryId, :productCode, :name, :description, :imageUrl, 'ACTIVE', :user)
             """),
-            {**data.model_dump(), "store": store_id, "user": user_id},
+            {**data.model_dump(), "productCode": code, "store": store_id, "user": user_id},
         )
     except IntegrityError as error:
         if getattr(error.orig, "args", ())[:1] == (1062,):

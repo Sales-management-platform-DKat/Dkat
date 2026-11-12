@@ -44,7 +44,3 @@ class VariantInput(BaseModel):
         if len({item.attributeId for item in self.attributes}) != len(self.attributes):
             raise ValueError("Each attribute can appear only once per variant")
         return self
-
-
-class VariantCreate(VariantInput):
-    sku: Sku
