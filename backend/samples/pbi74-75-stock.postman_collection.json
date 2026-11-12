@@ -1,0 +1,354 @@
+{
+  "info": {
+    "name": "DKat PBI 74–75 | Nhập và xuất kho",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Chạy trên database kiểm thử. Điền accessToken của OWNER hoặc MANAGER được gán chi nhánh, branchId và variantId đã có dòng inventory. Chạy cả hai thư mục theo thứ tự. Luồng tăng tồn ròng 7 và thêm hai biến động."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "branchId",
+      "value": ""
+    },
+    {
+      "key": "variantId",
+      "value": ""
+    },
+    {
+      "key": "quantityBefore",
+      "value": ""
+    },
+    {
+      "key": "quantityAfterImport",
+      "value": ""
+    },
+    {
+      "key": "quantityAfterExport",
+      "value": ""
+    },
+    {
+      "key": "availableAfterImport",
+      "value": ""
+    },
+    {
+      "key": "excessQuantity",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Import",
+      "item": [
+        {
+          "name": "Xem tồn ban đầu",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{branchId}}/{{variantId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data).to.include.keys('branchId', 'variantId', 'quantity', 'reserved', 'available');",
+                  "  pm.expect(data.available).to.eql(data.quantity - data.reserved);",
+                  "  pm.collectionVariables.set('quantityBefore', data.quantity);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Nhập 10 đơn vị",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/inventory/import",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"note\": \"PBI 74/75 test\",\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"quantity\": 10\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data).to.include.keys('branchId', 'movementType', 'reason', 'items');",
+                  "  pm.expect(data.movementType).to.eql('IMPORT');",
+                  "  pm.expect(data.reason).to.eql(null);",
+                  "  pm.expect(data.branchId).to.eql(Number(pm.variables.get('branchId')));",
+                  "  pm.expect(data.items).to.have.lengthOf(1);",
+                  "  const row = data.items[0];",
+                  "  pm.expect(row).to.include.keys('variantId', 'inventoryId', 'movementId', 'quantityBefore', 'quantityChange', 'quantityAfter');",
+                  "  pm.expect(row.variantId).to.eql(Number(pm.variables.get('variantId')));",
+                  "  pm.expect(row.movementId).to.be.a('number').above(0);",
+                  "  pm.expect(row.quantityChange).to.eql(10);",
+                  "  pm.expect(row.quantityAfter).to.eql(row.quantityBefore + row.quantityChange);",
+                  "  pm.expect(row.quantityBefore).to.eql(Number(pm.variables.get('quantityBefore')));",
+                  "  pm.collectionVariables.set('quantityAfterImport', row.quantityAfter);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Kiểm tra tồn sau nhập",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{branchId}}/{{variantId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data).to.include.keys('branchId', 'variantId', 'quantity', 'reserved', 'available');",
+                  "  pm.expect(data.available).to.eql(data.quantity - data.reserved);",
+                  "  pm.expect(data.quantity).to.eql(Number(pm.variables.get('quantityAfterImport')));",
+                  "  pm.collectionVariables.set('excessQuantity', Math.max(1, data.available + 1));",
+                  "  pm.collectionVariables.set('availableAfterImport', data.available);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Từ chối số lượng 0",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/inventory/import",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"note\": \"PBI 74/75 test\",\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"quantity\": 0\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.detail).to.be.an('array').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Export",
+      "item": [
+        {
+          "name": "Chặn xuất quá tồn khả dụng",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/inventory/export",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"note\": \"PBI 74/75 test\",\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"quantity\": {{excessQuantity}}\n    }\n  ],\n  \"reason\": \"KHAC\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.detail.code).to.eql('INSUFFICIENT_STOCK');",
+                  "  pm.expect(data.detail.items).to.have.lengthOf(1);",
+                  "  pm.expect(data.detail.items[0]).to.include({variantId: Number(pm.variables.get('variantId')), requested: Number(pm.variables.get('excessQuantity')), available: Number(pm.variables.get('availableAfterImport'))});",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tồn giữ nguyên sau lỗi 409",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{branchId}}/{{variantId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data).to.include.keys('branchId', 'variantId', 'quantity', 'reserved', 'available');",
+                  "  pm.expect(data.available).to.eql(data.quantity - data.reserved);",
+                  "  pm.expect(data.quantity).to.eql(Number(pm.variables.get('quantityAfterImport')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Xuất hợp lệ 3 đơn vị",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/inventory/export",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"note\": \"PBI 74/75 test\",\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"quantity\": 3\n    }\n  ],\n  \"reason\": \"HU_HONG\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data).to.include.keys('branchId', 'movementType', 'reason', 'items');",
+                  "  pm.expect(data.movementType).to.eql('EXPORT');",
+                  "  pm.expect(data.reason).to.eql(\"HU_HONG\");",
+                  "  pm.expect(data.branchId).to.eql(Number(pm.variables.get('branchId')));",
+                  "  pm.expect(data.items).to.have.lengthOf(1);",
+                  "  const row = data.items[0];",
+                  "  pm.expect(row).to.include.keys('variantId', 'inventoryId', 'movementId', 'quantityBefore', 'quantityChange', 'quantityAfter');",
+                  "  pm.expect(row.variantId).to.eql(Number(pm.variables.get('variantId')));",
+                  "  pm.expect(row.movementId).to.be.a('number').above(0);",
+                  "  pm.expect(row.quantityChange).to.eql(-3);",
+                  "  pm.expect(row.quantityAfter).to.eql(row.quantityBefore + row.quantityChange);",
+                  "  pm.expect(row.quantityBefore).to.eql(Number(pm.variables.get('quantityAfterImport')));",
+                  "  pm.collectionVariables.set('quantityAfterExport', row.quantityAfter);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Kiểm tra tồn sau xuất",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{branchId}}/{{variantId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data).to.include.keys('branchId', 'variantId', 'quantity', 'reserved', 'available');",
+                  "  pm.expect(data.available).to.eql(data.quantity - data.reserved);",
+                  "  pm.expect(data.quantity).to.eql(Number(pm.variables.get('quantityAfterExport')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Thiếu token",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/inventory/export",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"note\": \"PBI 74/75 test\",\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"quantity\": 1\n    }\n  ],\n  \"reason\": \"MAU\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.detail).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

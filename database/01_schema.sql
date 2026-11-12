@@ -137,10 +137,11 @@ CREATE TABLE inventory (
 CREATE TABLE inventory_movements (
     movement_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     inventory_id BIGINT NOT NULL,
-    movement_type ENUM('IMPORT', 'SALE', 'PREORDER_FULFILLMENT', 'ADJUSTMENT') NOT NULL,
+    movement_type ENUM('IMPORT', 'SALE', 'PREORDER_FULFILLMENT', 'ADJUSTMENT', 'EXPORT') NOT NULL,
     quantity_change INT NOT NULL,
     reference_type VARCHAR(50),
     reference_id BIGINT,
+    export_reason ENUM('HU_HONG', 'MAU', 'KHAC') NULL,
     note VARCHAR(255),
     created_by BIGINT NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

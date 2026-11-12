@@ -1,17 +1,57 @@
+import logging
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.core import config
 from app.core.permissions import Actor, get_accessible_branch_ids, require_auth, require_branch_access
-from app.db.session import get_db
-from app.modules.inventory.schemas import InventoryId, InventoryItem
-from app.modules.inventory.service import list_inventory
+from app.db.session import engine, get_db
+from app.modules.inventory.schemas import (
+    InventoryId, InventoryItem, StockChangeResult, StockExportInput, StockImportInput,
+)
+from app.modules.inventory.service import change_stock, list_inventory
+from app.modules.preorders.services.allocation import allocate_preorders
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/inventory", tags=["inventory"])
 Reader = Annotated[Actor, Depends(require_auth)]
 Database = Annotated[Session, Depends(get_db)]
+
+
+def require_stock_writer(actor: Reader) -> Actor:
+    if actor.role == "EMPLOYEE" and not config.ALLOW_EMPLOYEE_STOCK:
+        raise HTTPException(403, "Bạn không có quyền nhập hoặc xuất kho.")
+    return actor
+
+
+StockWriter = Annotated[Actor, Depends(require_stock_writer)]
+
+
+def record_stock_change(actor: Actor, data: StockImportInput | StockExportInput) -> StockChangeResult:
+    try:
+        # Read the latest reservation totals after acquiring the inventory locks.
+        with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
+            return change_stock(db, actor, data)
+    except SQLAlchemyError:
+        logger.exception("Stock change transaction failed")
+        raise HTTPException(503, "Database unavailable") from None
+
+
+@router.post("/import", status_code=201)
+def import_inventory(data: StockImportInput, actor: StockWriter) -> StockChangeResult:
+    result = record_stock_change(actor, data)
+    try:
+        allocate_preorders(data.branchId, [item.variantId for item in data.items])
+    except Exception:
+        logger.exception("Preorder allocation failed after import committed")
+    return result
+
+
+@router.post("/export", status_code=201)
+def export_inventory(data: StockExportInput, actor: StockWriter) -> StockChangeResult:
+    return record_stock_change(actor, data)
 
 
 @router.get("")

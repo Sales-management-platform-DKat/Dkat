@@ -64,3 +64,20 @@ Các test dùng SQLite trong bộ nhớ. Khóa SELECT FOR UPDATE được giả 
    ```
 
 Mỗi chi nhánh ACTIVE thuộc cửa hàng có một dòng với `quantity = 0`. POST nhận `sku` nhập tay. PUT giữ SKU cũ nếu bỏ qua `sku` và thay toàn bộ danh sách thuộc tính theo `attributes`. Gửi `[]` hoặc bỏ qua `attributes` để xóa các giá trị cũ. TEXT nhận chuỗi có nội dung, NUMBER nhận số hoặc chuỗi số, BOOLEAN nhận boolean hoặc chuỗi true/false. SKU trùng trả HTTP 409 với `{"detail":"DUPLICATE_SKU"}`.
+
+## Nhập và xuất kho PBI 74 và 75
+
+1. Với database đã tạo từ schema cũ, chạy `database/02_inventory_export.sql` bằng tài khoản quản trị. Với database mới, chạy `database/01_schema.sql`.
+2. Nếu dùng tài khoản MySQL local `dkat_app` đã có quyền SELECT, cấp thêm:
+
+   ```sql
+   GRANT INSERT, UPDATE ON dkat.inventory TO 'dkat_app'@'127.0.0.1';
+   GRANT INSERT ON dkat.inventory_movements TO 'dkat_app'@'127.0.0.1';
+   ```
+
+3. Đăng nhập OWNER hoặc MANAGER được phân công chi nhánh. EMPLOYEE cần thêm `ALLOW_EMPLOYEE_STOCK=true` trong `.env` và phải thuộc chi nhánh đó. Khởi động lại backend sau khi sửa `.env`.
+4. Trong Swagger, gửi `POST /inventory/import` với `{"branchId":1,"note":"Nhập hàng","items":[{"variantId":1,"quantity":10}]}`. Thay ID theo database của bạn. Gọi `POST /inventory/export` với cùng cấu trúc, thêm `"reason":"HU_HONG"` và nhập số lượng cần xuất. Lý do hỗ trợ `HU_HONG`, `MAU` và `KHAC`.
+
+Mỗi request nhận từ 1 đến 100 biến thể khác nhau, số lượng từng dòng là số nguyên dương. HTTP 201 trả số lượng trước, lượng thay đổi, số lượng sau và ID biến động. Nếu xuất vượt tồn khả dụng ở bất kỳ dòng nào, API trả HTTP 409 `INSUFFICIENT_STOCK` kèm các dòng thiếu và rollback cả lô. API nhập gọi hook phân bổ sau commit. Hook đang chờ triển khai FIFO ở PBI 129/130.
+
+Để chạy nhanh cả hai luồng trên database kiểm thử, import `samples/pbi74-75-stock.postman_collection.json` và điền `accessToken`, `branchId` và `variantId`. Collection thay đổi số lượng tồn và tạo biến động.
