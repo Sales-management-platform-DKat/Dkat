@@ -7,6 +7,9 @@ Accounts (password for all: Dkat@1234):
   manager01   MANAGER   ACTIVE  -> CN01, CN02
   staff01     EMPLOYEE  ACTIVE  -> CN01
   locked01    EMPLOYEE  LOCKED  -> CN01
+
+Branch CN03 is assigned to nobody (only OWNER sees it): used to test the RBAC branch scope.
+Category "Danh mục mẫu" is used to test POST /products.
 """
 import asyncio
 
@@ -17,7 +20,12 @@ from app.db.session import close_engine, standalone_transaction
 
 DEFAULT_PASSWORD = "Dkat@1234"
 STORE_NAME = "DKat Demo Store"
-BRANCHES = [("CN01", "Chi nhánh Quận 1", "12 Lê Lợi, Q.1, TP.HCM"), ("CN02", "Chi nhánh Cầu Giấy", "88 Xuân Thủy, Cầu Giấy, Hà Nội")]
+BRANCHES = [
+    ("CN01", "Chi nhánh Quận 1", "12 Lê Lợi, Q.1, TP.HCM"),
+    ("CN02", "Chi nhánh Cầu Giấy", "88 Xuân Thủy, Cầu Giấy, Hà Nội"),
+    ("CN03", "Chi nhánh Hải Châu", "45 Bạch Đằng, Hải Châu, Đà Nẵng"),
+]
+CATEGORY_NAME = "Danh mục mẫu"
 USERS = [
     ("owner01", "Nguyễn Văn Chủ", "OWNER", "ACTIVE", []),
     ("manager01", "Trần Thị Quản Lý", "MANAGER", "ACTIVE", ["CN01", "CN02"]),
@@ -52,6 +60,16 @@ async def main() -> None:
                     {"s": store_id, "c": code},
                 )
             ).scalar_one()
+
+        if (
+            await db.execute(
+                text("SELECT 1 FROM categories WHERE store_id = :s AND name = :n"), {"s": store_id, "n": CATEGORY_NAME}
+            )
+        ).first() is None:
+            await db.execute(
+                text("INSERT INTO categories (store_id, name) VALUES (:s, :n)"), {"s": store_id, "n": CATEGORY_NAME}
+            )
+            print("create sample category")  # ASCII only: the Windows console may not print Vietnamese
 
         for username, full_name, role, status, codes in USERS:
             user_id = (await db.execute(text("SELECT user_id FROM users WHERE username = :u"), {"u": username})).scalar()

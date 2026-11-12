@@ -100,4 +100,9 @@ Ngoài request (worker, seed): `async with standalone_transaction() as db: ...`
 @router.post("", dependencies=[Depends(require_role("OWNER", "MANAGER"))])
 @router.get("/branches/{branch_id}/inventory")
 async def handler(branch_id: int, user = Depends(require_branch_access())): ...
+ids = get_accessible_branch_ids(user)   # lọc danh sách theo chi nhánh user được xem
 ```
+
+- `require_role`: sai vai trò → 403 `FORBIDDEN`.
+- `require_branch_access`: lấy `branch_id`/`branchId` từ path, query, JSON body. OWNER qua mọi chi nhánh của cửa hàng; MANAGER/EMPLOYEE chỉ chi nhánh được phân công, khác → 403.
+- Ma trận quyền thực tế: [docs/rbac-matrix.md](../docs/rbac-matrix.md). Kiểm tra lại: `python -m scripts.check_rbac`.

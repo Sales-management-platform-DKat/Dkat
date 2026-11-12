@@ -32,6 +32,6 @@ async def database_check():
     """Detailed DB connection check: 200 if connected, 503 DATABASE_UNAVAILABLE if not.
 
     Returns: DB name, MySQL version, latency, charset, table list and whether all 18 tables exist.
-    (require_role is currently a STUB; once auth is real, only OWNER can call this.)
+    OWNER only (401 without token, 403 FORBIDDEN for MANAGER/EMPLOYEE).
     """
     return ok(await service.check_database())
