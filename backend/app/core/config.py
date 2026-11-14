@@ -8,6 +8,7 @@ from sqlalchemy.engine import URL
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 ADMIN_TOKEN = os.getenv("DKAT_ADMIN_TOKEN", "")
+ALLOW_EMPLOYEE_STOCK = os.getenv("ALLOW_EMPLOYEE_STOCK", "false").strip().lower() in {"1", "true", "yes", "on"}
 CORS_ORIGINS = [
     origin.strip()
     for origin in os.getenv(
