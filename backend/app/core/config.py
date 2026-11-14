@@ -1,11 +1,9 @@
-import os
-from pathlib import Path
+"""Read configuration from environment variables / the .env file."""
+from functools import lru_cache
+from urllib.parse import quote_plus
 
-import certifi
-from dotenv import load_dotenv
-from sqlalchemy.engine import URL
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 ADMIN_TOKEN = os.getenv("DKAT_ADMIN_TOKEN", "")
 ALLOW_EMPLOYEE_STOCK = os.getenv("ALLOW_EMPLOYEE_STOCK", "false").strip().lower() in {"1", "true", "yes", "on"}
@@ -18,18 +16,24 @@ CORS_ORIGINS = [
     if origin.strip()
 ]
 
-_database_fields = {
-    "DB_HOST": os.getenv("DB_HOST"),
-    "DB_PORT": os.getenv("DB_PORT"),
-    "DB_USER": os.getenv("DB_USER"),
-    "DB_PASSWORD": os.getenv("DB_PASSWORD"),
-    "DB_NAME": os.getenv("DB_NAME"),
-}
-_configured_fields = {key for key, value in _database_fields.items() if value}
+    # ---- App ----
+    APP_NAME: str = "DKat API"
+    APP_ENV: str = "development"  # development | production
+    APP_HOST: str = "127.0.0.1"
+    APP_PORT: int = 8000
+    API_V1_PREFIX: str = "/api/v1"
+    CORS_ORIGINS: list[str] = ["http://127.0.0.1:5173", "http://localhost:5173"]
 
-if _configured_fields and len(_configured_fields) != len(_database_fields):
-    missing = ", ".join(sorted(set(_database_fields) - _configured_fields))
-    raise RuntimeError(f"Thiếu cấu hình database bắt buộc: {missing}")
+    # ---- MySQL ----
+    DB_HOST: str = "127.0.0.1"
+    DB_PORT: int = 3306
+    DB_USER: str = "root"
+    DB_PASSWORD: str = ""
+    DB_NAME: str = "dkat"
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 5
+    DB_POOL_RECYCLE: int = 1800  # seconds; must be shorter than MySQL wait_timeout
+    DB_ECHO: bool = False  # True = print SQL statements
 
 if _configured_fields:
     DATABASE_URL = URL.create(

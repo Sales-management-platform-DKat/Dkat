@@ -1,15 +1,13 @@
-from datetime import datetime, timedelta, timezone
-from uuid import uuid4
+"""Login, current user, logout, change password (FR-01.1, FR-01.2, FR-01.5)."""
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.core.security import (
-    create_access_token,
-    hash_password,
-    verify_password,
-)
-from app.modules.auth.models import AuthSession, Shop, StoreSubscription, User
+logger = get_logger("app.auth")
+
+# Same message for "unknown username" and "wrong password": never reveal which one was wrong
+INVALID_CREDENTIALS_MESSAGE = "Tên đăng nhập hoặc mật khẩu không đúng"
 
 
 SESSION_DURATION = timedelta(hours=12)
@@ -83,8 +81,6 @@ def create_user(
         status="ACTIVE",
         created_at=utcnow(),
     )
-    db.add(user)
-    return user
 
 
 def authenticate(db: Session, username: str, password: str):
@@ -111,18 +107,24 @@ def authenticate(db: Session, username: str, password: str):
     ):
         return None
 
-    token, token_hash = create_access_token()
-    expires_at = utcnow() + SESSION_DURATION
-    if expires_at.tzinfo is not None:
-        expires_at = expires_at.replace(tzinfo=None)
-    db.add(
-        AuthSession(
-            id=str(uuid4()),
-            user_id=user.id,
-            token_hash=token_hash,
-            expires_at=expires_at,
-            revoked=False,
-        )
+    # Always run bcrypt (dummy hash if user missing) so timing does not reveal valid usernames
+    password_ok = await verify_password(body.password, user.password_hash if user else None)
+    if not password_ok:
+        reason = "unknown_username" if user is None else "wrong_password"
+        logger.warning("LOGIN_FAILED username=%r ip=%s reason=%s", body.username, client_ip, reason)
+        raise AppError(401, "INVALID_CREDENTIALS", INVALID_CREDENTIALS_MESSAGE)
+
+    # Lock status is only revealed to someone who already knows the correct password
+    if user.status == "LOCKED":
+        logger.warning("LOGIN_FAILED username=%r ip=%s reason=account_locked", body.username, client_ip)
+        raise AppError(403, "ACCOUNT_LOCKED", "Tài khoản đã bị khóa. Vui lòng liên hệ quản lý cửa hàng")
+
+    user_out = await _build_user_out(db, user)
+    token = create_access_token(
+        user_id=user.user_id,
+        role=user.role,
+        store_id=user.store_id,
+        branch_ids=[b.id for b in user_out.branches],
     )
     db.commit()
     return {"access_token": token, "expires_at": expires_at, "user": user_info(user)}

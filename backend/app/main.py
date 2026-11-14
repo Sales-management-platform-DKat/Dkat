@@ -1,3 +1,4 @@
+"""Entry point. Run: uvicorn app.main:app --reload"""
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -15,9 +16,14 @@ from app.modules.users.router import router as users_router
 
 
 @asynccontextmanager
-async def lifespan(_app: FastAPI):
-    Base.metadata.create_all(bind=engine)
+async def lifespan(app: FastAPI):
+    if await ping_database():
+        logger.info("MySQL connected: %s@%s:%s/%s", settings.DB_USER, settings.DB_HOST, settings.DB_PORT, settings.DB_NAME)
+    else:
+        # The server stays up; /health reports database: "down"
+        logger.warning("MySQL not reachable. Check DB_* in .env")
     yield
+    await close_engine()
 
 
 app = FastAPI(title="DKat API", version="1.0.0", lifespan=lifespan)
