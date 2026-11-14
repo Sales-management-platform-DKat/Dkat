@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -27,6 +27,16 @@ def add_store_user(
     if duplicate is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tên đăng nhập này đã được sử dụng.")
 
+    if payload.email is not None:
+        duplicate_email = db.scalar(
+            select(User.id).where(func.lower(User.email) == payload.email.casefold())
+        )
+        if duplicate_email is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email \u0111\u00e3 \u0111\u01b0\u1ee3c d\u00f9ng cho t\u00e0i kho\u1ea3n kh\u00e1c.",
+            )
+
     user = create_user(
         db,
         shop=owner.shop,
@@ -34,6 +44,7 @@ def add_store_user(
         full_name=payload.full_name,
         password=payload.password,
         role=payload.role,
+        email=payload.email,
     )
     try:
         db.commit()

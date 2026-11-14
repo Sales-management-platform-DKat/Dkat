@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, StringConstraints
 from typing_extensions import Annotated
 
 
@@ -17,12 +17,32 @@ Username = Annotated[
 
 
 class LoginRequest(BaseModel):
-    username: str = Field(min_length=3, max_length=40)
+    model_config = ConfigDict(populate_by_name=True)
+
+    username: str = Field(
+        min_length=1,
+        max_length=255,
+        strip_whitespace=True,
+        validation_alias=AliasChoices("username", "email"),
+    )
     password: str = Field(min_length=1, max_length=256)
+
+
+EmailAddress = Annotated[
+    str,
+    StringConstraints(
+        min_length=5,
+        max_length=255,
+        pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$",
+        strip_whitespace=True,
+        to_lower=True,
+    ),
+]
 
 
 class UserCreate(BaseModel):
     username: Username
+    email: EmailAddress | None = None
     full_name: str = Field(min_length=1, max_length=120, strip_whitespace=True)
     password: str = Field(min_length=12, max_length=128)
     role: Literal["manager", "staff"]
@@ -34,6 +54,7 @@ class UserInfo(BaseModel):
     id: int
     shop_id: int
     username: str
+    email: str | None
     full_name: str
     role: Literal["owner", "manager", "staff"]
     shop_name: str

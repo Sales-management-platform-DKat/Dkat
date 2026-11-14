@@ -21,7 +21,7 @@ app = FastAPI(title="DKat API", version="1.0.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,
-    allow_methods=["GET", "POST"],
+    allow_methods=["GET", "POST", "PATCH"],
     allow_headers=["Authorization", "Content-Type", "X-Admin-Token"],
 )
 app.include_router(auth_router, prefix="/api/v1")
