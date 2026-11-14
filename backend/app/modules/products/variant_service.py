@@ -7,6 +7,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.modules.products.catalog_transaction import CatalogConflict, CatalogInvalid, CatalogNotFound
 from app.modules.products.category_service import lock_store
+from app.modules.products.codes import generate_sku
 from app.modules.products.schemas import AttributeDataType, ProductStatus, VariantAttribute, VariantDetail
 from app.modules.products.variant_schemas import AttributeInput, AttributeRecord, VariantInput
 
@@ -112,6 +113,28 @@ def attribute_values(db: Connection, store_id: int, data: VariantInput) -> list[
     ]
 
 
+def insert_variant(db: Connection, params: dict, generated_sku: str | None) -> int:
+    sequence = 1
+    while True:
+        if generated_sku is not None:
+            suffix = f"-{sequence}" if sequence > 1 else ""
+            params["sku"] = generated_sku[:80 - len(suffix)].rstrip("-") + suffix
+        try:
+            return db.execute(
+                text("""
+                    INSERT INTO product_variants (product_id, sku, variant_name, price, cost_price, barcode, status)
+                    VALUES (:product, :sku, :variantName, :price, :costPrice, :barcode, 'ACTIVE')
+                """),
+                params,
+            ).lastrowid
+        except IntegrityError as error:
+            if getattr(error.orig, "args", ())[:1] != (1062,):
+                raise
+            if generated_sku is None:
+                raise CatalogConflict("DUPLICATE_SKU") from error
+            sequence += 1
+
+
 def save_variant(
     db: Connection, store_id: int, data: VariantInput, *,
     product_id: int | None = None, variant_id: int | None = None,
@@ -119,28 +142,27 @@ def save_variant(
     lock_store(db, store_id)
     creating = variant_id is None
     if creating:
-        product = db.execute(
-            text("SELECT product_id FROM products WHERE store_id = :store AND product_id = :product"),
+        product_code = db.execute(
+            text("SELECT product_code FROM products WHERE store_id = :store AND product_id = :product"),
             {"store": store_id, "product": product_id},
         ).scalar_one_or_none()
-        if product is None:
+        if product_code is None:
             raise CatalogNotFound("Product not found")
     else:
         product_id = variant_product_id(db, store_id, variant_id)
 
     values = attribute_values(db, store_id, data)
     params = {**data.model_dump(exclude={"attributes"}), "product": product_id, "variant": variant_id}
-    try:
-        if creating:
-            result = db.execute(
-                text("""
-                    INSERT INTO product_variants (product_id, sku, variant_name, price, cost_price, barcode, status)
-                    VALUES (:product, :sku, :variantName, :price, :costPrice, :barcode, 'ACTIVE')
-                """),
-                params,
+    if creating:
+        generated_sku = None
+        if data.sku is None:
+            sorted_values = sorted(values, key=lambda item: item["attribute"])
+            generated_sku = generate_sku(
+                product_code, (item["value"] for item in sorted_values),
             )
-            variant_id = result.lastrowid
-        else:
+        variant_id = insert_variant(db, params, generated_sku)
+    else:
+        try:
             db.execute(
                 text("""
                     UPDATE product_variants SET sku = COALESCE(:sku, sku), variant_name = :variantName,
@@ -149,12 +171,11 @@ def save_variant(
                 """),
                 params,
             )
-    except IntegrityError as error:
-        if getattr(error.orig, "args", ())[:1] == (1062,):
-            raise CatalogConflict("DUPLICATE_SKU") from error
-        raise
+        except IntegrityError as error:
+            if getattr(error.orig, "args", ())[:1] == (1062,):
+                raise CatalogConflict("DUPLICATE_SKU") from error
+            raise
 
-    if not creating:
         db.execute(
             text("DELETE FROM variant_attribute_values WHERE variant_id = :variant"),
             {"variant": variant_id},

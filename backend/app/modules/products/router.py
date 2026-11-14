@@ -9,7 +9,7 @@ from app.modules.products.schemas import (
     Product, ProductCreate, ProductDetail, ProductId, ProductInput, ProductRecord,
     ProductSort, ProductStatus, ProductStatusInput, VariantDetail,
 )
-from app.modules.products.variant_schemas import AttributeInput, AttributeRecord, VariantCreate, VariantInput
+from app.modules.products.variant_schemas import AttributeInput, AttributeRecord, VariantInput
 
 router = APIRouter(tags=["products"])
 Owner = Annotated[Actor, Depends(require_owner)]
@@ -46,7 +46,8 @@ def get_product(product_id: ProductId, actor: Reader) -> ProductDetail:
 
 @router.post("/products", status_code=201)
 def create_product(data: ProductCreate, actor: Owner) -> ProductRecord:
-    with catalog_transaction() as db:
+    # Read the sequence after acquiring the store lock, even after waiting for another writer.
+    with catalog_transaction(read_committed=True) as db:
         return service.create_product(db, actor.store_id, actor.user_id, data)
 
 
@@ -75,7 +76,7 @@ def create_attribute(data: AttributeInput, actor: Owner) -> AttributeRecord:
 
 
 @router.post("/products/{product_id}/variants", status_code=201)
-def create_variant(product_id: ProductId, data: VariantCreate, actor: Owner) -> VariantDetail:
+def create_variant(product_id: ProductId, data: VariantInput, actor: Owner) -> VariantDetail:
     with catalog_transaction() as db:
         return variant_service.save_variant(db, actor.store_id, data, product_id=product_id)
 
