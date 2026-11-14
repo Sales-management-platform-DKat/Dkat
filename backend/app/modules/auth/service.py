@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.security import (
@@ -53,6 +53,7 @@ def user_info(user: User) -> dict:
         "id": user.id,
         "shop_id": user.shop_id,
         "username": user.username,
+        "email": user.email,
         "full_name": user.full_name,
         "role": {value: key for key, value in STORAGE_ROLES.items()}[user.role],
         "shop_name": user.shop.name,
@@ -69,12 +70,13 @@ def create_user(
     full_name: str,
     password: str,
     role: str,
+    email: str | None = None,
 ) -> User:
     user = User(
         shop_id=shop.id,
         full_name=full_name.strip(),
         username=username.strip(),
-        email=None,
+        email=email.strip().casefold() if email else None,
         phone=None,
         password_hash=hash_password(password),
         role=STORAGE_ROLES[role],
@@ -86,13 +88,21 @@ def create_user(
 
 
 def authenticate(db: Session, username: str, password: str):
-    normalized_username, role = parse_login_name(username)
-    user = db.scalar(
-        select(User).where(
-            User.username == normalized_username,
-            User.role == STORAGE_ROLES.get(role, ""),
-        )
-    ) if normalized_username and role else None
+    login_value = username.strip()
+    if "@" in login_value:
+        users = db.scalars(
+            select(User).where(func.lower(User.email) == login_value.casefold())
+        ).all()
+        # Do not guess if legacy data has the same email on multiple accounts.
+        user = users[0] if len(users) == 1 else None
+    else:
+        normalized_username, role = parse_login_name(login_value)
+        user = db.scalar(
+            select(User).where(
+                User.username == normalized_username,
+                User.role == STORAGE_ROLES.get(role, ""),
+            )
+        ) if normalized_username and role else None
     if (
         user is None
         or user.status != "ACTIVE"
