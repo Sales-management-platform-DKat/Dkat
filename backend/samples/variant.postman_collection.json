@@ -1,0 +1,236 @@
+{
+  "info": {
+    "name": "DKat PBI 56",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Điền accessToken của OWNER và productId thuộc cùng cửa hàng. Chạy các request trong Variant theo thứ tự."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "productId",
+      "value": ""
+    },
+    {
+      "key": "attributeId",
+      "value": ""
+    },
+    {
+      "key": "variantId",
+      "value": ""
+    },
+    {
+      "key": "variantSku",
+      "value": ""
+    },
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    }
+  ],
+  "item": [
+    {
+      "name": "Variant",
+      "item": [
+        {
+          "name": "Tạo thuộc tính",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "pm.collectionVariables.set('attributeId', pm.response.json().attributeId);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/attributes",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Màu {{$guid}}\",\n  \"dataType\": \"TEXT\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Danh sách thuộc tính",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const id = Number(pm.collectionVariables.get('attributeId'));",
+                  "pm.expect(pm.response.json().some(attribute => attribute.attributeId === id)).to.be.true;"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/attributes"
+          }
+        },
+        {
+          "name": "Tạo biến thể",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "pm.collectionVariables.set('variantSku', 'PBI56-' + pm.variables.replaceIn('{{$guid}}'));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(201);",
+                  "pm.collectionVariables.set('variantId', pm.response.json().variant_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/products/{{productId}}/variants",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{variantSku}}\",\n  \"variantName\": \"Đỏ\",\n  \"price\": \"99000.00\",\n  \"costPrice\": \"59000.00\",\n  \"barcode\": null,\n  \"attributes\": [\n    {\n      \"attributeId\": {{attributeId}},\n      \"value\": \"Đỏ\"\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Tạo SKU trùng",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(409);",
+                  "pm.expect(pm.response.json().detail).to.eql('DUPLICATE_SKU');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/products/{{productId}}/variants",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{variantSku}}\",\n  \"variantName\": \"Đỏ\",\n  \"price\": \"99000.00\",\n  \"costPrice\": \"59000.00\",\n  \"barcode\": null,\n  \"attributes\": [\n    {\n      \"attributeId\": {{attributeId}},\n      \"value\": \"Đỏ\"\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Sửa biến thể",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.expect(pm.response.json().attributes[0].value).to.eql('Xanh');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/variants/{{variantId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sku\": \"{{variantSku}}\",\n  \"variantName\": \"Xanh\",\n  \"price\": \"99000.00\",\n  \"costPrice\": \"59000.00\",\n  \"barcode\": null,\n  \"attributes\": [\n    {\n      \"attributeId\": {{attributeId}},\n      \"value\": \"Xanh\"\n    }\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Chi tiết sản phẩm có biến thể",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const id = Number(pm.collectionVariables.get('variantId'));",
+                  "pm.expect(pm.response.json().variants.some(variant => variant.variant_id === id)).to.be.true;"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/products/{{productId}}"
+          }
+        },
+        {
+          "name": "Ngừng biến thể",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.expect(pm.response.json().status).to.eql('INACTIVE');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "url": "{{baseUrl}}/variants/{{variantId}}/status",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"INACTIVE\"\n}"
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
