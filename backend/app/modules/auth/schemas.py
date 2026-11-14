@@ -1,13 +1,19 @@
-"""Request/response schemas for /auth (JSON uses camelCase)."""
-from pydantic import BaseModel, ConfigDict, Field, field_validator
-from pydantic.alias_generators import to_camel
+from datetime import datetime
+from typing import Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, StringConstraints
 from typing_extensions import Annotated
 
 
-class CamelModel(BaseModel):
-    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+Username = Annotated[
+    str,
+    StringConstraints(
+        min_length=3,
+        max_length=32,
+        pattern=r"^[a-zA-Z0-9._-]+$",
+        strip_whitespace=True,
+    ),
+]
 
 
 class LoginRequest(BaseModel):
@@ -42,21 +48,18 @@ class UserCreate(BaseModel):
     role: Literal["manager", "staff"]
 
 
-class BranchBrief(CamelModel):
-    id: int
-    name: str
+class UserInfo(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
 
-
-class AuthUserOut(CamelModel):
     id: int
     shop_id: int
     username: str
     email: str | None
     full_name: str
-    username: str
-    role: str
-    store_id: int
-    branches: list[BranchBrief]
+    role: Literal["owner", "manager", "staff"]
+    shop_name: str
+    plan: str
+    subscription_expires_at: datetime
 
 
 class LoginResponse(BaseModel):

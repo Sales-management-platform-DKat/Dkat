@@ -3,9 +3,16 @@ import re
 from datetime import datetime
 from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from app.modules.auth.schemas import CamelModel
+
+def _to_camel(value: str) -> str:
+    head, *tail = value.split("_")
+    return head + "".join(part.capitalize() for part in tail)
+
+
+class CamelModel(BaseModel):
+    model_config = ConfigDict(alias_generator=_to_camel, populate_by_name=True)
 
 BranchStatus = Literal["ACTIVE", "INACTIVE"]
 

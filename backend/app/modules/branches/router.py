@@ -1,78 +1,203 @@
-"""Branch management API (FR-02).
+from typing import Annotated
 
-GET    /branches                 all roles  (OWNER: whole store, others: assigned branches)
-GET    /branches/{id}            all roles  (403 when the branch is outside the user's scope)
-POST   /branches                 OWNER      (201; creates inventory rows = 0)
-PUT    /branches/{id}            OWNER
-PATCH  /branches/{id}/status     OWNER      (409 BRANCH_HAS_OPEN_PREORDERS)
-There is no DELETE: a branch is deactivated, never removed.
-"""
-from fastapi import APIRouter, Depends, Query
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import bindparam, text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
-from app.core.permissions import ROLE_OWNER, CurrentUser, require_auth, require_branch_access, require_role
-from app.db.session import get_db
-from app.modules.branches import service
-from app.modules.branches.schemas import BranchCreatedOut, BranchIn, BranchOut, BranchStatus, BranchStatusIn
-from app.utils.response import SuccessResponse, ok
+from app.core.permissions import (
+    Actor,
+    get_accessible_branch_ids,
+    require_auth,
+    require_branch_access,
+    require_owner,
+)
+from app.db.session import engine, get_db
+from app.modules.branches.schemas import (
+    BranchCreatedOut,
+    BranchIn,
+    BranchOut,
+    BranchStatus,
+    BranchStatusIn,
+)
 
 router = APIRouter(prefix="/branches", tags=["branches"])
+Reader = Annotated[Actor, Depends(require_auth)]
+Owner = Annotated[Actor, Depends(require_owner)]
+Database = Annotated[Session, Depends(get_db)]
 
-# Route-level dependencies run before the ones in the signature: role first, then branch scope
-_owner_only = [Depends(require_role(ROLE_OWNER))]
+
+def _out(row) -> BranchOut:
+    return BranchOut(
+        id=row["branch_id"],
+        store_id=row["store_id"],
+        branch_code=row["branch_code"],
+        name=row["name"],
+        address=row["address"],
+        phone=row["phone"],
+        status=row["status"],
+        created_at=row["created_at"],
+    )
 
 
-@router.get("", response_model=SuccessResponse[list[BranchOut]], response_model_by_alias=True)
-async def list_branches(
+@router.get("", response_model=list[BranchOut], response_model_by_alias=True)
+def list_branches(
+    actor: Reader,
+    db: Database,
     status: BranchStatus | None = Query(default=None),
-    user: CurrentUser = Depends(require_auth),
-    db: AsyncSession = Depends(get_db),
-):
-    """Danh sách chi nhánh. `?status=ACTIVE|INACTIVE` để lọc."""
-    return ok(await service.list_branches(db, user, status))
+) -> list[BranchOut]:
+    connection = db.connection()
+    branch_ids = get_accessible_branch_ids(connection, actor)
+    if not branch_ids:
+        return []
+    rows = connection.execute(
+        text("""
+            SELECT branch_id, store_id, branch_code, name, address, phone, status, created_at
+            FROM branches
+            WHERE store_id = :store_id AND branch_id IN :branch_ids
+              AND (:status IS NULL OR status = :status)
+            ORDER BY branch_code
+        """).bindparams(bindparam("branch_ids", expanding=True)),
+        {"store_id": actor.store_id, "branch_ids": branch_ids, "status": status},
+    ).mappings()
+    return [_out(row) for row in rows]
 
 
-@router.get("/{branch_id}", response_model=SuccessResponse[BranchOut], response_model_by_alias=True)
-async def get_branch(
-    branch_id: int,
-    user: CurrentUser = Depends(require_branch_access()),
-    db: AsyncSession = Depends(get_db),
-):
-    """Chi tiết chi nhánh. MANAGER/EMPLOYEE xem chi nhánh không được phân công -> 403."""
-    return ok(await service.get_branch(db, user, branch_id))
+@router.get("/{branch_id}", response_model=BranchOut, response_model_by_alias=True)
+def get_branch(branch_id: int, actor: Reader, db: Database) -> BranchOut:
+    connection = db.connection()
+    require_branch_access(connection, actor, branch_id)
+    row = connection.execute(
+        text("""
+            SELECT branch_id, store_id, branch_code, name, address, phone, status, created_at
+            FROM branches WHERE store_id = :store_id AND branch_id = :branch_id
+        """),
+        {"store_id": actor.store_id, "branch_id": branch_id},
+    ).mappings().one_or_none()
+    if row is None:
+        raise HTTPException(404, "Không tìm thấy chi nhánh")
+    return _out(row)
 
 
-@router.post(
-    "",
-    status_code=201,
-    dependencies=_owner_only,
-    response_model=SuccessResponse[BranchCreatedOut],
-    response_model_by_alias=True,
-)
-async def create_branch(body: BranchIn, user: CurrentUser = Depends(require_auth), db: AsyncSession = Depends(get_db)):
-    """Tạo chi nhánh (OWNER). Bắt buộc branchCode, name, address. 409 DUPLICATE_BRANCH_CODE nếu trùng mã."""
-    return ok(await service.create_branch(db, user, body))
+@router.post("", status_code=201, response_model=BranchCreatedOut, response_model_by_alias=True)
+def create_branch(body: BranchIn, actor: Owner) -> BranchCreatedOut:
+    try:
+        with engine.begin() as db:
+            if db.execute(
+                text("SELECT 1 FROM branches WHERE store_id = :store_id AND branch_code = :code"),
+                {"store_id": actor.store_id, "code": body.branch_code},
+            ).first():
+                raise HTTPException(409, "Mã chi nhánh đã tồn tại trong cửa hàng")
+            result = db.execute(
+                text("""
+                    INSERT INTO branches (store_id, branch_code, name, address, phone, status)
+                    VALUES (:store_id, :code, :name, :address, :phone, 'ACTIVE')
+                """),
+                {
+                    "store_id": actor.store_id,
+                    "code": body.branch_code,
+                    "name": body.name,
+                    "address": body.address,
+                    "phone": body.phone,
+                },
+            )
+            branch_id = result.lastrowid
+            inventory_rows = db.execute(
+                text("""
+                    INSERT INTO inventory (branch_id, variant_id, quantity)
+                    SELECT :branch_id, v.variant_id, 0
+                    FROM product_variants v
+                    JOIN products p ON p.product_id = v.product_id
+                    LEFT JOIN inventory i ON i.branch_id = :branch_id AND i.variant_id = v.variant_id
+                    WHERE p.store_id = :store_id AND v.status = 'ACTIVE' AND i.inventory_id IS NULL
+                """),
+                {"branch_id": branch_id, "store_id": actor.store_id},
+            ).rowcount or 0
+            row = db.execute(
+                text("""
+                    SELECT branch_id, store_id, branch_code, name, address, phone, status, created_at
+                    FROM branches WHERE branch_id = :branch_id
+                """),
+                {"branch_id": branch_id},
+            ).mappings().one()
+    except IntegrityError:
+        raise HTTPException(409, "Mã chi nhánh đã tồn tại trong cửa hàng") from None
+    return BranchCreatedOut(**_out(row).model_dump(), inventory_rows_created=inventory_rows)
 
 
-@router.put("/{branch_id}", dependencies=_owner_only, response_model=SuccessResponse[BranchOut], response_model_by_alias=True)
-async def update_branch(
-    branch_id: int,
-    body: BranchIn,
-    user: CurrentUser = Depends(require_branch_access()),
-    db: AsyncSession = Depends(get_db),
-):
-    """Cập nhật mã, tên, địa chỉ, SĐT (OWNER). Trạng thái đổi qua PATCH /status."""
-    return ok(await service.update_branch(db, user, branch_id, body))
+@router.put("/{branch_id}", response_model=BranchOut, response_model_by_alias=True)
+def update_branch(branch_id: int, body: BranchIn, actor: Owner) -> BranchOut:
+    try:
+        with engine.begin() as db:
+            row = db.execute(
+                text("SELECT 1 FROM branches WHERE store_id = :store_id AND branch_id = :branch_id"),
+                {"store_id": actor.store_id, "branch_id": branch_id},
+            ).first()
+            if row is None:
+                raise HTTPException(404, "Không tìm thấy chi nhánh")
+            duplicate = db.execute(
+                text("""
+                    SELECT 1 FROM branches
+                    WHERE store_id = :store_id AND branch_code = :code AND branch_id <> :branch_id
+                """),
+                {"store_id": actor.store_id, "code": body.branch_code, "branch_id": branch_id},
+            ).first()
+            if duplicate:
+                raise HTTPException(409, "Mã chi nhánh đã tồn tại trong cửa hàng")
+            db.execute(
+                text("""
+                    UPDATE branches SET branch_code = :code, name = :name, address = :address, phone = :phone
+                    WHERE store_id = :store_id AND branch_id = :branch_id
+                """),
+                {
+                    "store_id": actor.store_id,
+                    "branch_id": branch_id,
+                    "code": body.branch_code,
+                    "name": body.name,
+                    "address": body.address,
+                    "phone": body.phone,
+                },
+            )
+            result = db.execute(
+                text("""
+                    SELECT branch_id, store_id, branch_code, name, address, phone, status, created_at
+                    FROM branches WHERE branch_id = :branch_id
+                """),
+                {"branch_id": branch_id},
+            ).mappings().one()
+    except IntegrityError:
+        raise HTTPException(409, "Mã chi nhánh đã tồn tại trong cửa hàng") from None
+    return _out(result)
 
 
-@router.patch(
-    "/{branch_id}/status", dependencies=_owner_only, response_model=SuccessResponse[BranchOut], response_model_by_alias=True
-)
-async def change_branch_status(
-    branch_id: int,
-    body: BranchStatusIn,
-    user: CurrentUser = Depends(require_branch_access()),
-    db: AsyncSession = Depends(get_db),
-):
-    """ACTIVE/INACTIVE (OWNER). 409 BRANCH_HAS_OPEN_PREORDERS khi còn đơn WAITING_STOCK/READY/NOTIFIED."""
-    return ok(await service.change_status(db, user, branch_id, body.status))
+@router.patch("/{branch_id}/status", response_model=BranchOut, response_model_by_alias=True)
+def change_branch_status(branch_id: int, body: BranchStatusIn, actor: Owner) -> BranchOut:
+    with engine.begin() as db:
+        row = db.execute(
+            text("SELECT 1 FROM branches WHERE store_id = :store_id AND branch_id = :branch_id"),
+            {"store_id": actor.store_id, "branch_id": branch_id},
+        ).first()
+        if row is None:
+            raise HTTPException(404, "Không tìm thấy chi nhánh")
+        if body.status == "INACTIVE":
+            open_orders = db.execute(
+                text("""
+                    SELECT COUNT(*) FROM preorders
+                    WHERE branch_id = :branch_id AND status IN ('WAITING_STOCK', 'READY', 'NOTIFIED')
+                """),
+                {"branch_id": branch_id},
+            ).scalar_one()
+            if open_orders:
+                raise HTTPException(409, "Không thể ngừng hoạt động khi chi nhánh còn đơn đặt trước đang xử lý")
+        db.execute(
+            text("UPDATE branches SET status = :status WHERE store_id = :store_id AND branch_id = :branch_id"),
+            {"status": body.status, "store_id": actor.store_id, "branch_id": branch_id},
+        )
+        result = db.execute(
+            text("""
+                SELECT branch_id, store_id, branch_code, name, address, phone, status, created_at
+                FROM branches WHERE branch_id = :branch_id
+            """),
+            {"branch_id": branch_id},
+        ).mappings().one()
+    return _out(result)

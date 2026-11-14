@@ -1,4 +1,3 @@
-"""Entry point. Run: uvicorn app.main:app --reload"""
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,6 +8,7 @@ from app.db.base import Base
 from app.db.session import engine
 from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
+from app.modules.branches.router import router as branches_router
 from app.modules.inventory.router import router as inventory_router
 from app.modules.products.category_router import router as categories_router
 from app.modules.products.router import router as products_router
@@ -16,14 +16,9 @@ from app.modules.users.router import router as users_router
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    if await ping_database():
-        logger.info("MySQL connected: %s@%s:%s/%s", settings.DB_USER, settings.DB_HOST, settings.DB_PORT, settings.DB_NAME)
-    else:
-        # The server stays up; /health reports database: "down"
-        logger.warning("MySQL not reachable. Check DB_* in .env")
+async def lifespan(_app: FastAPI):
+    Base.metadata.create_all(bind=engine)
     yield
-    await close_engine()
 
 
 app = FastAPI(title="DKat API", version="1.0.0", lifespan=lifespan)
@@ -36,6 +31,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")
+app.include_router(branches_router, prefix="/api/v1")
 app.include_router(products_router, prefix="/api/v1")
 app.include_router(categories_router, prefix="/api/v1")
 app.include_router(inventory_router, prefix="/api/v1")
