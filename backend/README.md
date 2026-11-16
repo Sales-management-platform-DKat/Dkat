@@ -93,3 +93,13 @@ Gọi `POST /inventory/stocktake` với token của OWNER hoặc MANAGER đượ
 Thay ID bằng chi nhánh và biến thể cần kiểm kê. Ghi chú bắt buộc và số đếm phải là số nguyên không âm. Phản hồi HTTP 201 có số trước, chênh lệch và số sau theo từng biến thể. Dòng có chênh lệch ghi biến động `ADJUSTMENT`. Nếu số đếm bằng tồn thực, dòng trả `quantityChange: 0` và `movementId: null`. Nếu số đếm thấp hơn lượng giữ chỗ, API trả HTTP 409 `STOCK_BELOW_RESERVED` với từng dòng vi phạm và hoàn tác cả lô.
 
 Import `samples/pbi82-stocktake.postman_collection.json` để chạy thử. Dùng một biến thể trên database kiểm thử có cả tồn giữ chỗ và tồn khả dụng từ 1 trở lên. Điền `accessToken`, `branchId` và `variantId`, rồi chạy thư mục Stocktake theo thứ tự.
+
+## Lịch sử biến động kho PBI 83
+
+Gọi `GET /inventory/movements` bằng Bearer token. OWNER xem các chi nhánh trong cửa hàng của mình. MANAGER và EMPLOYEE xem các chi nhánh được phân công. Bỏ `branchId` để xem trong toàn bộ chi nhánh có quyền. Truy cập trực tiếp chi nhánh ngoài quyền trả 403.
+
+Ví dụ `GET /inventory/movements?branchId=1&variantId=1&type=EXPORT&from=2026-11-01&to=2026-11-17&page=1&size=20`. Bộ lọc ngày dùng giờ Việt Nam và bao gồm cả ngày `to`. Nếu gửi timestamp ISO 8601, hai đầu mút đều bao gồm và timestamp thiếu múi giờ được hiểu là UTC. Khoảng sai trả 422. Phản hồi trả `createdAt` theo UTC, mới nhất trước. Các biến động cùng thời điểm sắp theo ID giảm dần. Mặc định 50 dòng mỗi trang, tối đa 100.
+
+Với database đã khởi tạo, chạy `database/03_inventory_movement_history.sql` để bổ sung index theo thời gian. File `database/01_schema.sql` đã có index cho database mới.
+
+Để thử cả luồng, import `samples/pbi83-movement-history.postman_collection.json`. Dùng database kiểm thử, điền `accessToken` của OWNER và ID chi nhánh, biến thể đã có dòng tồn kho. Chạy đúng thứ tự để tạo và xác minh ba biến động nhập, xuất và kiểm kê.

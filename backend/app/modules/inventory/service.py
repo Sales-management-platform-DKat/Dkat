@@ -4,8 +4,9 @@ from sqlalchemy.engine import Connection
 
 from app.core.permissions import Actor, require_branch_access
 from app.modules.inventory.schemas import (
-    MAX_STOCK_QUANTITY, ExportReason, InventoryItem, StockChangeResult, StockExportInput,
-    StockImportInput, StockLineResult, StockMovementType, StocktakeInput,
+    MAX_STOCK_QUANTITY, ExportReason, InventoryItem, InventoryMovement, MovementFilters,
+    StockChangeResult, StockExportInput, StockImportInput, StockLineResult,
+    StockMovementType, StocktakeInput,
 )
 
 LOW_STOCK_THRESHOLD = 5
@@ -60,6 +61,53 @@ def list_inventory(
         },
     ).mappings()
     return [InventoryItem.model_validate(row) for row in rows]
+
+
+def list_inventory_movements(
+    db: Connection, store_id: int, branch_ids: list[int], filters: MovementFilters,
+) -> list[InventoryMovement]:
+    if not branch_ids:
+        return []
+
+    end_operator = "<" if filters.end_exclusive else "<="
+    conditions = ["i.branch_id IN :branches"]
+    params = {
+        "store": store_id, "branches": branch_ids, "limit": filters.size,
+        "offset": (filters.page - 1) * filters.size,
+    }
+    for name, expression, value in (
+        ("variant", "i.variant_id = :variant", filters.variantId),
+        ("type", "m.movement_type = :type", filters.type),
+        ("start", "m.created_at >= :start", filters.utc_bound(filters.from_date)),
+        ("end", f"m.created_at {end_operator} :end", filters.utc_bound(filters.to_date, end=True)),
+    ):
+        if value is not None:
+            conditions.append(expression)
+            params[name] = value
+
+    rows = db.execute(
+        text(f"""
+            SELECT m.movement_id AS movementId, i.inventory_id AS inventoryId,
+                   b.branch_id AS branchId, b.name AS branchName,
+                   p.product_id AS productId, p.name AS productName,
+                   v.variant_id AS variantId, v.variant_name AS variantName, v.sku,
+                   m.movement_type AS movementType, m.quantity_change AS quantityChange,
+                   m.created_by AS createdBy, u.full_name AS createdByName, m.note,
+                   m.reference_type AS referenceType, m.reference_id AS referenceId,
+                   m.export_reason AS exportReason, m.created_at AS createdAt
+            FROM inventory_movements AS m
+            JOIN inventory AS i ON i.inventory_id = m.inventory_id
+            JOIN branches AS b ON b.branch_id = i.branch_id AND b.store_id = :store
+            JOIN product_variants AS v ON v.variant_id = i.variant_id
+            JOIN products AS p ON p.product_id = v.product_id AND p.store_id = :store
+            LEFT JOIN users AS u ON u.user_id = m.created_by AND u.store_id = :store
+            WHERE {" AND ".join(conditions)}
+            ORDER BY m.created_at DESC, m.movement_id DESC
+            LIMIT :limit OFFSET :offset
+        """).bindparams(bindparam("branches", expanding=True)),
+        params,
+    ).mappings()
+    return [InventoryMovement.model_validate(row) for row in rows]
 
 
 def check_variants(db: Connection, store_id: int, variant_ids: list[int]) -> None:

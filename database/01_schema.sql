@@ -146,6 +146,7 @@ CREATE TABLE inventory_movements (
     created_by BIGINT NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     KEY ix_movements_inventory_time (inventory_id, created_at),
+    KEY ix_movements_created_at_id (created_at, movement_id),
     CONSTRAINT fk_inventory_movements_inventory_id FOREIGN KEY (inventory_id) REFERENCES inventory (inventory_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT fk_inventory_movements_created_by FOREIGN KEY (created_by) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT
 ) ENGINE=InnoDB;
