@@ -4,8 +4,8 @@ from sqlalchemy.engine import Connection
 
 from app.core.permissions import Actor, require_branch_access
 from app.modules.inventory.schemas import (
-    MAX_STOCK_QUANTITY, InventoryItem, StockChangeResult, StockExportInput, StockImportInput,
-    StockLineResult,
+    MAX_STOCK_QUANTITY, ExportReason, InventoryItem, StockChangeResult, StockExportInput,
+    StockImportInput, StockLineResult, StockMovementType, StocktakeInput,
 )
 
 LOW_STOCK_THRESHOLD = 5
@@ -106,11 +106,9 @@ def lock_inventory_rows(
     return rows
 
 
-def check_export_stock(
-    db: Connection, data: StockExportInput, rows: dict[int, tuple[int, int]]
-) -> None:
+def reserved_quantities(db: Connection, branch_id: int, variant_ids: list[int]) -> dict[int, int]:
     # Reservation writers must take the same inventory locks before changing allocations.
-    reserved_by_variant = dict(db.execute(
+    rows = db.execute(
         text(f"""
             SELECT item.variant_id, SUM(item.allocated_quantity)
             FROM preorders AS po
@@ -119,13 +117,18 @@ def check_export_stock(
               AND item.variant_id IN :variants
             GROUP BY item.variant_id
         """).bindparams(bindparam("variants", expanding=True)),
-        {"branch": data.branchId, "variants": [item.variantId for item in data.items]},
-    ).all())
+        {"branch": branch_id, "variants": variant_ids},
+    )
+    return {variant_id: int(quantity) for variant_id, quantity in rows}
 
+
+def check_export_stock(
+    data: StockExportInput, rows: dict[int, tuple[int, int]], reserved_by_variant: dict[int, int]
+) -> None:
     shortages = []
     for item in data.items:
         quantity = rows.get(item.variantId, (None, 0))[1]
-        reserved = int(reserved_by_variant.get(item.variantId, 0))
+        reserved = reserved_by_variant.get(item.variantId, 0)
         available = quantity - reserved
         if item.quantity > available:
             shortages.append({
@@ -136,32 +139,19 @@ def check_export_stock(
         raise HTTPException(409, {"code": "INSUFFICIENT_STOCK", "items": shortages})
 
 
-def change_stock(
-    db: Connection, actor: Actor, data: StockImportInput | StockExportInput
-) -> StockChangeResult:
-    exporting = isinstance(data, StockExportInput)
-    movement_type = "EXPORT" if exporting else "IMPORT"
-    reason = data.reason if exporting else None
-    variant_ids = [item.variantId for item in data.items]
-    require_branch_access(db, actor, data.branchId)
-    check_variants(db, actor.store_id, variant_ids)
-    rows = lock_inventory_rows(db, data.branchId, variant_ids, create_missing=not exporting)
-
-    if exporting:
-        check_export_stock(db, data, rows)
-
-    results = []
-    for item in data.items:
-        inventory_id, before = rows[item.variantId]
-        delta = -item.quantity if exporting else item.quantity
-        after = before + delta
-        if after > MAX_STOCK_QUANTITY:
-            raise HTTPException(409, {"code": "STOCK_LIMIT_EXCEEDED", "variantId": item.variantId})
+def record_movement(
+    db: Connection, actor: Actor, *, variant_id: int, inventory_id: int,
+    before: int, after: int, movement_type: StockMovementType, note: str | None,
+    reason: ExportReason | None = None,
+) -> StockLineResult:
+    delta = after - before
+    movement_id = None
+    if delta:
         db.execute(
             text("UPDATE inventory SET quantity = :quantity WHERE inventory_id = :id"),
             {"quantity": after, "id": inventory_id},
         )
-        movement = db.execute(
+        movement_id = db.execute(
             text("""
                 INSERT INTO inventory_movements
                     (inventory_id, movement_type, quantity_change, export_reason, note, created_by)
@@ -169,12 +159,67 @@ def change_stock(
             """),
             {
                 "inventory": inventory_id, "type": movement_type, "delta": delta,
-                "reason": reason, "note": data.note, "user": actor.user_id,
+                "reason": reason, "note": note, "user": actor.user_id,
             },
-        )
-        results.append(StockLineResult(
-            variantId=item.variantId, inventoryId=inventory_id, movementId=movement.lastrowid,
-            quantityBefore=before, quantityChange=delta, quantityAfter=after,
+        ).lastrowid
+    return StockLineResult(
+        variantId=variant_id, inventoryId=inventory_id, movementId=movement_id,
+        quantityBefore=before, quantityChange=delta, quantityAfter=after,
+    )
+
+
+def record_stocktake(
+    db: Connection, actor: Actor, data: StocktakeInput, rows: dict[int, tuple[int, int]],
+    reserved_by_variant: dict[int, int],
+) -> StockChangeResult:
+    shortages = []
+    for item in data.items:
+        reserved = reserved_by_variant.get(item.variantId, 0)
+        if item.countedQuantity < reserved:
+            shortages.append({
+                "variantId": item.variantId, "countedQuantity": item.countedQuantity,
+                "quantity": rows[item.variantId][1], "reserved": reserved,
+            })
+    if shortages:
+        raise HTTPException(409, {"code": "STOCK_BELOW_RESERVED", "items": shortages})
+
+    results = []
+    for item in data.items:
+        inventory_id, before = rows[item.variantId]
+        results.append(record_movement(
+            db, actor, variant_id=item.variantId, inventory_id=inventory_id, before=before,
+            after=item.countedQuantity, movement_type="ADJUSTMENT", note=data.note,
+        ))
+    return StockChangeResult(branchId=data.branchId, movementType="ADJUSTMENT", items=results)
+
+
+def change_stock(
+    db: Connection, actor: Actor, data: StockImportInput | StocktakeInput
+) -> StockChangeResult:
+    exporting = isinstance(data, StockExportInput)
+    variant_ids = [item.variantId for item in data.items]
+    require_branch_access(db, actor, data.branchId)
+    check_variants(db, actor.store_id, variant_ids)
+    rows = lock_inventory_rows(db, data.branchId, variant_ids, create_missing=not exporting)
+
+    if isinstance(data, StocktakeInput):
+        reserved = reserved_quantities(db, data.branchId, variant_ids)
+        return record_stocktake(db, actor, data, rows, reserved)
+
+    if isinstance(data, StockExportInput):
+        check_export_stock(data, rows, reserved_quantities(db, data.branchId, variant_ids))
+    movement_type = "EXPORT" if exporting else "IMPORT"
+    reason = data.reason if isinstance(data, StockExportInput) else None
+    results = []
+    for item in data.items:
+        inventory_id, before = rows[item.variantId]
+        delta = -item.quantity if exporting else item.quantity
+        after = before + delta
+        if after > MAX_STOCK_QUANTITY:
+            raise HTTPException(409, {"code": "STOCK_LIMIT_EXCEEDED", "variantId": item.variantId})
+        results.append(record_movement(
+            db, actor, variant_id=item.variantId, inventory_id=inventory_id, before=before,
+            after=after, movement_type=movement_type, reason=reason, note=data.note,
         ))
 
     return StockChangeResult(branchId=data.branchId, movementType=movement_type, reason=reason, items=results)

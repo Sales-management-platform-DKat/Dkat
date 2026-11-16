@@ -81,3 +81,15 @@ Mỗi chi nhánh ACTIVE thuộc cửa hàng có một dòng với `quantity = 0`
 Mỗi request nhận từ 1 đến 100 biến thể khác nhau, số lượng từng dòng là số nguyên dương. HTTP 201 trả số lượng trước, lượng thay đổi, số lượng sau và ID biến động. Nếu xuất vượt tồn khả dụng ở bất kỳ dòng nào, API trả HTTP 409 `INSUFFICIENT_STOCK` kèm các dòng thiếu và rollback cả lô. API nhập gọi hook phân bổ sau commit. Hook đang chờ triển khai FIFO ở PBI 129/130.
 
 Để chạy nhanh cả hai luồng trên database kiểm thử, import `samples/pbi74-75-stock.postman_collection.json` và điền `accessToken`, `branchId` và `variantId`. Collection thay đổi số lượng tồn và tạo biến động.
+
+## Kiểm kê tồn kho PBI 82
+
+Gọi `POST /inventory/stocktake` với token của OWNER hoặc MANAGER được phân công chi nhánh. EMPLOYEE cần được phân công và có `ALLOW_EMPLOYEE_STOCK=true`. Backend dùng schema và quyền MySQL đã thiết lập cho PBI 74 và 75.
+
+```json
+{"branchId": 1, "note": "Kiểm kê cuối ngày", "items": [{"variantId": 1, "countedQuantity": 8}]}
+```
+
+Thay ID bằng chi nhánh và biến thể cần kiểm kê. Ghi chú bắt buộc và số đếm phải là số nguyên không âm. Phản hồi HTTP 201 có số trước, chênh lệch và số sau theo từng biến thể. Dòng có chênh lệch ghi biến động `ADJUSTMENT`. Nếu số đếm bằng tồn thực, dòng trả `quantityChange: 0` và `movementId: null`. Nếu số đếm thấp hơn lượng giữ chỗ, API trả HTTP 409 `STOCK_BELOW_RESERVED` với từng dòng vi phạm và hoàn tác cả lô.
+
+Import `samples/pbi82-stocktake.postman_collection.json` để chạy thử. Dùng một biến thể trên database kiểm thử có cả tồn giữ chỗ và tồn khả dụng từ 1 trở lên. Điền `accessToken`, `branchId` và `variantId`, rồi chạy thư mục Stocktake theo thứ tự.

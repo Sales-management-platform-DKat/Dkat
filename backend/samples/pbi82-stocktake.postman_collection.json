@@ -1,0 +1,375 @@
+{
+  "info": {
+    "name": "DKat PBI 82 | Kiểm kê tồn kho",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Chạy trên database kiểm thử. Điền accessToken của OWNER hoặc MANAGER được phân công, branchId và variantId có dòng tồn kho, reserved và available đều từ 1 trở lên. Chạy các request theo thứ tự. Mỗi lượt tạo hai biến động và giảm tồn thực ròng 1."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "branchId",
+      "value": ""
+    },
+    {
+      "key": "variantId",
+      "value": ""
+    },
+    {
+      "key": "before",
+      "value": ""
+    },
+    {
+      "key": "plusTwo",
+      "value": ""
+    },
+    {
+      "key": "minusThree",
+      "value": ""
+    },
+    {
+      "key": "belowReserved",
+      "value": ""
+    },
+    {
+      "key": "reserved",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Stocktake",
+      "item": [
+        {
+          "name": "Đọc tồn kiểm thử",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{branchId}}/{{variantId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data).to.include.keys('branchId', 'variantId', 'quantity', 'reserved', 'available');",
+                  "  pm.expect(data.branchId).to.eql(Number(pm.variables.get('branchId')));",
+                  "  pm.expect(data.variantId).to.eql(Number(pm.variables.get('variantId')));",
+                  "  pm.expect(data.reserved).to.be.at.least(1);",
+                  "  pm.expect(data.available).to.be.at.least(1);",
+                  "  pm.collectionVariables.set('before', data.quantity);",
+                  "  pm.collectionVariables.set('plusTwo', data.quantity + 2);",
+                  "  pm.collectionVariables.set('minusThree', data.quantity - 1);",
+                  "  pm.collectionVariables.set('belowReserved', data.reserved - 1);",
+                  "  pm.collectionVariables.set('reserved', data.reserved);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Điều chỉnh tăng 2",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/inventory/stocktake",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"note\": \"Kiểm kê thử PBI 82\",\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"countedQuantity\": {{plusTwo}}\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.branchId).to.eql(Number(pm.variables.get('branchId')));",
+                  "  pm.expect(data.movementType).to.eql('ADJUSTMENT');",
+                  "  pm.expect(data.items).to.have.lengthOf(1);",
+                  "  const row = data.items[0];",
+                  "  pm.expect(row.variantId).to.eql(Number(pm.variables.get('variantId')));",
+                  "  pm.expect(row.inventoryId).to.be.a('number').above(0);",
+                  "  pm.expect(row.quantityBefore).to.eql(Number(pm.variables.get('before')));",
+                  "  pm.expect(row.quantityChange).to.eql(2);",
+                  "  pm.expect(row.quantityAfter).to.eql(Number(pm.variables.get('plusTwo')));",
+                  "  pm.expect(row.movementId).to.be.a('number').above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Điều chỉnh giảm 3",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/inventory/stocktake",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"note\": \"Kiểm kê thử PBI 82\",\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"countedQuantity\": {{minusThree}}\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.branchId).to.eql(Number(pm.variables.get('branchId')));",
+                  "  pm.expect(data.movementType).to.eql('ADJUSTMENT');",
+                  "  pm.expect(data.items).to.have.lengthOf(1);",
+                  "  const row = data.items[0];",
+                  "  pm.expect(row.variantId).to.eql(Number(pm.variables.get('variantId')));",
+                  "  pm.expect(row.inventoryId).to.be.a('number').above(0);",
+                  "  pm.expect(row.quantityBefore).to.eql(Number(pm.variables.get('plusTwo')));",
+                  "  pm.expect(row.quantityChange).to.eql(-3);",
+                  "  pm.expect(row.quantityAfter).to.eql(Number(pm.variables.get('minusThree')));",
+                  "  pm.expect(row.movementId).to.be.a('number').above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Kiểm kê không có chênh lệch",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/inventory/stocktake",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"note\": \"Kiểm kê thử PBI 82\",\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"countedQuantity\": {{minusThree}}\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.branchId).to.eql(Number(pm.variables.get('branchId')));",
+                  "  pm.expect(data.movementType).to.eql('ADJUSTMENT');",
+                  "  pm.expect(data.items).to.have.lengthOf(1);",
+                  "  const row = data.items[0];",
+                  "  pm.expect(row.variantId).to.eql(Number(pm.variables.get('variantId')));",
+                  "  pm.expect(row.inventoryId).to.be.a('number').above(0);",
+                  "  pm.expect(row.quantityBefore).to.eql(Number(pm.variables.get('minusThree')));",
+                  "  pm.expect(row.quantityChange).to.eql(0);",
+                  "  pm.expect(row.quantityAfter).to.eql(Number(pm.variables.get('minusThree')));",
+                  "  pm.expect(row.movementId).to.eql(null);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Từ chối số đếm dưới lượng giữ",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/inventory/stocktake",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"note\": \"Kiểm kê thử PBI 82\",\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"countedQuantity\": {{belowReserved}}\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.detail.code).to.eql('STOCK_BELOW_RESERVED');",
+                  "  pm.expect(data.detail.items).to.have.lengthOf(1);",
+                  "  pm.expect(data.detail.items[0]).to.include({variantId: Number(pm.variables.get('variantId')), countedQuantity: Number(pm.variables.get('belowReserved')), quantity: Number(pm.variables.get('minusThree')), reserved: Number(pm.variables.get('reserved'))});",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Từ chối số đếm âm",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/inventory/stocktake",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"note\": \"Kiểm kê thử PBI 82\",\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"countedQuantity\": -1\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.detail).to.be.an('array').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Từ chối ghi chú trống",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/inventory/stocktake",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"note\": \" \",\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"countedQuantity\": {{minusThree}}\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.detail).to.be.an('array').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Xác minh tồn sau các yêu cầu lỗi",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{branchId}}/{{variantId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data).to.include.keys('branchId', 'variantId', 'quantity', 'reserved', 'available');",
+                  "  pm.expect(data.branchId).to.eql(Number(pm.variables.get('branchId')));",
+                  "  pm.expect(data.variantId).to.eql(Number(pm.variables.get('variantId')));",
+                  "  pm.expect(data.quantity).to.eql(Number(pm.variables.get('minusThree')));",
+                  "  pm.expect(data.reserved).to.eql(Number(pm.variables.get('reserved')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Từ chối thiếu token",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/inventory/stocktake",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"note\": \"Kiểm kê thử PBI 82\",\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"countedQuantity\": {{minusThree}}\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.detail).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -9,7 +9,7 @@ from app.core import config
 from app.core.permissions import Actor, get_accessible_branch_ids, require_auth, require_branch_access
 from app.db.session import engine, get_db
 from app.modules.inventory.schemas import (
-    InventoryId, InventoryItem, StockChangeResult, StockExportInput, StockImportInput,
+    InventoryId, InventoryItem, StockChangeResult, StockExportInput, StockImportInput, StocktakeInput,
 )
 from app.modules.inventory.service import change_stock, list_inventory
 from app.modules.preorders.services.allocation import allocate_preorders
@@ -22,14 +22,14 @@ Database = Annotated[Session, Depends(get_db)]
 
 def require_stock_writer(actor: Reader) -> Actor:
     if actor.role == "EMPLOYEE" and not config.ALLOW_EMPLOYEE_STOCK:
-        raise HTTPException(403, "Bạn không có quyền nhập hoặc xuất kho.")
+        raise HTTPException(403, "Bạn không có quyền thay đổi tồn kho.")
     return actor
 
 
 StockWriter = Annotated[Actor, Depends(require_stock_writer)]
 
 
-def record_stock_change(actor: Actor, data: StockImportInput | StockExportInput) -> StockChangeResult:
+def record_stock_change(actor: Actor, data: StockImportInput | StocktakeInput) -> StockChangeResult:
     try:
         # Read the latest reservation totals after acquiring the inventory locks.
         with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
@@ -51,6 +51,11 @@ def import_inventory(data: StockImportInput, actor: StockWriter) -> StockChangeR
 
 @router.post("/export", status_code=201)
 def export_inventory(data: StockExportInput, actor: StockWriter) -> StockChangeResult:
+    return record_stock_change(actor, data)
+
+
+@router.post("/stocktake", status_code=201)
+def stocktake_inventory(data: StocktakeInput, actor: StockWriter) -> StockChangeResult:
     return record_stock_change(actor, data)
 
 
