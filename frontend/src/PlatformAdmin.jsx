@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { apiRequest } from './auth-client';
+import { getLocale, LanguageSwitcher } from './i18n';
 
 function platformError(error) {
   const detail = error?.message || '';
@@ -18,7 +19,7 @@ const plans = [
 ];
 
 function formatDate(value) {
-  return value ? new Date(value).toLocaleDateString('vi-VN') : '—';
+  return value ? new Intl.DateTimeFormat(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value)) : '—';
 }
 
 function planName(value) {
@@ -125,6 +126,7 @@ export default function PlatformAdmin() {
           <span className="platform-admin-brand-label">QUẢN TRỊ HỆ THỐNG</span>
         </div>
         <div className="platform-admin-header-actions">
+          <LanguageSwitcher />
           <span className="platform-admin-access"><i /> CỔNG QUẢN TRỊ</span>
           <a className="btn outline" href="#/login">Đăng nhập cửa hàng <span aria-hidden="true">↗</span></a>
         </div>

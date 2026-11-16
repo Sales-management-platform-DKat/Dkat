@@ -408,6 +408,17 @@ body,button,input,select,textarea,.dk-landing{font-family:var(--font-sans)}
 @media(max-width:520px){.toast{right:16px;bottom:16px;width:calc(100vw - 32px)}}
 @media(prefers-reduced-motion:reduce){.toast{animation:none}}
 
+.language-switch{display:inline-flex;align-items:center;gap:2px;flex:none;padding:3px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--text);font-size:10px;line-height:1}
+.language-switch button{min-width:30px;min-height:27px;padding:0 6px;border:0;border-radius:6px;background:transparent;color:var(--muted);font-size:10px;font-weight:800;cursor:pointer;transition:background .18s ease,color .18s ease}
+.language-switch button:hover{color:var(--primary)}
+.language-switch button:focus-visible{outline:2px solid var(--primary);outline-offset:2px}
+.language-switch button[aria-pressed=true]{background:var(--primary);color:#fff}
+[data-theme=dark] .language-switch button[aria-pressed=true]{color:#08211f}
+.login-showcase{position:relative}
+.login-language-switch{position:absolute;z-index:2;top:22px;right:24px}
+.platform-admin-header-actions .language-switch{margin-right:4px}
+@media(max-width:800px){.login-language-switch{top:16px;right:16px}.app-header .actions{flex-wrap:wrap}.app-header .language-switch{min-height:30px}}
+
 .platform-admin-message{display:flex;align-items:flex-start;gap:10px;margin-top:16px;padding:13px 15px;border:1px solid var(--line);border-radius:11px;background:var(--green-bg);color:var(--green);font-size:13px;line-height:1.6;font-weight:600}
 .platform-admin-message>span{display:grid;place-items:center;flex:none;width:22px;height:22px;border-radius:50%;background:var(--green);color:#fff;font-weight:800;line-height:1}
 .platform-admin-message.error{border-color:color-mix(in srgb,var(--red) 24%,var(--line));background:var(--red-bg,#FEE2E2);color:var(--red)}
