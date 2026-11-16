@@ -103,3 +103,21 @@ Ví dụ `GET /inventory/movements?branchId=1&variantId=1&type=EXPORT&from=2026-
 Với database đã khởi tạo, chạy `database/03_inventory_movement_history.sql` để bổ sung index theo thời gian. File `database/01_schema.sql` đã có index cho database mới.
 
 Để thử cả luồng, import `samples/pbi83-movement-history.postman_collection.json`. Dùng database kiểm thử, điền `accessToken` của OWNER và ID chi nhánh, biến thể đã có dòng tồn kho. Chạy đúng thứ tự để tạo và xác minh ba biến động nhập, xuất và kiểm kê.
+
+## Tạo đơn POS PBI 90
+
+Với database đã khởi tạo, chạy `database/04_sales_order_customers.sql`. Database mới dùng `database/01_schema.sql`. Tài khoản backend cần quyền SELECT hiện có và INSERT trên `sales_orders` và `sales_order_items`.
+
+Đăng nhập và gọi `POST /sales-orders` với ID chi nhánh được phép thao tác và hai biến thể còn hàng:
+
+```json
+{
+  "branchId": 1,
+  "discountAmount": "5000.00",
+  "items": [{"variantId": 1, "quantity": 2}, {"variantId": 2, "quantity": 1}]
+}
+```
+
+Bỏ `customerId` hoặc gửi `null` cho khách vãng lai. Với khách có hồ sơ, gửi ID khách thuộc cùng cửa hàng. API lấy giá từ database, lưu tên, SKU và giá trên từng dòng đơn, rồi trả HTTP 201 với trạng thái `PENDING`. Mã đơn dùng ngày Việt Nam và hậu tố UUID. Số tiền trả dưới dạng chuỗi thập phân. Khi thiếu hàng, API trả `409` với `detail.code = "OUT_OF_STOCK"` và `detail.items` chứa `variantId` và `available`. Kho và số lượng giữ chỗ giữ nguyên. Luồng thanh toán cần kiểm tra lại tồn khi chốt đơn.
+
+Để thử qua Postman trên database kiểm thử, import `samples/pbi90-sales-order.postman_collection.json`, điền `accessToken`, `branchId`, `variantIdA` và `variantIdB`, rồi chạy thư mục SalesOrder theo thứ tự.
