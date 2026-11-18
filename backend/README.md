@@ -121,3 +121,19 @@ ids = get_accessible_branch_ids(user)   # lọc danh sách theo chi nhánh user 
 - `branchCode` được chuyển thành chữ hoa; so trùng không phân biệt hoa/thường.
 - Mở lại chi nhánh (ACTIVE) sẽ bổ sung dòng tồn kho còn thiếu cho biến thể tạo trong lúc đóng.
 - Postman: `postman/DKat_Branches.postman_collection.json` (40 request, chạy theo thứ tự; cần `python -m scripts.seed_auth`).
+
+## Tài khoản nội bộ (FR-01.3)
+
+| Endpoint | Ghi chú |
+|---|---|
+| `GET /api/v1/users`, `GET /api/v1/users/{id}` | danh sách / chi tiết trong phạm vi quản lý |
+| `POST /api/v1/users` `{username, password, fullName, email?, phone?, role, branchIds}` | 201; `role` chỉ `MANAGER`/`EMPLOYEE`; mật khẩu >= 8 ký tự (bcrypt); trùng username → 409 `DUPLICATE_USERNAME` |
+| `PUT /api/v1/users/{id}` `{fullName, email?, phone?, role?}` | thay họ tên/email/SĐT; `role` chỉ OWNER được đổi |
+| `PATCH /api/v1/users/{id}/status` `{status}` | `ACTIVE`/`LOCKED`; tự khóa mình → 409 `CANNOT_LOCK_SELF`; khóa OWNER đang hoạt động duy nhất → 409 `LAST_ACTIVE_OWNER` |
+| `POST /api/v1/users/{id}/reset-password` `{newPassword}` | không dùng cho chính mình → 409 `CANNOT_RESET_OWN_PASSWORD` (dùng `/auth/change-password`) |
+
+- Chỉ OWNER và MANAGER gọi được (EMPLOYEE → 403). OWNER quản lý mọi tài khoản của cửa hàng.
+- MANAGER chỉ quản lý tài khoản EMPLOYEE có **toàn bộ** chi nhánh ACTIVE nằm trong chi nhánh mình quản lý. Chỉ được tạo EMPLOYEE và gán vào chi nhánh của mình. Ngoài phạm vi → 403, kể cả id không tồn tại.
+- Response không bao giờ có `password_hash`. Khóa tài khoản có hiệu lực ngay: login → 403 `ACCOUNT_LOCKED`, token cũ cũng bị chặn.
+- Chưa có API đổi phân công chi nhánh của tài khoản đã tạo.
+- Postman: `postman/DKat_Users.postman_collection.json` (55 request). Mỗi lần chạy tạo `emp_<số>`/`mgr_<số>` và khóa lại ở cuối.
