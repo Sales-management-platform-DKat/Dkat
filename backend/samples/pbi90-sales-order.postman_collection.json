@@ -1,0 +1,310 @@
+{
+  "info": {
+    "name": "DKat PBI 90 | Tạo đơn bán",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Điền accessToken, branchId và hai ID biến thể khác nhau đang ACTIVE và còn tồn khả dụng tại chi nhánh. Chạy theo thứ tự trên database kiểm thử. Mỗi lượt tạo một đơn PENDING."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "branchId",
+      "value": ""
+    },
+    {
+      "key": "variantIdA",
+      "value": ""
+    },
+    {
+      "key": "variantIdB",
+      "value": ""
+    },
+    {
+      "key": "quantityA",
+      "value": ""
+    },
+    {
+      "key": "quantityB",
+      "value": ""
+    },
+    {
+      "key": "reservedA",
+      "value": ""
+    },
+    {
+      "key": "reservedB",
+      "value": ""
+    },
+    {
+      "key": "availableA",
+      "value": ""
+    },
+    {
+      "key": "excessQuantity",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "SalesOrder",
+      "item": [
+        {
+          "name": "Đọc tồn biến thể A",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{branchId}}/{{variantIdA}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.variantId).to.eql(Number(pm.variables.get('variantIdA')));",
+                  "  pm.expect(data.available).to.be.at.least(1);",
+                  "  pm.collectionVariables.set('quantityA', data.quantity);",
+                  "  pm.collectionVariables.set('reservedA', data.reserved);",
+                  "  pm.collectionVariables.set('excessQuantity', data.available + 1);",
+                  "  pm.collectionVariables.set('availableA', data.available);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Đọc tồn biến thể B",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{branchId}}/{{variantIdB}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.variantId).to.eql(Number(pm.variables.get('variantIdB')));",
+                  "  pm.expect(data.available).to.be.at.least(1);",
+                  "  pm.collectionVariables.set('quantityB', data.quantity);",
+                  "  pm.collectionVariables.set('reservedB', data.reserved);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tạo đơn khách vãng lai hai dòng",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"discountAmount\": \"0.00\",\n  \"items\": [\n    {\n      \"variantId\": {{variantIdA}},\n      \"quantity\": 1\n    },\n    {\n      \"variantId\": {{variantIdB}},\n      \"quantity\": 1\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.status).to.eql('PENDING');",
+                  "  pm.expect(data.customerId).to.eql(null);",
+                  "  pm.expect(data.salesOrderId).to.be.a('number').above(0);",
+                  "  pm.expect(data.orderCode).to.match(/^DK-\\d{6}-[A-F0-9]{32}$/);",
+                  "  pm.expect(data.items.map(row => row.variantId)).to.eql([Number(pm.variables.get('variantIdA')), Number(pm.variables.get('variantIdB'))]);",
+                  "  const cents = amount => Math.round(Number(amount) * 100);",
+                  "  data.items.forEach(row => pm.expect(cents(row.lineTotal)).to.eql(cents(row.unitPrice) * row.quantity));",
+                  "  pm.expect(cents(data.subtotal)).to.eql(data.items.reduce((sum, row) => sum + cents(row.lineTotal), 0));",
+                  "  pm.expect(cents(data.totalAmount)).to.eql(cents(data.subtotal) - cents(data.discountAmount));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Từ chối đơn vượt tồn khả dụng",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"discountAmount\": \"0.00\",\n  \"items\": [\n    {\n      \"variantId\": {{variantIdA}},\n      \"quantity\": {{excessQuantity}}\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.detail.code).to.eql('OUT_OF_STOCK');",
+                  "  pm.expect(data.detail.items).to.eql([{variantId: Number(pm.variables.get('variantIdA')), available: Number(pm.variables.get('availableA'))}]);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Từ chối giá do client gửi",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"discountAmount\": \"0.00\",\n  \"items\": [\n    {\n      \"variantId\": {{variantIdA}},\n      \"quantity\": 1,\n      \"unitPrice\": \"0.01\"\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.detail.some(error => error.type === 'extra_forbidden' && error.loc.includes('unitPrice'))).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tồn và giữ chỗ của A sau tạo đơn",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{branchId}}/{{variantIdA}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.variantId).to.eql(Number(pm.variables.get('variantIdA')));",
+                  "  pm.expect(data.quantity).to.eql(Number(pm.variables.get('quantityA')));",
+                  "  pm.expect(data.reserved).to.eql(Number(pm.variables.get('reservedA')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tồn và giữ chỗ của B sau tạo đơn",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{branchId}}/{{variantIdB}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.variantId).to.eql(Number(pm.variables.get('variantIdB')));",
+                  "  pm.expect(data.quantity).to.eql(Number(pm.variables.get('quantityB')));",
+                  "  pm.expect(data.reserved).to.eql(Number(pm.variables.get('reservedB')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Từ chối yêu cầu thiếu token",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders",
+            "auth": {
+              "type": "noauth"
+            },
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"discountAmount\": \"0.00\",\n  \"items\": [\n    {\n      \"variantId\": {{variantIdA}},\n      \"quantity\": 1\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Kiểm tra phản hồi', () => {",
+                  "  const data = pm.response.json();",
+                  "  pm.expect(data.detail).to.be.a('string').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -9,9 +9,10 @@ from app.core import config
 from app.core.permissions import Actor, get_accessible_branch_ids, require_auth, require_branch_access
 from app.db.session import engine, get_db
 from app.modules.inventory.schemas import (
-    InventoryId, InventoryItem, StockChangeResult, StockExportInput, StockImportInput,
+    InventoryId, InventoryItem, InventoryMovement, MovementFilters,
+    StockChangeResult, StockExportInput, StockImportInput, StocktakeInput,
 )
-from app.modules.inventory.service import change_stock, list_inventory
+from app.modules.inventory.service import change_stock, list_inventory, list_inventory_movements
 from app.modules.preorders.services.allocation import allocate_preorders
 
 logger = logging.getLogger(__name__)
@@ -22,14 +23,14 @@ Database = Annotated[Session, Depends(get_db)]
 
 def require_stock_writer(actor: Reader) -> Actor:
     if actor.role == "EMPLOYEE" and not config.ALLOW_EMPLOYEE_STOCK:
-        raise HTTPException(403, "Bạn không có quyền nhập hoặc xuất kho.")
+        raise HTTPException(403, "Bạn không có quyền thay đổi tồn kho.")
     return actor
 
 
 StockWriter = Annotated[Actor, Depends(require_stock_writer)]
 
 
-def record_stock_change(actor: Actor, data: StockImportInput | StockExportInput) -> StockChangeResult:
+def record_stock_change(actor: Actor, data: StockImportInput | StocktakeInput) -> StockChangeResult:
     try:
         # Read the latest reservation totals after acquiring the inventory locks.
         with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
@@ -54,6 +55,11 @@ def export_inventory(data: StockExportInput, actor: StockWriter) -> StockChangeR
     return record_stock_change(actor, data)
 
 
+@router.post("/stocktake", status_code=201)
+def stocktake_inventory(data: StocktakeInput, actor: StockWriter) -> StockChangeResult:
+    return record_stock_change(actor, data)
+
+
 @router.get("")
 def get_inventory(
     actor: Reader,
@@ -75,6 +81,22 @@ def get_inventory(
             db, actor.store_id, branches, keyword=keyword, low_stock=low_stock,
             limit=size, offset=(page - 1) * size,
         )
+    except SQLAlchemyError:
+        raise HTTPException(503, "Database unavailable") from None
+
+
+@router.get("/movements")
+def get_inventory_movements(
+    actor: Reader, session: Database, filters: Annotated[MovementFilters, Query()],
+) -> list[InventoryMovement]:
+    try:
+        db = session.connection()
+        if filters.branchId is None:
+            branches = get_accessible_branch_ids(db, actor)
+        else:
+            require_branch_access(db, actor, filters.branchId)
+            branches = [filters.branchId]
+        return list_inventory_movements(db, actor.store_id, branches, filters)
     except SQLAlchemyError:
         raise HTTPException(503, "Database unavailable") from None
 

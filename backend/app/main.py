@@ -1,4 +1,4 @@
-from contextlib import asynccontextmanager
+﻿from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -13,6 +13,7 @@ from app.modules.inventory.router import router as inventory_router
 from app.modules.products.category_router import router as categories_router
 from app.modules.products.router import router as products_router
 from app.modules.users.router import router as users_router
+from app.modules.sales.router import router as sales_router
 
 
 @asynccontextmanager
@@ -36,8 +37,11 @@ app.include_router(branches_router, prefix="/api/v1")
 app.include_router(products_router, prefix="/api/v1")
 app.include_router(categories_router, prefix="/api/v1")
 app.include_router(inventory_router, prefix="/api/v1")
+app.include_router(sales_router, prefix="/api/v1")
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
