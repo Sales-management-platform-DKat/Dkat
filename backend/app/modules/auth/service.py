@@ -1,18 +1,21 @@
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from app.core import config
 from app.core.security import (
     create_access_token,
+    create_refresh_token,
     hash_password,
+    hash_access_token,
+    refresh_token_is_persistent,
     verify_password,
 )
 from app.modules.auth.models import AuthSession, Shop, StoreSubscription, User
 
 
-SESSION_DURATION = timedelta(hours=12)
 STORAGE_ROLES = {"owner": "OWNER", "manager": "MANAGER", "staff": "EMPLOYEE"}
 
 
@@ -87,7 +90,7 @@ def create_user(
     return user
 
 
-def authenticate(db: Session, username: str, password: str):
+def authenticate(db: Session, username: str, password: str) -> User | None:
     login_value = username.strip()
     if "@" in login_value:
         users = db.scalars(
@@ -111,18 +114,90 @@ def authenticate(db: Session, username: str, password: str):
     ):
         return None
 
-    token, token_hash = create_access_token()
-    expires_at = utcnow() + SESSION_DURATION
-    if expires_at.tzinfo is not None:
-        expires_at = expires_at.replace(tzinfo=None)
+    return user
+
+
+def _issue_session(db: Session, user: User, remember_me: bool) -> dict:
+    now = utcnow()
+    duration_seconds = (
+        config.REMEMBERED_SESSION_TTL_SECONDS
+        if remember_me
+        else config.SESSION_TTL_SECONDS
+    )
+    expires_at = (now + timedelta(seconds=duration_seconds)).replace(tzinfo=None)
+    session_id = str(uuid4())
+    refresh_token, refresh_hash = create_refresh_token(remember_me)
+    access_token, access_expires_at = create_access_token(user.id, session_id)
     db.add(
         AuthSession(
-            id=str(uuid4()),
+            id=session_id,
             user_id=user.id,
-            token_hash=token_hash,
+            token_hash=refresh_hash,
             expires_at=expires_at,
             revoked=False,
         )
     )
     db.commit()
-    return {"access_token": token, "expires_at": expires_at, "user": user_info(user)}
+    return {
+        "access_token": access_token,
+        "expires_at": datetime.fromtimestamp(access_expires_at, timezone.utc),
+        "refresh_token": refresh_token,
+        "refresh_expires_at": expires_at,
+        "remember_me": remember_me,
+        "user": user_info(user),
+    }
+
+
+def start_session(db: Session, user: User, remember_me: bool) -> dict:
+    return _issue_session(db, user, remember_me)
+
+
+def rotate_refresh_session(db: Session, refresh_token: str) -> dict | None:
+    session = db.scalar(
+        select(AuthSession).where(
+            AuthSession.token_hash == hash_access_token(refresh_token)
+        )
+    )
+    if session is None:
+        return None
+
+    if session.revoked:
+        # A rotated token was presented again. Revoke the account's active
+        # sessions so a stolen token cannot keep using the same account.
+        db.execute(
+            update(AuthSession)
+            .where(AuthSession.user_id == session.user_id, AuthSession.revoked.is_(False))
+            .values(revoked=True)
+        )
+        db.commit()
+        return None
+
+    expires_at = session.expires_at
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    user = session.user
+    if (
+        expires_at <= utcnow()
+        or user.status != "ACTIVE"
+        or not subscription_is_active(user.shop)
+    ):
+        session.revoked = True
+        db.commit()
+        return None
+
+    remember_me = refresh_token_is_persistent(refresh_token)
+    claimed = db.execute(
+        update(AuthSession)
+        .where(AuthSession.id == session.id, AuthSession.revoked.is_(False))
+        .values(revoked=True)
+    )
+    if claimed.rowcount != 1:
+        db.execute(
+            update(AuthSession)
+            .where(AuthSession.user_id == session.user_id, AuthSession.revoked.is_(False))
+            .values(revoked=True)
+        )
+        db.commit()
+        return None
+    result = _issue_session(db, user, remember_me)
+    return result

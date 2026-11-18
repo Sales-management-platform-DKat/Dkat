@@ -58,7 +58,7 @@ function ProductDashboard({ BrandLogo }) {
     <div className="lp-product-main">
       <div className="lp-product-toolbar">
         <div><small>KHÔNG GIAN CỬA HÀNG</small><strong>Tổng quan kinh doanh</strong></div>
-        <button className="lp-branch-select" type="button"><Icon name="pin" size={15} /> Tất cả chi nhánh <span>⌄</span></button>
+        <button className="lp-branch-select" type="button"><Icon name="pin" size={15} /> Tất cả chi nhánh</button>
       </div>
       <div className="lp-product-kicker"><span><i /> BẢN XEM TRƯỚC</span><span>Hôm nay · 08:00–20:00</span></div>
       <div className="lp-metrics">
@@ -255,12 +255,14 @@ export default function LandingPage({ BrandLogo, go, startDemo, dark, setDark })
       <span className="lp-brand" onClick={closeMenu}><BrandLogo /></span>
       <nav className={`lp-nav ${menuOpen ? 'is-open' : ''}`} aria-label="Điều hướng chính">
         {navLinks.map(([id, label]) => <a href={`#${id}`} key={id} onClick={closeMenu}>{label}</a>)}
+        <a className="lp-mobile-login" href="#/catalog" onClick={closeMenu}>Danh m&#7909;c demo</a>
         <a className="lp-mobile-login" href="#/login" onClick={closeMenu}>Đăng nhập</a>
         <button className="lp-mobile-theme" type="button" onClick={() => { setDark(!dark); closeMenu(); }}><Icon name={dark ? 'sun' : 'moon'} size={18} /> Giao diện {dark ? 'sáng' : 'tối'}</button>
       </nav>
       <div className="lp-header-actions">
         <LanguageSwitcher />
         <button className="lp-theme-toggle" type="button" aria-pressed={dark} aria-label={dark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'} onClick={() => setDark(!dark)}><Icon name={dark ? 'sun' : 'moon'} size={17} /></button>
+        <a className="lp-login" href="#/catalog">Danh m&#7909;c demo</a>
         <a className="lp-login" href="#/login">Đăng nhập</a>
         <button className="lp-button lp-button-primary lp-header-cta" type="button" onClick={() => go('demo')}>Trải nghiệm bản demo <Icon name="arrow" size={17} /></button>
       </div>

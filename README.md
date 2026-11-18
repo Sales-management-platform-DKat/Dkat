@@ -86,3 +86,18 @@ Tạo/ghi dữ liệu nghiệp vụ của các màn hình bán hàng hiện vẫ
 ## Kiểm tra
 
 Frontend: `npm test` và `npm run build`. Backend (từ thư mục `backend`): `python -m unittest discover -s tests -v`. Cần test API nghiệp vụ/E2E lại khi tích hợp các màn hình bán hàng với backend.
+
+
+## Authentication session configuration
+
+Backend authentication uses 15-minute HS256 access tokens and rotating refresh tokens stored as hashes in `auth_sessions`. Refresh tokens are sent only in an `HttpOnly`, `SameSite=Lax` cookie. The login checkbox keeps that cookie for 30 days; without it, the browser receives a session cookie and the server session expires after 12 hours.
+
+Add these values to `backend/.env`:
+
+- `DKAT_AUTH_SECRET_KEY`: a private random value of at least 32 characters. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(48))"` and keep it out of source control.
+- `DKAT_COOKIE_SECURE=auto`: enables the `Secure` cookie flag when the request is HTTPS or has `X-Forwarded-Proto: https`. Set it to `true` when the HTTPS proxy does not forward that header. Use `false` only for local HTTP development.
+- `DKAT_CORS_ORIGINS`: comma-separated frontend origins when the browser calls FastAPI directly. The Vite proxy already keeps local frontend API requests same-origin.
+
+Authentication endpoints are `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, and `GET /api/v1/auth/me`. Refresh rotates and revokes the previous refresh token. Logout revokes the current session. No database migration is needed; the existing `auth_sessions` table stores the refresh-token hash and expiration.
+
+For backend tests, install `backend/requirements-dev.txt` (it includes Starlette's `httpx2` TestClient dependency), then run `python -m unittest discover -s tests -v` from `backend/`.

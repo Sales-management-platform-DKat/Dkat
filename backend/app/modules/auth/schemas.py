@@ -26,6 +26,7 @@ class LoginRequest(BaseModel):
         validation_alias=AliasChoices("username", "email"),
     )
     password: str = Field(min_length=1, max_length=256)
+    remember_me: bool = False
 
 
 EmailAddress = Annotated[

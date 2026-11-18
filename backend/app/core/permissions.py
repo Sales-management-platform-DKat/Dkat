@@ -5,7 +5,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.security import hash_access_token
+from app.core.security import decode_access_token
 from app.db.session import get_db
 from app.modules.auth.models import AuthSession, User
 from app.modules.auth.service import subscription_is_active, utcnow
@@ -21,13 +21,17 @@ def get_current_user(
     if credentials is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Vui lòng đăng nhập.")
 
+    claims = decode_access_token(credentials.credentials)
+    if claims is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Phiên đăng nhập không hợp lệ.")
+
     session = db.scalar(
         select(AuthSession).where(
-            AuthSession.token_hash == hash_access_token(credentials.credentials),
+            AuthSession.id == claims["sid"],
             AuthSession.revoked.is_(False),
         )
     )
-    if session is None:
+    if session is None or str(session.user_id) != claims["sub"]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Phiên đăng nhập không hợp lệ.")
 
     expires_at = session.expires_at

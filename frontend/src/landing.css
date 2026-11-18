@@ -222,6 +222,17 @@
 @media(hover:hover){.dk-landing .lp-features .lp-feature{transition:transform .24s ease,border-color .24s ease,box-shadow .24s ease}.dk-landing .lp-features .lp-feature:hover{transform:translateY(-4px) scale(1.008)}}
 @media(prefers-reduced-motion:reduce){.dk-landing .lp-header.lp-enter,.dk-landing .lp-hero-copy.is-visible h1,.dk-landing .lp-hero-copy.is-visible>p,.dk-landing .lp-hero-copy.is-visible .lp-hero-actions,.dk-landing .lp-hero-copy.is-visible .lp-hero-proof,.dk-landing .lp-hero-copy.is-visible .lp-demo-note,.dk-landing .lp-hero-showcase.is-visible .lp-product,.dk-landing .lp-section-heading.is-visible h2,.dk-landing .lp-branch-copy.is-visible h2,.dk-landing .lp-analytics-copy.is-visible h2,.dk-landing .lp-faq-heading.is-visible h2,.dk-landing .lp-value-row.is-visible article,.dk-landing .lp-steps.is-visible article,.dk-landing .lp-branch-visual.is-visible .lp-branch-row,.dk-landing .lp-footer.is-visible{animation:none!important}.dk-landing .lp-product,.dk-landing .lp-product *,.dk-landing .lp-chart-line,.dk-landing .lp-chart-area,.dk-landing .lp-chart-plot circle,.dk-landing .lp-cta>*:not(.lp-cta-glow){opacity:1!important;transform:none!important;filter:none!important;transition:none!important}.dk-landing .lp-chart-line{stroke-dashoffset:0!important}.dk-landing .lp-report-chart i,.dk-landing .lp-inventory-track i,.dk-landing .lp-analytics-chart i{transform:none!important;transition:none!important}}
 
+/* Consistent landing-page action states across pointer, keyboard, and touch. */
+.dk-landing .lp-hero-actions{gap:14px}
+.dk-landing .lp-button{min-height:50px;padding-inline:22px;border-radius:11px;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease,background .18s ease,color .18s ease}
+.dk-landing .lp-button:active{transform:translateY(0) scale(.985)}
+.dk-landing button:active,.dk-landing .lp-login:active,.dk-landing a.lp-button:active,.dk-landing .lp-text-link:active{transform:translateY(0) scale(.985)}
+.dk-landing .lp-button:focus-visible,.dk-landing .lp-login:focus-visible,.dk-landing .lp-theme-toggle:focus-visible{outline:3px solid var(--lp-orange);outline-offset:3px}
+.dk-landing button:disabled{cursor:not-allowed;opacity:.55;transform:none;box-shadow:none}
+.dk-landing .lp-login{min-height:44px;padding-inline:17px;border-radius:11px}
+@media(max-width:820px){.dk-landing .lp-hero-actions{gap:12px}}
+@media(prefers-reduced-motion:reduce){.dk-landing .lp-button,.dk-landing .lp-login,.dk-landing .lp-theme-toggle{transition:none}}
+
 /* Give reveal and product storytelling a calmer, more deliberate pace. */
 .dk-landing .lp-reveal{transition-duration:.85s}
 .dk-landing .lp-header.lp-enter{animation-duration:.9s}
