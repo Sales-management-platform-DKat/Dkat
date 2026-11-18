@@ -38,6 +38,7 @@ class AuthFlowTests(unittest.TestCase):
         main_module.engine = test_engine
         app.dependency_overrides[get_db] = override_get_db
         config.ADMIN_TOKEN = TEST_ADMIN_TOKEN
+        config.AUTH_SECRET_KEY = "test-auth-secret-key-with-at-least-32-characters"
         cls.client_context = TestClient(app)
         cls.client = cls.client_context.__enter__()
 
@@ -49,6 +50,8 @@ class AuthFlowTests(unittest.TestCase):
 
     def setUp(self):
         config.ADMIN_TOKEN = TEST_ADMIN_TOKEN
+        config.AUTH_SECRET_KEY = "test-auth-secret-key-with-at-least-32-characters"
+        self.client.cookies.clear()
         Base.metadata.drop_all(bind=test_engine)
         Base.metadata.create_all(bind=test_engine)
 
@@ -58,9 +61,10 @@ class AuthFlowTests(unittest.TestCase):
             headers={"X-Admin-Token": TEST_ADMIN_TOKEN},
             json={
                 "shop_name": "Cửa hàng thử nghiệm",
-                "plan": "pro",
+                "plan": "basic",
                 "subscription_months": 12,
                 "owner_username": username,
+                "owner_email": f"{username}@example.test",
                 "owner_full_name": "Chủ cửa hàng",
                 "owner_password": "owner-password-123",
             },
@@ -82,9 +86,10 @@ class AuthFlowTests(unittest.TestCase):
             "/api/v1/admin/accounts",
             json={
                 "shop_name": "Cửa hàng thử nghiệm",
-                "plan": "pro",
+                "plan": "basic",
                 "subscription_months": 12,
                 "owner_username": "owner1",
+                "owner_email": "owner1@example.test",
                 "owner_full_name": "Chủ cửa hàng",
                 "owner_password": "owner-password-123",
             },
@@ -93,7 +98,7 @@ class AuthFlowTests(unittest.TestCase):
 
         provisioned = self.provision()
         self.assertEqual(provisioned.status_code, 201, provisioned.text)
-        self.assertEqual(provisioned.json()["plan"], "pro")
+        self.assertEqual(provisioned.json()["plan"], "basic")
         self.assertEqual(provisioned.json()["owner_username"], "owner1")
 
         login = self.login("owner1", "owner-password-123")
@@ -168,6 +173,66 @@ class AuthFlowTests(unittest.TestCase):
             db.commit()
 
         self.assertEqual(self.login("owner1", "owner-password-123").status_code, 401)
+
+    def test_refresh_rotation_remember_cookie_and_reuse_revokes_sessions(self):
+        self.assertEqual(self.provision().status_code, 201)
+        login = self.client.post(
+            "/api/v1/auth/login",
+            json={
+                "username": "owner1",
+                "password": "owner-password-123",
+                "remember_me": True,
+            },
+        )
+        self.assertEqual(login.status_code, 200, login.text)
+        original_access = login.json()["access_token"]
+        original_refresh = login.cookies.get("dkat_refresh")
+        self.assertTrue(original_refresh)
+        set_cookie = login.headers["set-cookie"].lower()
+        self.assertIn("httponly", set_cookie)
+        self.assertIn("max-age=", set_cookie)
+        self.assertNotIn("secure", set_cookie)
+
+        rotated = self.client.post("/api/v1/auth/refresh")
+        self.assertEqual(rotated.status_code, 200, rotated.text)
+        self.assertNotEqual(rotated.json()["access_token"], original_access)
+        rotated_access = rotated.json()["access_token"]
+        self.assertEqual(
+            self.client.get(
+                "/api/v1/auth/me",
+                headers={"Authorization": f"Bearer {rotated_access}"},
+            ).status_code,
+            200,
+        )
+        self.assertEqual(
+            self.client.get(
+                "/api/v1/auth/me",
+                headers={"Authorization": f"Bearer {original_access}"},
+            ).status_code,
+            401,
+        )
+
+        self.client.cookies.clear()
+        self.client.cookies.set(
+            "dkat_refresh", original_refresh, path="/api/v1/auth"
+        )
+        reused = self.client.post("/api/v1/auth/refresh")
+        self.assertEqual(reused.status_code, 401)
+        self.assertEqual(
+            self.client.get(
+                "/api/v1/auth/me",
+                headers={"Authorization": f"Bearer {rotated_access}"},
+            ).status_code,
+            401,
+        )
+
+    def test_unremembered_login_uses_session_cookie(self):
+        self.assertEqual(self.provision().status_code, 201)
+        login = self.login("owner1", "owner-password-123")
+        self.assertEqual(login.status_code, 200, login.text)
+        set_cookie = login.headers["set-cookie"].lower()
+        self.assertIn("httponly", set_cookie)
+        self.assertNotIn("max-age=", set_cookie)
 
 
 if __name__ == "__main__":

@@ -9,6 +9,11 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 ADMIN_TOKEN = os.getenv("DKAT_ADMIN_TOKEN", "")
 ALLOW_EMPLOYEE_STOCK = os.getenv("ALLOW_EMPLOYEE_STOCK", "false").strip().lower() in {"1", "true", "yes", "on"}
+AUTH_SECRET_KEY = os.getenv("DKAT_AUTH_SECRET_KEY", os.getenv("SECRET_KEY", ""))
+ACCESS_TOKEN_TTL_SECONDS = 15 * 60
+SESSION_TTL_SECONDS = 12 * 60 * 60
+REMEMBERED_SESSION_TTL_SECONDS = 30 * 24 * 60 * 60
+COOKIE_SECURE = os.getenv("DKAT_COOKIE_SECURE", "auto").strip().casefold()
 CORS_ORIGINS = [
     origin.strip()
     for origin in os.getenv(

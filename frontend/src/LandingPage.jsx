@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { LanguageSwitcher, getLocale } from './i18n';
 import './landing.css';
 
 const featureItems = [
@@ -35,10 +36,13 @@ function Icon({ name, size = 20 }) {
 }
 
 function Metric({ label, value, change, icon }) {
+  const count = value === '12,8 triệu' ? { end: 12.8, decimals: 1, suffix: getLocale() === 'en-US' ? ' million' : ' triệu' }
+    : value === '186' ? { end: 186, decimals: 0, suffix: '' }
+      : value === '08 SKU' ? { end: 8, decimals: 0, suffix: ' SKU', pad: 2 } : null;
   return <div className="lp-metric">
     <span className="lp-metric-icon"><Icon name={icon} size={16} /></span>
     <span className="lp-metric-label">{label}</span>
-    <strong>{value}</strong>
+    <strong {...(count ? { 'data-count': count.end, 'data-count-decimals': count.decimals, 'data-count-suffix': count.suffix, 'data-count-pad': count.pad || 0 } : {})}>{value}</strong>
     <small>{change}</small>
   </div>;
 }
@@ -54,7 +58,7 @@ function ProductDashboard({ BrandLogo }) {
     <div className="lp-product-main">
       <div className="lp-product-toolbar">
         <div><small>KHÔNG GIAN CỬA HÀNG</small><strong>Tổng quan kinh doanh</strong></div>
-        <button className="lp-branch-select" type="button"><Icon name="pin" size={15} /> Tất cả chi nhánh <span>⌄</span></button>
+        <button className="lp-branch-select" type="button"><Icon name="pin" size={15} /> Tất cả chi nhánh</button>
       </div>
       <div className="lp-product-kicker"><span><i /> BẢN XEM TRƯỚC</span><span>Hôm nay · 08:00–20:00</span></div>
       <div className="lp-metrics">
@@ -177,33 +181,88 @@ export default function LandingPage({ BrandLogo, go, startDemo, dark, setDark })
   useEffect(() => {
     const nodes = document.querySelectorAll('.lp-reveal');
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const counterFrames = new Set();
+    const animateCounters = (container) => {
+      container.querySelectorAll('[data-count]').forEach((node) => {
+        if (node.dataset.countStarted) return;
+        node.dataset.countStarted = 'true';
+        const end = Number(node.dataset.count);
+        const decimals = Number(node.dataset.countDecimals || 0);
+        const suffix = node.dataset.countSuffix || '';
+        const pad = Number(node.dataset.countPad || 0);
+        const render = (value) => `${new Intl.NumberFormat(getLocale(), { minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(value).padStart(pad, '0')}${suffix}`;
+        if (reduceMotion) { node.textContent = render(end); return; }
+        const start = performance.now();
+        let frameId = 0;
+        const tick = (now) => {
+          counterFrames.delete(frameId);
+          const progress = Math.min(1, (now - start) / 1400);
+          const eased = 1 - (1 - progress) ** 3;
+          node.textContent = render(end * eased);
+          if (progress < 1) {
+            frameId = requestAnimationFrame(tick);
+            counterFrames.add(frameId);
+          }
+        };
+        frameId = requestAnimationFrame(tick);
+        counterFrames.add(frameId);
+      });
+    };
     if (reduceMotion || !('IntersectionObserver' in window)) {
       nodes.forEach((node) => node.classList.add('is-visible'));
       return undefined;
     }
+    // Keep the first screen present during hydration; the CSS transition provides its entrance.
+    document.querySelectorAll('.lp-hero .lp-reveal').forEach((node) => node.classList.add('is-visible'));
     const observer = new IntersectionObserver((entries) => entries.forEach((entry) => {
       if (entry.isIntersecting) {
         entry.target.classList.add('is-visible');
+        if (entry.target.classList.contains('lp-hero-showcase')) animateCounters(entry.target);
         observer.unobserve(entry.target);
       }
     }), { threshold: 0.12, rootMargin: '0px 0px -30px 0px' });
     nodes.forEach((node) => observer.observe(node));
-    return () => observer.disconnect();
+    const desktop = window.matchMedia('(min-width: 1101px)');
+    let frame = 0;
+    const updateDashboardParallax = () => {
+      if (frame) return;
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        const dashboard = document.querySelector('.lp-product');
+        if (!dashboard || !desktop.matches || reduceMotion) return;
+        const rect = dashboard.getBoundingClientRect();
+        const progress = (window.innerHeight * 0.5 - (rect.top + rect.height * 0.5)) / window.innerHeight;
+        dashboard.style.setProperty('--lp-parallax-y', `${Math.max(-8, Math.min(8, progress * 12))}px`);
+      });
+    };
+    window.addEventListener('scroll', updateDashboardParallax, { passive: true });
+    window.addEventListener('resize', updateDashboardParallax);
+    updateDashboardParallax();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('scroll', updateDashboardParallax);
+      window.removeEventListener('resize', updateDashboardParallax);
+      if (frame) window.cancelAnimationFrame(frame);
+      counterFrames.forEach((counterFrame) => window.cancelAnimationFrame(counterFrame));
+    };
   }, []);
 
   const closeMenu = () => setMenuOpen(false);
   const navLinks = [['overview', 'Tổng quan'], ['features', 'Tính năng'], ['branches', 'Giải pháp'], ['plans', 'Bảng giá'], ['contact', 'Liên hệ']];
 
   return <div className="dk-landing" id="overview">
-    <header className="lp-header">
+    <header className="lp-header lp-enter">
       <span className="lp-brand" onClick={closeMenu}><BrandLogo /></span>
       <nav className={`lp-nav ${menuOpen ? 'is-open' : ''}`} aria-label="Điều hướng chính">
         {navLinks.map(([id, label]) => <a href={`#${id}`} key={id} onClick={closeMenu}>{label}</a>)}
+        <a className="lp-mobile-login" href="#/catalog" onClick={closeMenu}>Danh m&#7909;c demo</a>
         <a className="lp-mobile-login" href="#/login" onClick={closeMenu}>Đăng nhập</a>
         <button className="lp-mobile-theme" type="button" onClick={() => { setDark(!dark); closeMenu(); }}><Icon name={dark ? 'sun' : 'moon'} size={18} /> Giao diện {dark ? 'sáng' : 'tối'}</button>
       </nav>
       <div className="lp-header-actions">
+        <LanguageSwitcher />
         <button className="lp-theme-toggle" type="button" aria-pressed={dark} aria-label={dark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'} onClick={() => setDark(!dark)}><Icon name={dark ? 'sun' : 'moon'} size={17} /></button>
+        <a className="lp-login" href="#/catalog">Danh m&#7909;c demo</a>
         <a className="lp-login" href="#/login">Đăng nhập</a>
         <button className="lp-button lp-button-primary lp-header-cta" type="button" onClick={() => go('demo')}>Trải nghiệm bản demo <Icon name="arrow" size={17} /></button>
       </div>
@@ -266,17 +325,17 @@ export default function LandingPage({ BrandLogo, go, startDemo, dark, setDark })
         <div className="lp-faq-list lp-reveal"><details><summary>Đây có phải là bản dùng thử trực tiếp không?</summary><p>Nút dùng thử mở bản demo với dữ liệu mẫu lưu trên trình duyệt. Bản demo giúp bạn khám phá giao diện và quy trình, không tạo tài khoản thật.</p></details><details><summary>DKat phù hợp với mô hình cửa hàng nào?</summary><p>DKat hướng đến cửa hàng bán lẻ và chuỗi cửa hàng cần quản lý sản phẩm, tồn kho, bán tại quầy và hoạt động nhiều chi nhánh.</p></details><details><summary>DKat có xử lý thanh toán trực tuyến không?</summary><p>Chưa. Trong bản hiện tại, nhân viên ghi nhận phương thức thanh toán sau khi kiểm tra giao dịch thực tế.</p></details></div>
       </section>
 
-      <section className="lp-pricing lp-section" id="plans">
+      <section className="lp-pricing lp-section lp-reveal" id="plans">
         <div><span className="lp-overline">LỰA CHỌN THEO QUY MÔ</span><h2>Bắt đầu từ nhu cầu<br /><em>của cửa hàng bạn.</em></h2></div>
         <div><p>Thông tin giá chưa được công bố trên trang. Hãy trải nghiệm demo để xem các luồng quản lý phù hợp với cửa hàng của bạn.</p><button className="lp-button lp-button-secondary" type="button" onClick={() => go('demo')}>Trải nghiệm bản demo <Icon name="arrow" size={17} /></button></div>
       </section>
 
-      <section className="lp-cta lp-section" id="contact">
+      <section className="lp-cta lp-section lp-reveal" id="contact">
         <div className="lp-cta-glow" /><span className="lp-overline">DIGITAL KEY TO ALL</span><h2>Sẵn sàng nâng cấp<br />cách bạn kinh doanh?</h2><p>Bắt đầu hành trình quản lý kinh doanh thông minh cùng DKat.</p><div className="lp-hero-actions"><button className="lp-button lp-button-light" type="button" onClick={() => go('demo')}>Trải nghiệm bản demo <Icon name="arrow" size={18} /></button><a href="#plans" className="lp-button lp-button-ghost">Tìm hiểu lựa chọn</a></div><small>Không cần tạo tài khoản để trải nghiệm</small>
       </section>
     </main>
 
-    <footer className="lp-footer">
+    <footer className="lp-footer lp-reveal">
       <div className="lp-footer-brand"><BrandLogo /><p>Digital Key To All.<br />Công cụ rõ ràng cho cửa hàng bán lẻ.</p></div>
       <div className="lp-footer-column"><strong>Khám phá</strong><a href="#features">Tính năng</a><a href="#branches">Quản lý chi nhánh</a><a href="#workflow">Cách bắt đầu</a></div>
       <div className="lp-footer-column"><strong>Tài khoản</strong><a href="#/login">Đăng nhập cửa hàng</a><button type="button" onClick={() => go('demo')}>Trải nghiệm bản demo </button><a href="#/platform-admin">Quản trị hệ thống</a></div>
