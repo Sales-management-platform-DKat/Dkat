@@ -1,4 +1,4 @@
-# Backend DKat
+﻿# Backend DKat
 
 1. Khởi tạo database từ 01_schema.sql nếu chưa có schema.
 2. Trong Workbench, chạy samples/02_auth_schema.sql bằng tài khoản quản trị. Script thêm auth_sessions, store_subscriptions và cấp quyền cho dkat_app. Script lấy kiểu ID từ schema hiện có để hỗ trợ BIGINT hoặc BIGINT UNSIGNED.
@@ -81,3 +81,26 @@ Mỗi chi nhánh ACTIVE thuộc cửa hàng có một dòng với `quantity = 0`
 Mỗi request nhận từ 1 đến 100 biến thể khác nhau, số lượng từng dòng là số nguyên dương. HTTP 201 trả số lượng trước, lượng thay đổi, số lượng sau và ID biến động. Nếu xuất vượt tồn khả dụng ở bất kỳ dòng nào, API trả HTTP 409 `INSUFFICIENT_STOCK` kèm các dòng thiếu và rollback cả lô. API nhập gọi hook phân bổ sau commit. Hook đang chờ triển khai FIFO ở PBI 129/130.
 
 Để chạy nhanh cả hai luồng trên database kiểm thử, import `samples/pbi74-75-stock.postman_collection.json` và điền `accessToken`, `branchId` và `variantId`. Collection thay đổi số lượng tồn và tạo biến động.
+- Không có DELETE (405): chi nhánh chỉ chuyển INACTIVE. MANAGER/EMPLOYEE mất quyền vào chi nhánh INACTIVE.
+- `branchCode` được chuyển thành chữ hoa; so trùng không phân biệt hoa/thường.
+- Mở lại chi nhánh (ACTIVE) sẽ bổ sung dòng tồn kho còn thiếu cho biến thể tạo trong lúc đóng.
+- Postman: `postman/DKat_Branches.postman_collection.json` (40 request, chạy theo thứ tự; cần `python -m scripts.seed_auth`).
+
+## Tài khoản nội bộ (FR-01.3)
+
+| Endpoint | Ghi chú |
+|---|---|
+| `GET /api/v1/users?branchId&role&status&keyword&page&pageSize` | `{items, page, pageSize, total, totalPages}`; `pageSize` ≤ 100 (mặc định 20); `keyword` tìm trong username, họ tên, email, SĐT; `branchId` ngoài phạm vi → 403 |
+| `GET /api/v1/users/{id}` | chi tiết kèm `branches: [{id, branchCode, name, status}]` |
+| `PUT /api/v1/users/{id}/branches` `{branchIds}` | thay toàn bộ phân công (FR-02.4), chỉ ghi phần chênh lệch, không trùng cặp; OWNER → 409 `OWNER_HAS_ALL_BRANCHES` |
+| `POST /api/v1/users` `{username, password, fullName, email?, phone?, role, branchIds}` | 201; `role` chỉ `MANAGER`/`EMPLOYEE`; mật khẩu >= 8 ký tự (bcrypt); trùng username → 409 `DUPLICATE_USERNAME` |
+| `PUT /api/v1/users/{id}` `{fullName, email?, phone?, role?}` | thay họ tên/email/SĐT; `role` chỉ OWNER được đổi |
+| `PATCH /api/v1/users/{id}/status` `{status}` | `ACTIVE`/`LOCKED`; tự khóa mình → 409 `CANNOT_LOCK_SELF`; khóa OWNER đang hoạt động duy nhất → 409 `LAST_ACTIVE_OWNER` |
+| `POST /api/v1/users/{id}/reset-password` `{newPassword}` | không dùng cho chính mình → 409 `CANNOT_RESET_OWN_PASSWORD` (dùng `/auth/change-password`) |
+
+- Chỉ OWNER và MANAGER gọi được (EMPLOYEE → 403). OWNER quản lý mọi tài khoản của cửa hàng.
+- MANAGER chỉ quản lý tài khoản EMPLOYEE có **toàn bộ** chi nhánh ACTIVE nằm trong chi nhánh mình quản lý. Chỉ được tạo EMPLOYEE và gán vào chi nhánh của mình. Ngoài phạm vi → 403, kể cả id không tồn tại.
+- Response không bao giờ có `password_hash`. Khóa tài khoản có hiệu lực ngay: login → 403 `ACCOUNT_LOCKED`, token cũ cũng bị chặn.
+- Phân công: MANAGER chỉ dùng chi nhánh mình quản lý; phân công vào chi nhánh INACTIVE ngoài phạm vi của MANAGER được giữ nguyên. Thay đổi có hiệu lực ngay ở request kế tiếp (token cũ mất quyền chi nhánh bị gỡ) và khi đăng nhập lại.
+- Postman: `postman/DKat_Users.postman_collection.json` (55 request), `postman/DKat_UserBranches.postman_collection.json` (42 request). Mỗi lần chạy tạo tài khoản test và khóa lại ở cuối.
+
