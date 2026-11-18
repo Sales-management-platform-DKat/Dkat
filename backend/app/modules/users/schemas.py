@@ -9,11 +9,13 @@ from typing import Literal
 from pydantic import Field, field_validator
 
 from app.core.security import BCRYPT_MAX_BYTES
-from app.modules.auth.schemas import MIN_PASSWORD_LENGTH, BranchBrief, CamelModel
+from app.modules.auth.schemas import MIN_PASSWORD_LENGTH, CamelModel
 
 # Roles that can be given through this API (OWNER accounts are never created or granted here)
 ManagedRole = Literal["MANAGER", "EMPLOYEE"]
+AnyRole = Literal["OWNER", "MANAGER", "EMPLOYEE"]
 UserStatus = Literal["ACTIVE", "LOCKED"]
+MAX_PAGE_SIZE = 100
 
 USERNAME_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9._-]{2,99}$"
 EMAIL_PATTERN = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"
@@ -24,6 +26,12 @@ def _check_password(v: str) -> str:
     if len(v.encode("utf-8")) > BCRYPT_MAX_BYTES:
         raise ValueError(f"Password must be at most {BCRYPT_MAX_BYTES} bytes")
     return v
+
+
+def _unique_branch_ids(v: list[int]) -> list[int]:
+    if any(b <= 0 for b in v):
+        raise ValueError("Branch ids must be positive")
+    return sorted(set(v))
 
 
 def _optional(v, pattern: str, message: str):
@@ -84,9 +92,18 @@ class UserCreateIn(_ProfileIn):
     @field_validator("branch_ids")
     @classmethod
     def unique_branch_ids(cls, v: list[int]) -> list[int]:
-        if any(b <= 0 for b in v):
-            raise ValueError("Branch ids must be positive")
-        return sorted(set(v))
+        return _unique_branch_ids(v)
+
+
+class UserBranchesIn(CamelModel):
+    """PUT /users/{id}/branches: the complete new set of assigned branches (duplicates are merged)."""
+
+    branch_ids: list[int] = Field(min_length=1, max_length=50)
+
+    @field_validator("branch_ids")
+    @classmethod
+    def unique_branch_ids(cls, v: list[int]) -> list[int]:
+        return _unique_branch_ids(v)
 
 
 class UserUpdateIn(_ProfileIn):
@@ -108,6 +125,13 @@ class ResetPasswordIn(CamelModel):
         return _check_password(v)
 
 
+class AssignedBranchOut(CamelModel):
+    id: int
+    branch_code: str
+    name: str
+    status: str  # an INACTIVE assignment is kept but grants no access
+
+
 class UserOut(CamelModel):
     id: int
     store_id: int
@@ -118,4 +142,12 @@ class UserOut(CamelModel):
     role: str
     status: str
     created_at: datetime
-    branches: list[BranchBrief]  # OWNER: [] (works on every branch, see /auth/me)
+    branches: list[AssignedBranchOut]  # rows of user_branches. OWNER: [] (works on every branch, see /auth/me)
+
+
+class UserPageOut(CamelModel):
+    items: list[UserOut]
+    page: int
+    page_size: int
+    total: int
+    total_pages: int

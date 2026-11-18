@@ -1,14 +1,67 @@
 """SQL queries for internal user accounts."""
-from sqlalchemy import select, update
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.branches.models import Branch
 from app.modules.users.models import User, UserBranch
 
 
-async def list_store_users(db: AsyncSession, store_id: int) -> list[User]:
-    stmt = select(User).where(User.store_id == store_id).order_by(User.role, User.username)
-    return list((await db.execute(stmt)).scalars())
+def _escape_like(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+async def list_users_page(
+    db: AsyncSession,
+    store_id: int,
+    *,
+    manager_branch_ids: list[int] | None = None,
+    branch_id: int | None = None,
+    role: str | None = None,
+    status: str | None = None,
+    keyword: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> tuple[list[User], int]:
+    """One page of the store's users and the total count.
+
+    manager_branch_ids (MANAGER scope): only EMPLOYEE accounts that have at least one ACTIVE branch
+    and whose ACTIVE branches are all inside these ids. Same rule as users.service._in_manager_scope.
+    branch_id: users assigned to that branch (OWNER has no assignment rows, so never matches).
+    keyword: username, full name, email or phone contains it (case-insensitive collation).
+    """
+    stmt = select(User).where(User.store_id == store_id)
+    if manager_branch_ids is not None:
+        if not manager_branch_ids:
+            return [], 0
+        active_assignment = (
+            select(UserBranch.user_branch_id)
+            .join(Branch, Branch.branch_id == UserBranch.branch_id)
+            .where(UserBranch.user_id == User.user_id, Branch.status == "ACTIVE")
+        )
+        stmt = stmt.where(
+            User.role == "EMPLOYEE",
+            active_assignment.exists(),
+            ~active_assignment.where(UserBranch.branch_id.not_in(manager_branch_ids)).exists(),
+        )
+    if branch_id is not None:
+        stmt = stmt.where(
+            select(UserBranch.user_branch_id)
+            .where(UserBranch.user_id == User.user_id, UserBranch.branch_id == branch_id)
+            .exists()
+        )
+    if role is not None:
+        stmt = stmt.where(User.role == role)
+    if status is not None:
+        stmt = stmt.where(User.status == status)
+    if keyword:
+        pattern = f"%{_escape_like(keyword)}%"
+        stmt = stmt.where(
+            or_(*(col.like(pattern, escape="\\") for col in (User.username, User.full_name, User.email, User.phone)))
+        )
+
+    total = int((await db.execute(select(func.count()).select_from(stmt.subquery()))).scalar_one())
+    page_stmt = stmt.order_by(User.role, User.username).limit(page_size).offset((page - 1) * page_size)
+    return list((await db.execute(page_stmt)).scalars()), total
 
 
 async def get_user(db: AsyncSession, store_id: int, user_id: int, *, for_update: bool = False) -> User | None:
@@ -54,6 +107,26 @@ async def insert_user(db: AsyncSession, user: User, branch_ids: list[int]) -> Us
     await db.flush()
     await db.refresh(user)  # load server defaults (created_at, status)
     return user
+
+
+async def replace_user_branches(db: AsyncSession, user_id: int, branch_ids: set[int]) -> None:
+    """Make user_branches for `user_id` equal to `branch_ids`.
+
+    Only the difference is written: kept rows keep their assigned_at, and a (user_id, branch_id) pair
+    is never inserted twice (uq_user_branch would also reject it).
+    """
+    current = await assigned_branch_ids(db, user_id)
+    removed = current - branch_ids
+    added = sorted(branch_ids - current)
+    if removed:
+        await db.execute(delete(UserBranch).where(UserBranch.user_id == user_id, UserBranch.branch_id.in_(removed)))
+    if added:
+        db.add_all(UserBranch(user_id=user_id, branch_id=b) for b in added)
+    await db.flush()
+
+
+async def assigned_branch_ids(db: AsyncSession, user_id: int) -> set[int]:
+    return set((await db.execute(select(UserBranch.branch_id).where(UserBranch.user_id == user_id))).scalars())
 
 
 async def save_user(db: AsyncSession, user: User) -> User:

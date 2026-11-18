@@ -126,7 +126,9 @@ ids = get_accessible_branch_ids(user)   # lọc danh sách theo chi nhánh user 
 
 | Endpoint | Ghi chú |
 |---|---|
-| `GET /api/v1/users`, `GET /api/v1/users/{id}` | danh sách / chi tiết trong phạm vi quản lý |
+| `GET /api/v1/users?branchId&role&status&keyword&page&pageSize` | `{items, page, pageSize, total, totalPages}`; `pageSize` ≤ 100 (mặc định 20); `keyword` tìm trong username, họ tên, email, SĐT; `branchId` ngoài phạm vi → 403 |
+| `GET /api/v1/users/{id}` | chi tiết kèm `branches: [{id, branchCode, name, status}]` |
+| `PUT /api/v1/users/{id}/branches` `{branchIds}` | thay toàn bộ phân công (FR-02.4), chỉ ghi phần chênh lệch, không trùng cặp; OWNER → 409 `OWNER_HAS_ALL_BRANCHES` |
 | `POST /api/v1/users` `{username, password, fullName, email?, phone?, role, branchIds}` | 201; `role` chỉ `MANAGER`/`EMPLOYEE`; mật khẩu >= 8 ký tự (bcrypt); trùng username → 409 `DUPLICATE_USERNAME` |
 | `PUT /api/v1/users/{id}` `{fullName, email?, phone?, role?}` | thay họ tên/email/SĐT; `role` chỉ OWNER được đổi |
 | `PATCH /api/v1/users/{id}/status` `{status}` | `ACTIVE`/`LOCKED`; tự khóa mình → 409 `CANNOT_LOCK_SELF`; khóa OWNER đang hoạt động duy nhất → 409 `LAST_ACTIVE_OWNER` |
@@ -135,5 +137,5 @@ ids = get_accessible_branch_ids(user)   # lọc danh sách theo chi nhánh user 
 - Chỉ OWNER và MANAGER gọi được (EMPLOYEE → 403). OWNER quản lý mọi tài khoản của cửa hàng.
 - MANAGER chỉ quản lý tài khoản EMPLOYEE có **toàn bộ** chi nhánh ACTIVE nằm trong chi nhánh mình quản lý. Chỉ được tạo EMPLOYEE và gán vào chi nhánh của mình. Ngoài phạm vi → 403, kể cả id không tồn tại.
 - Response không bao giờ có `password_hash`. Khóa tài khoản có hiệu lực ngay: login → 403 `ACCOUNT_LOCKED`, token cũ cũng bị chặn.
-- Chưa có API đổi phân công chi nhánh của tài khoản đã tạo.
-- Postman: `postman/DKat_Users.postman_collection.json` (55 request). Mỗi lần chạy tạo `emp_<số>`/`mgr_<số>` và khóa lại ở cuối.
+- Phân công: MANAGER chỉ dùng chi nhánh mình quản lý; phân công vào chi nhánh INACTIVE ngoài phạm vi của MANAGER được giữ nguyên. Thay đổi có hiệu lực ngay ở request kế tiếp (token cũ mất quyền chi nhánh bị gỡ) và khi đăng nhập lại.
+- Postman: `postman/DKat_Users.postman_collection.json` (55 request), `postman/DKat_UserBranches.postman_collection.json` (42 request). Mỗi lần chạy tạo tài khoản test và khóa lại ở cuối.

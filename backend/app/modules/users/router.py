@@ -1,20 +1,32 @@
 """Internal account management API (FR-01.3). OWNER and MANAGER only; EMPLOYEE -> 403.
 
-GET    /users                         list accounts in the caller's scope
-GET    /users/{id}
+GET    /users?branchId&role&status&keyword&page&pageSize   paged list in the caller's scope
+GET    /users/{id}                    includes the assigned branches
 POST   /users                         201; MANAGER may only create EMPLOYEE in their own branches
 PUT    /users/{id}                    fullName, email, phone (+ role: OWNER only)
+PUT    /users/{id}/branches           replace the branch assignment (FR-02.4)
 PATCH  /users/{id}/status             ACTIVE / LOCKED
 POST   /users/{id}/reset-password     new password typed by the manager
 Responses never contain password_hash (UserOut has no such field).
 """
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.permissions import ROLE_MANAGER, ROLE_OWNER, CurrentUser, require_role
+from app.core.permissions import ROLE_MANAGER, ROLE_OWNER, CurrentUser, require_branch_access, require_role
 from app.db.session import get_db
 from app.modules.users import service
-from app.modules.users.schemas import ResetPasswordIn, UserCreateIn, UserOut, UserStatusIn, UserUpdateIn
+from app.modules.users.schemas import (
+    MAX_PAGE_SIZE,
+    AnyRole,
+    ResetPasswordIn,
+    UserBranchesIn,
+    UserCreateIn,
+    UserOut,
+    UserPageOut,
+    UserStatus,
+    UserStatusIn,
+    UserUpdateIn,
+)
 from app.utils.response import SuccessResponse, ok
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -23,10 +35,30 @@ router = APIRouter(prefix="/users", tags=["users"])
 _managers = require_role(ROLE_OWNER, ROLE_MANAGER)
 
 
-@router.get("", response_model=SuccessResponse[list[UserOut]], response_model_by_alias=True)
-async def list_users(user: CurrentUser = Depends(_managers), db: AsyncSession = Depends(get_db)):
-    """OWNER: mọi tài khoản của cửa hàng. MANAGER: nhân viên thuộc chi nhánh mình quản lý."""
-    return ok(await service.list_users(db, user))
+@router.get(
+    "",
+    dependencies=[Depends(_managers)],
+    response_model=SuccessResponse[UserPageOut],
+    response_model_by_alias=True,
+)
+async def list_users(
+    branch_id: int | None = Query(default=None, alias="branchId", gt=0),
+    role: AnyRole | None = Query(default=None),
+    status: UserStatus | None = Query(default=None),
+    keyword: str | None = Query(default=None, max_length=100),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, alias="pageSize", ge=1, le=MAX_PAGE_SIZE),
+    # role is checked first (route dependencies), then branchId must be one of the caller's branches
+    user: CurrentUser = Depends(require_branch_access()),
+    db: AsyncSession = Depends(get_db),
+):
+    """OWNER: mọi tài khoản. MANAGER: nhân viên thuộc chi nhánh mình; branchId ngoài phạm vi -> 403.
+    keyword tìm trong username, họ tên, email, SĐT."""
+    return ok(
+        await service.list_users(
+            db, user, branch_id=branch_id, role=role, status=status, keyword=keyword, page=page, page_size=page_size
+        )
+    )
 
 
 @router.get("/{user_id}", response_model=SuccessResponse[UserOut], response_model_by_alias=True)
@@ -46,6 +78,15 @@ async def update_user(
 ):
     """Sửa họ tên, email, SĐT. `role` chỉ OWNER được đổi (MANAGER -> 403)."""
     return ok(await service.update_user(db, user, user_id, body))
+
+
+@router.put("/{user_id}/branches", response_model=SuccessResponse[UserOut], response_model_by_alias=True)
+async def assign_branches(
+    user_id: int, body: UserBranchesIn, user: CurrentUser = Depends(_managers), db: AsyncSession = Depends(get_db)
+):
+    """Thay toàn bộ phân công chi nhánh. MANAGER chỉ dùng chi nhánh mình quản lý (khác -> 403).
+    Có hiệu lực ngay ở request kế tiếp và khi đăng nhập lại."""
+    return ok(await service.assign_branches(db, user, user_id, body))
 
 
 @router.patch("/{user_id}/status", response_model=SuccessResponse[UserOut], response_model_by_alias=True)

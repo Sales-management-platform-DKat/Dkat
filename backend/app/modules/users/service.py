@@ -16,14 +16,21 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppError
-from app.core.permissions import ROLE_EMPLOYEE, ROLE_OWNER, CurrentUser
+from app.core.permissions import ROLE_EMPLOYEE, ROLE_OWNER, CurrentUser, get_accessible_branch_ids
 from app.core.security import hash_password
 from app.db.session import transaction
-from app.modules.auth.schemas import BranchBrief
 from app.modules.branches.models import Branch
 from app.modules.users import repository
 from app.modules.users.models import User
-from app.modules.users.schemas import ResetPasswordIn, UserCreateIn, UserOut, UserUpdateIn
+from app.modules.users.schemas import (
+    AssignedBranchOut,
+    ResetPasswordIn,
+    UserBranchesIn,
+    UserCreateIn,
+    UserOut,
+    UserPageOut,
+    UserUpdateIn,
+)
 from app.utils.logger import get_logger
 
 logger = get_logger("app.users")
@@ -42,7 +49,9 @@ def _to_out(user: User, branches: list[Branch]) -> UserOut:
         role=user.role,
         status=user.status,
         created_at=user.created_at,
-        branches=[BranchBrief(id=b.branch_id, name=b.name) for b in branches],
+        branches=[
+            AssignedBranchOut(id=b.branch_id, branch_code=b.branch_code, name=b.name, status=b.status) for b in branches
+        ],
     )
 
 
@@ -76,14 +85,37 @@ def _duplicate_username(username: str) -> AppError:
 # --------------------------------------------------------------------------- read
 
 
-async def list_users(db: AsyncSession, actor: CurrentUser) -> list[UserOut]:
-    users = await repository.list_store_users(db, actor.store_id)
+async def list_users(
+    db: AsyncSession,
+    actor: CurrentUser,
+    *,
+    branch_id: int | None,
+    role: str | None,
+    status: str | None,
+    keyword: str | None,
+    page: int,
+    page_size: int,
+) -> UserPageOut:
+    """branch_id has already been checked by require_branch_access (MANAGER: must be one of theirs)."""
+    users, total = await repository.list_users_page(
+        db,
+        actor.store_id,
+        manager_branch_ids=None if actor.is_owner else get_accessible_branch_ids(actor),
+        branch_id=branch_id,
+        role=role,
+        status=status,
+        keyword=keyword.strip() if keyword else None,
+        page=page,
+        page_size=page_size,
+    )
     branches = await repository.branches_by_user(db, [u.user_id for u in users])
-    return [
-        _to_out(u, branches.get(u.user_id, []))
-        for u in users
-        if actor.is_owner or _in_manager_scope(actor, u, branches.get(u.user_id, []))
-    ]
+    return UserPageOut(
+        items=[_to_out(u, branches.get(u.user_id, [])) for u in users],
+        page=page,
+        page_size=page_size,
+        total=total,
+        total_pages=(total + page_size - 1) // page_size,
+    )
 
 
 async def get_user(db: AsyncSession, actor: CurrentUser, user_id: int) -> UserOut:
@@ -168,6 +200,41 @@ async def change_status(db: AsyncSession, actor: CurrentUser, user_id: int, stat
         user = await repository.save_user(db, user)
     logger.info("USER_STATUS id=%s status=%s by user_id=%s", user_id, status, actor.id)
     return _to_out(user, branches)
+
+
+async def assign_branches(db: AsyncSession, actor: CurrentUser, user_id: int, body: UserBranchesIn) -> UserOut:
+    """Replace the user's branch assignment (FR-02.4).
+
+    OWNER: the new set is exactly body.branchIds.
+    MANAGER: may only use their own branches; assignments outside them (e.g. an INACTIVE branch of
+    another manager) are kept untouched, so a manager can never remove what they cannot see.
+    Takes effect on the next request (require_auth reloads branches) and on the next login.
+    """
+    requested = set(body.branch_ids)
+    if not actor.is_owner:
+        outside = sorted(requested - set(actor.branch_ids))
+        if outside:
+            raise AppError(403, "FORBIDDEN", "Chỉ được phân công vào chi nhánh bạn quản lý", {"branchIds": outside})
+    invalid = sorted(requested - await repository.active_branch_ids(db, actor.store_id, sorted(requested)))
+    if invalid:
+        raise AppError.validation(
+            "Chi nhánh không tồn tại hoặc đã ngừng hoạt động",
+            [{"field": "branchIds", "message": f"Invalid branch ids: {invalid}", "type": "invalid_branch"}],
+        )
+
+    async with transaction(db):
+        # Row lock: two managers editing the same account are applied one after the other
+        user, _ = await _load_target(db, actor, user_id, for_update=True)
+        if user.role == ROLE_OWNER:
+            raise AppError(409, "OWNER_HAS_ALL_BRANCHES", "Chủ cửa hàng luôn được truy cập mọi chi nhánh, không cần phân công")
+        new_ids = requested
+        if not actor.is_owner:
+            kept = await repository.assigned_branch_ids(db, user.user_id) - set(actor.branch_ids)
+            new_ids = requested | kept
+        await repository.replace_user_branches(db, user.user_id, new_ids)
+    logger.info("USER_BRANCHES id=%s branches=%s by user_id=%s", user_id, sorted(new_ids), actor.id)
+    # Still in a MANAGER's scope afterwards: kept rows are outside their branches only if INACTIVE
+    return await get_user(db, actor, user_id)
 
 
 async def reset_password(db: AsyncSession, actor: CurrentUser, user_id: int, body: ResetPasswordIn) -> None:

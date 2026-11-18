@@ -820,7 +820,7 @@
       "name": "2. Xem danh sách / chi tiết",
       "item": [
         {
-          "name": "2.1 OWNER GET /users -> thấy cả 2 tài khoản mới",
+          "name": "2.1 OWNER GET /users?keyword -> thấy cả 2 tài khoản mới",
           "request": {
             "method": "GET",
             "header": [
@@ -830,7 +830,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/users",
+              "raw": "{{baseUrl}}/api/v1/users?keyword={{suffix}}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -838,6 +838,12 @@
                 "api",
                 "v1",
                 "users"
+              ],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": "{{suffix}}"
+                }
               ]
             }
           },
@@ -849,7 +855,7 @@
                 "exec": [
                   "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
                   "pm.test(\"Không trả password/passwordHash\", () => pm.expect(pm.response.text()).to.not.match(/password/i));",
-                  "const ids = pm.response.json().data.map(u => u.id);",
+                  "const ids = pm.response.json().data.items.map(u => u.id);",
                   "pm.test(\"Có newManager + newEmployee\", () => { pm.expect(ids).to.include(Number(pm.collectionVariables.get(\"newManagerId\"))); pm.expect(ids).to.include(Number(pm.collectionVariables.get(\"newEmployeeId\"))); });"
                 ]
               }
@@ -857,7 +863,7 @@
           ]
         },
         {
-          "name": "2.2 MANAGER GET /users -> chỉ nhân viên chi nhánh mình",
+          "name": "2.2 MANAGER GET /users?keyword -> chỉ nhân viên chi nhánh mình",
           "request": {
             "method": "GET",
             "header": [
@@ -867,7 +873,7 @@
               }
             ],
             "url": {
-              "raw": "{{baseUrl}}/api/v1/users",
+              "raw": "{{baseUrl}}/api/v1/users?keyword={{suffix}}",
               "host": [
                 "{{baseUrl}}"
               ],
@@ -875,6 +881,12 @@
                 "api",
                 "v1",
                 "users"
+              ],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": "{{suffix}}"
+                }
               ]
             }
           },
@@ -886,7 +898,7 @@
                 "exec": [
                   "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
                   "pm.test(\"Không trả password/passwordHash\", () => pm.expect(pm.response.text()).to.not.match(/password/i));",
-                  "const users = pm.response.json().data; const ids = users.map(u => u.id);",
+                  "const users = pm.response.json().data.items; const ids = users.map(u => u.id);",
                   "pm.test(\"Chỉ EMPLOYEE\", () => users.forEach(u => pm.expect(u.role).to.eql(\"EMPLOYEE\")));",
                   "pm.test(\"Có nhân viên mới, không có quản lý mới\", () => { pm.expect(ids).to.include(Number(pm.collectionVariables.get(\"newEmployeeId\"))); pm.expect(ids).to.not.include(Number(pm.collectionVariables.get(\"newManagerId\"))); });"
                 ]
