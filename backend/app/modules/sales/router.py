@@ -7,10 +7,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.permissions import Actor, require_auth
 from app.db.session import engine
 from app.modules.sales.schemas import (
-    CancelOrderInput, PendingSalesOrder, SalesId, SalesOrderDetail,
+    CancelOrderInput, ConfirmPaymentInput, PendingSalesOrder, SalesId, SalesOrderDetail,
     SalesOrderFilters, SalesOrderInput, SalesOrderSummary,
 )
-from app.modules.sales.service import cancel_sales_order, create_sales_order, get_sales_order, list_sales_orders
+from app.modules.sales.service import (
+    cancel_sales_order, confirm_payment, create_sales_order, get_sales_order, list_sales_orders,
+)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/sales-orders", tags=["sales-orders"])
@@ -54,4 +56,14 @@ def cancel_order(order_id: SalesId, data: CancelOrderInput, actor: Reader) -> Sa
             return cancel_sales_order(db, actor, order_id, data.reason)
     except SQLAlchemyError:
         logger.exception("Sales order cancellation failed")
+        raise HTTPException(503, "Database unavailable") from None
+
+
+@router.post("/{order_id}/confirm-payment")
+def confirm_order_payment(order_id: SalesId, data: ConfirmPaymentInput, actor: Reader) -> SalesOrderDetail:
+    try:
+        with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
+            return confirm_payment(db, actor, order_id, data)
+    except SQLAlchemyError:
+        logger.exception("Sales order payment failed")
         raise HTTPException(503, "Database unavailable") from None

@@ -131,3 +131,27 @@ Với database hiện có, chạy `database/05_sales_order_cancellation.sql` đ�
 - `POST /sales-orders/{id}/cancel` nhận `{"reason":"Khách đổi ý"}` và trả HTTP 200 với trạng thái CANCELLED. Lý do là bắt buộc. Đơn không còn PENDING trả 409 ORDER_NOT_PENDING. Hai request hủy cùng đơn được tuần tự hóa bằng khóa dòng. Cả xem và hủy đều giới hạn trong chi nhánh có quyền.
 
 Import `samples/pbi91-sales-orders.postman_collection.json`. Điền accessToken, branchId, variantId còn hàng và paidOrderId của đơn PAID để chạy đầy đủ các ca.
+
+## Xác nhận thanh toán POS PBI 99
+
+1. Database mới chạy `database/01_schema.sql`. Database cũ cần các migration 02–05 đã liệt kê ở trên. PBI 99 không thêm bảng/cột. Tài khoản backend cần SELECT trên các bảng liên quan, UPDATE trên `sales_orders` và `inventory`, INSERT trên `payments` và `inventory_movements`.
+2. Đăng nhập OWNER, MANAGER hoặc EMPLOYEE có quyền tại chi nhánh của đơn. Trong Swagger gọi `POST /sales-orders/{order_id}/confirm-payment`:
+
+   ```json
+   {"paymentMethod": "CASH", "amount": "99000.00"}
+   ```
+
+   Thay ID và số tiền bằng `salesOrderId`, `totalAmount` vừa trả từ API tạo đơn. Phương thức nhận CASH, BANK_TRANSFER, CARD hoặc OTHER. `amount` là tiền thanh toán cho đơn; với tiền mặt, frontend tự tính tiền khách đưa và tiền thừa. Tổng bằng 0 vẫn được ghi nhận khi đơn giảm giá toàn bộ.
+3. HTTP 200 trả chi tiết đơn PAID, thời điểm thanh toán và một payment SUCCESS. Tồn kho giảm theo dòng hàng snapshot; movement SALE có `referenceType: SALES_ORDER`, `referenceId` là ID đơn. Thanh toán, tồn kho, movement và trạng thái đơn cùng commit hoặc cùng rollback.
+
+Số tiền không khớp trả 422 `PAYMENT_AMOUNT_MISMATCH`. Tồn khả dụng không đủ trả 409 `OUT_OF_STOCK` với chi tiết từng biến thể; hàng giữ chỗ cho preorder được bảo vệ. Đơn đã PAID/CANCELLED trả 409 `ORDER_NOT_PENDING`. Ngoài cửa hàng trả 404; ngoài chi nhánh được phân công trả 403. Lỗi database trả 503 và hoàn tác giao dịch. Gửi lại cùng đơn sau khi kết nối bị ngắt sẽ không trừ kho lần thứ hai; đọc GET chi tiết để kiểm tra trạng thái.
+
+Thử nhanh: import `samples/pbi99-confirm-payment.postman_collection.json`, điền `accessToken`, `branchId`, `variantId` còn hàng, rồi chạy thư mục SalesPayment trên database kiểm thử. Collection tạo và thanh toán một đơn thật.
+
+Chạy bộ kiểm thử MySQL riêng bằng PowerShell từ thư mục backend:
+
+```powershell
+.\scripts\test_pbi99_mysql.ps1
+```
+
+Cần MySQL Server 8.0 và môi trường `.venv` đã cài `requirements-dev.txt`. Nếu MySQL nằm ở chỗ khác, thêm `-MySqlBin 'D:\MySQL\bin'`. Script tạo một MySQL tạm tại máy, nạp schema riêng `dkat_pbi99_test`, chạy các ca thanh toán, phân quyền, giữ chỗ, yêu cầu đồng thời và lỗi SQL ở ba giai đoạn, rồi tắt server. Database trong `.env` không được dùng. Log tạm được giữ tại đường dẫn cuối kết quả.

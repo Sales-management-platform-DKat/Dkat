@@ -7,8 +7,16 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_vali
 from app.core.query_schemas import DatePageFilters
 
 SalesId = Annotated[int, Field(gt=0, le=9223372036854775807)]
-Discount = Annotated[Decimal, Field(ge=0, max_digits=12, decimal_places=2, allow_inf_nan=False)]
+Money = Annotated[Decimal, Field(ge=0, max_digits=12, decimal_places=2, allow_inf_nan=False)]
 OrderStatus = Literal["PENDING", "PAID", "CANCELLED"]
+PaymentMethod = Literal["CASH", "BANK_TRANSFER", "CARD", "OTHER"]
+
+
+class ConfirmPaymentInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    paymentMethod: PaymentMethod
+    amount: Money
 
 
 class SalesOrderFilters(DatePageFilters):
@@ -50,7 +58,7 @@ class SalesOrderSummary(BaseModel):
 
 class OrderPayment(BaseModel):
     paymentId: int
-    paymentMethod: Literal["CASH", "BANK_TRANSFER", "CARD", "OTHER"]
+    paymentMethod: PaymentMethod
     amount: Decimal
     status: Literal["PENDING", "SUCCESS", "FAILED", "REFUNDED"]
     confirmedBy: int
@@ -74,7 +82,7 @@ class SalesOrderInput(BaseModel):
 
     branchId: SalesId
     customerId: SalesId | None = None
-    discountAmount: Discount = Decimal("0.00")
+    discountAmount: Money = Decimal("0.00")
     items: list[SalesLineInput] = Field(min_length=1, max_length=100)
 
     @model_validator(mode="after")

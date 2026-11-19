@@ -6,7 +6,7 @@ from app.core.permissions import Actor, require_branch_access
 from app.modules.inventory.schemas import (
     MAX_STOCK_QUANTITY, ExportReason, InventoryItem, InventoryMovement, MovementFilters,
     StockChangeResult, StockExportInput, StockImportInput, StockLineResult,
-    StockMovementType, StocktakeInput,
+    MovementType, StocktakeInput,
 )
 
 LOW_STOCK_THRESHOLD = 5
@@ -189,8 +189,9 @@ def check_export_stock(
 
 def record_movement(
     db: Connection, actor: Actor, *, variant_id: int, inventory_id: int,
-    before: int, after: int, movement_type: StockMovementType, note: str | None,
+    before: int, after: int, movement_type: MovementType, note: str | None,
     reason: ExportReason | None = None,
+    reference_type: str | None = None, reference_id: int | None = None,
 ) -> StockLineResult:
     delta = after - before
     movement_id = None
@@ -202,12 +203,14 @@ def record_movement(
         movement_id = db.execute(
             text("""
                 INSERT INTO inventory_movements
-                    (inventory_id, movement_type, quantity_change, export_reason, note, created_by)
-                VALUES (:inventory, :type, :delta, :reason, :note, :user)
+                    (inventory_id, movement_type, quantity_change, export_reason, note, created_by,
+                     reference_type, reference_id)
+                VALUES (:inventory, :type, :delta, :reason, :note, :user, :reference_type, :reference_id)
             """),
             {
                 "inventory": inventory_id, "type": movement_type, "delta": delta,
                 "reason": reason, "note": note, "user": actor.user_id,
+                "reference_type": reference_type, "reference_id": reference_id,
             },
         ).lastrowid
     return StockLineResult(

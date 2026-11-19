@@ -7,9 +7,11 @@ from sqlalchemy import bindparam, text
 from sqlalchemy.engine import Connection
 
 from app.core.permissions import Actor, get_accessible_branch_ids, require_branch_access
-from app.modules.inventory.service import OPEN_PREORDER_STATUSES
+from app.modules.inventory.service import (
+    OPEN_PREORDER_STATUSES, lock_inventory_rows, record_movement, reserved_quantities,
+)
 from app.modules.sales.schemas import (
-    OrderPayment, PendingSalesOrder, SalesOrderDetail, SalesOrderFilters,
+    ConfirmPaymentInput, OrderPayment, PendingSalesOrder, SalesOrderDetail, SalesOrderFilters,
     SalesOrderInput, SalesOrderLine, SalesOrderSummary,
 )
 
@@ -84,8 +86,11 @@ def get_sales_order(
     header = db.execute(
         text("""
             SELECT o.branch_id FROM sales_orders AS o
-            JOIN branches AS b ON b.branch_id = o.branch_id AND b.store_id = :store
             WHERE o.sales_order_id = :id
+              AND EXISTS (
+                  SELECT 1 FROM branches AS b
+                  WHERE b.branch_id = o.branch_id AND b.store_id = :store
+              )
         """ + (" FOR UPDATE" if lock else "")),
         {"store": actor.store_id, "id": order_id},
     ).scalar_one_or_none()
@@ -131,6 +136,69 @@ def cancel_sales_order(db: Connection, actor: Actor, order_id: int, reason: str)
             WHERE sales_order_id = :id AND status = 'PENDING'
         """),
         {"id": order_id, "reason": reason},
+    )
+    return get_sales_order(db, actor, order_id)
+
+
+def confirm_payment(
+    db: Connection, actor: Actor, order_id: int, data: ConfirmPaymentInput,
+) -> SalesOrderDetail:
+    # Lock only the order, then inventory in the same ascending order as stock writers.
+    # The caller owns one READ COMMITTED transaction for every write below.
+    order = get_sales_order(db, actor, order_id, lock=True)
+    if order.status != "PENDING":
+        raise HTTPException(409, {"code": "ORDER_NOT_PENDING"})
+    if data.amount != order.totalAmount:
+        raise HTTPException(422, {
+            "code": "PAYMENT_AMOUNT_MISMATCH", "expectedAmount": str(order.totalAmount),
+        })
+    if not order.items:
+        raise HTTPException(409, {"code": "ORDER_HAS_NO_ITEMS"})
+
+    quantities: dict[int, int] = {}
+    for item in order.items:
+        quantities[item.variantId] = quantities.get(item.variantId, 0) + item.quantity
+    variant_ids = sorted(quantities)
+    rows = lock_inventory_rows(db, order.branchId, variant_ids, create_missing=False)
+    reserved = reserved_quantities(db, order.branchId, variant_ids)
+    shortages = []
+    for variant_id in variant_ids:
+        quantity = rows.get(variant_id, (None, 0))[1]
+        held = reserved.get(variant_id, 0)
+        available = quantity - held
+        if quantities[variant_id] > available:
+            shortages.append({
+                "variantId": variant_id, "requested": quantities[variant_id],
+                "quantity": quantity, "reserved": held, "available": available,
+            })
+    if shortages:
+        raise HTTPException(409, {"code": "OUT_OF_STOCK", "items": shortages})
+
+    confirmed_at = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+    db.execute(
+        text("""
+            INSERT INTO payments
+                (sales_order_id, payment_method, amount, status, confirmed_by, confirmed_at)
+            VALUES (:order, :method, :amount, 'SUCCESS', :user, :at)
+        """),
+        {
+            "order": order_id, "method": data.paymentMethod, "amount": data.amount,
+            "user": actor.user_id, "at": confirmed_at,
+        },
+    )
+    for variant_id in variant_ids:
+        inventory_id, before = rows[variant_id]
+        record_movement(
+            db, actor, variant_id=variant_id, inventory_id=inventory_id,
+            before=before, after=before - quantities[variant_id], movement_type="SALE",
+            note=f"Bán đơn {order.orderCode}", reference_type="SALES_ORDER", reference_id=order_id,
+        )
+    db.execute(
+        text("""
+            UPDATE sales_orders SET status = 'PAID', paid_at = :at
+            WHERE sales_order_id = :id
+        """),
+        {"id": order_id, "at": confirmed_at},
     )
     return get_sales_order(db, actor, order_id)
 
