@@ -177,6 +177,8 @@ CREATE TABLE sales_orders (
     status ENUM('PENDING', 'PAID', 'CANCELLED') NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     paid_at DATETIME,
+    cancelled_at DATETIME,
+    cancel_reason VARCHAR(255),
     KEY ix_sales_branch_time (branch_id, created_at),
     KEY ix_sales_status_time (status, created_at),
     CHECK (subtotal >= 0 AND discount_amount >= 0 AND total_amount = subtotal - discount_amount AND total_amount >= 0),

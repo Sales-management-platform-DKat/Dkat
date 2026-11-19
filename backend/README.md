@@ -121,3 +121,13 @@ Với database đã khởi tạo, chạy `database/04_sales_order_customers.sql`
 Bỏ `customerId` hoặc gửi `null` cho khách vãng lai. Với khách có hồ sơ, gửi ID khách thuộc cùng cửa hàng. API lấy giá từ database, lưu tên, SKU và giá trên từng dòng đơn, rồi trả HTTP 201 với trạng thái `PENDING`. Mã đơn dùng ngày Việt Nam và hậu tố UUID. Số tiền trả dưới dạng chuỗi thập phân. Khi thiếu hàng, API trả `409` với `detail.code = "OUT_OF_STOCK"` và `detail.items` chứa `variantId` và `available`. Kho và số lượng giữ chỗ giữ nguyên. Luồng thanh toán cần kiểm tra lại tồn khi chốt đơn.
 
 Để thử qua Postman trên database kiểm thử, import `samples/pbi90-sales-order.postman_collection.json`, điền `accessToken`, `branchId`, `variantIdA` và `variantIdB`, rồi chạy thư mục SalesOrder theo thứ tự.
+
+## Danh sách, chi tiết và hủy đơn PBI 91
+
+Với database hiện có, chạy `database/05_sales_order_cancellation.sql` để thêm thời điểm và lý do hủy. Tài khoản backend cần SELECT và UPDATE trên sales_orders, cùng quyền đọc các bảng liên quan.
+
+- `GET /sales-orders?branchId=1&status=PENDING&keyword=DK-&page=1&size=20` trả các đơn theo quyền chi nhánh, mới nhất trước. Có thêm bộ lọc customerId, from và to. Ngày YYYY-MM-DD dùng giờ Việt Nam và bao gồm ngày cuối. Timestamp ISO dùng múi giờ được gửi, mặc định UTC khi thiếu múi giờ.
+- `GET /sales-orders/{id}` trả dòng hàng snapshot, lịch sử thanh toán, tên khách hoặc null, và người tạo. paymentMethods trong danh sách là các phương thức đã thanh toán SUCCESS.
+- `POST /sales-orders/{id}/cancel` nhận `{"reason":"Khách đổi ý"}` và trả HTTP 200 với trạng thái CANCELLED. Lý do là bắt buộc. Đơn không còn PENDING trả 409 ORDER_NOT_PENDING. Hai request hủy cùng đơn được tuần tự hóa bằng khóa dòng. Cả xem và hủy đều giới hạn trong chi nhánh có quyền.
+
+Import `samples/pbi91-sales-orders.postman_collection.json`. Điền accessToken, branchId, variantId còn hàng và paidOrderId của đơn PAID để chạy đầy đủ các ca.

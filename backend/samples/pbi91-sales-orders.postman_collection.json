@@ -1,0 +1,281 @@
+{
+  "info": {
+    "name": "DKat PBI 91 | Danh sách, chi tiết, hủy đơn",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Điền accessToken, branchId, variantId đang ACTIVE còn hàng và paidOrderId của một đơn PAID trong chi nhánh có quyền. Chạy cả thư mục SalesOrder theo thứ tự trên database kiểm thử."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "branchId",
+      "value": ""
+    },
+    {
+      "key": "variantId",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    },
+    {
+      "key": "orderCode",
+      "value": ""
+    },
+    {
+      "key": "paidOrderId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "SalesOrder",
+      "item": [
+        {
+          "name": "Tạo đơn thử",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"quantity\": 1\n    }\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Response', () => {",
+                  "const data = pm.response.json();",
+                  "pm.expect(data.status).to.eql('PENDING');",
+                  "pm.collectionVariables.set('orderId',data.salesOrderId);",
+                  "pm.collectionVariables.set('orderCode',data.orderCode);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tìm theo mã đơn",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/sales-orders?keyword={{orderCode}}&status=PENDING"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response', () => {",
+                  "const data = pm.response.json();",
+                  "pm.expect(data).to.have.lengthOf(1);",
+                  "pm.expect(data[0].salesOrderId).to.eql(Number(pm.variables.get('orderId')));",
+                  "pm.expect(data[0].paymentMethods).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Xem chi tiết",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response', () => {",
+                  "const data = pm.response.json();",
+                  "pm.expect(data).to.include.keys('createdBy','createdByName','customerId','customerName','items','payments');",
+                  "pm.expect(data.items).to.have.lengthOf(1);",
+                  "pm.expect(data.items[0]).to.include.keys('sku','productName','unitPrice','lineTotal');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Chặn lý do rỗng",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}/cancel",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \" \"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Response', () => {",
+                  "const data = pm.response.json();",
+                  "pm.expect(data.detail).to.be.an('array').and.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Hủy PENDING",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}/cancel",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Khách đổi ý\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response', () => {",
+                  "const data = pm.response.json();",
+                  "pm.expect(data.status).to.eql('CANCELLED');",
+                  "pm.expect(data.cancelReason).to.eql('Khách đổi ý');",
+                  "pm.expect(data.cancelledAt).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Hủy lại bị chặn",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}/cancel",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Hủy lại\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Response', () => {",
+                  "const data = pm.response.json();",
+                  "pm.expect(data.detail.code).to.eql('ORDER_NOT_PENDING');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Danh sách đơn đã hủy",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/sales-orders?keyword={{orderCode}}&status=CANCELLED"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Response', () => {",
+                  "const data = pm.response.json();",
+                  "pm.expect(data).to.have.lengthOf(1);",
+                  "pm.expect(data[0].status).to.eql('CANCELLED');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Chặn hủy PAID",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders/{{paidOrderId}}/cancel",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Đơn đã thu tiền\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Response', () => {",
+                  "const data = pm.response.json();",
+                  "pm.expect(data.detail.code).to.eql('ORDER_NOT_PENDING');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
