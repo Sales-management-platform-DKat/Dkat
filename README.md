@@ -86,3 +86,9 @@ Tạo/ghi dữ liệu nghiệp vụ của các màn hình bán hàng hiện vẫ
 ## Kiểm tra
 
 Frontend: `npm test` và `npm run build`. Backend (từ thư mục `backend`): `python -m unittest discover -s tests -v`. Cần test API nghiệp vụ/E2E lại khi tích hợp các màn hình bán hàng với backend.
+
+## Mock and API mode
+
+Set `VITE_USE_MOCK=true` in `frontend/.env` to use browser-persisted API fixtures from `frontend/src/mocks/`; set it to `false` to call FastAPI. Mock login accepts usernames containing `owner`, `manager`, or `staff` with any non-empty password. The mock API covers auth, categories, products, branches, inventory, variants, and pending sales orders.
+
+The API client reads `VITE_API_BASE_URL`, adds the bearer token from the current session, converts API errors to `{ code, message, details }`, redirects expired sessions to login, and raises toast events for permission and network errors. API sales orders reserve available stock while pending payment.

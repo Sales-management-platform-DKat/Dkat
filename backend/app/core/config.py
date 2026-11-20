@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import certifi
 from dotenv import load_dotenv
@@ -53,3 +54,5 @@ else:
         if DATABASE_URL.startswith("sqlite")
         else {}
     )
+
+settings = SimpleNamespace(is_production=os.getenv("DKAT_ENV", "development").strip().lower() == "production")

@@ -27,6 +27,18 @@ CREATE TABLE branches (
     CONSTRAINT fk_branches_store_id FOREIGN KEY (store_id) REFERENCES stores (store_id) ON DELETE RESTRICT ON UPDATE RESTRICT
 ) ENGINE=InnoDB;
 
+CREATE TABLE customers (
+    customer_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    store_id BIGINT NOT NULL,
+    full_name VARCHAR(150) NOT NULL,
+    phone VARCHAR(20),
+    email VARCHAR(255),
+    address VARCHAR(500),
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_customers_store_phone (store_id, phone),
+    CONSTRAINT fk_customers_store_id FOREIGN KEY (store_id) REFERENCES stores (store_id) ON DELETE RESTRICT ON UPDATE RESTRICT
+) ENGINE=InnoDB;
+
 CREATE TABLE users (
     user_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     store_id BIGINT NOT NULL,
@@ -154,6 +166,7 @@ CREATE TABLE sales_orders (
     sales_order_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     order_code VARCHAR(50) NOT NULL UNIQUE,
     branch_id BIGINT NOT NULL,
+    customer_id BIGINT,
     created_by BIGINT NOT NULL,
     subtotal DECIMAL(12,2) NOT NULL,
     discount_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
@@ -165,6 +178,7 @@ CREATE TABLE sales_orders (
     KEY ix_sales_status_time (status, created_at),
     CHECK (subtotal >= 0 AND discount_amount >= 0 AND total_amount = subtotal - discount_amount AND total_amount >= 0),
     CONSTRAINT fk_sales_orders_branch_id FOREIGN KEY (branch_id) REFERENCES branches (branch_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_sales_orders_customer_id FOREIGN KEY (customer_id) REFERENCES customers (customer_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
     CONSTRAINT fk_sales_orders_created_by FOREIGN KEY (created_by) REFERENCES users (user_id) ON DELETE RESTRICT ON UPDATE RESTRICT
 ) ENGINE=InnoDB;
 

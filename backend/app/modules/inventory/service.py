@@ -5,11 +5,11 @@ from sqlalchemy.engine import Connection
 from app.core.permissions import Actor, require_branch_access
 from app.modules.inventory.schemas import (
     MAX_STOCK_QUANTITY, InventoryItem, StockChangeResult, StockExportInput, StockImportInput,
-    StockLineResult,
+    StockLineResult, StockTakeInput,
 )
 
 LOW_STOCK_THRESHOLD = 5
-AVAILABLE = "CAST(i.quantity AS SIGNED) - COALESCE(reservations.reserved, 0)"
+AVAILABLE = "CAST(i.quantity AS SIGNED) - COALESCE(reservations.reserved, 0) - COALESCE(sales_reservations.reserved, 0)"
 OPEN_PREORDER_STATUSES = "'WAITING_STOCK', 'READY', 'NOTIFIED'"
 
 
@@ -44,6 +44,16 @@ def list_inventory(
                 GROUP BY po.branch_id, item.variant_id
             ) AS reservations ON reservations.branch_id = i.branch_id
                              AND reservations.variant_id = i.variant_id
+            LEFT JOIN (
+                SELECT so.branch_id, item.variant_id, SUM(item.quantity) AS reserved
+                FROM sales_orders AS so
+                JOIN sales_order_items AS item ON item.sales_order_id = so.sales_order_id
+                WHERE so.branch_id IN :branches
+                  AND so.status = 'PENDING'
+                  AND (:variant IS NULL OR item.variant_id = :variant)
+                GROUP BY so.branch_id, item.variant_id
+            ) AS sales_reservations ON sales_reservations.branch_id = i.branch_id
+                                   AND sales_reservations.variant_id = i.variant_id
             WHERE i.branch_id IN :branches
               AND (:variant IS NULL OR i.variant_id = :variant)
               AND (:pattern IS NULL OR v.sku LIKE :pattern ESCAPE '!'
@@ -122,10 +132,17 @@ def check_export_stock(
         {"branch": data.branchId, "variants": [item.variantId for item in data.items]},
     ).all())
 
+    sales_reserved = dict(db.execute(text("""
+        SELECT item.variant_id, SUM(item.quantity)
+        FROM sales_orders AS so JOIN sales_order_items AS item ON item.sales_order_id=so.sales_order_id
+        WHERE so.branch_id=:branch AND so.status='PENDING' AND item.variant_id IN :variants
+        GROUP BY item.variant_id
+    """).bindparams(bindparam("variants", expanding=True)), {"branch": data.branchId, "variants": [item.variantId for item in data.items]}).all())
+
     shortages = []
     for item in data.items:
         quantity = rows.get(item.variantId, (None, 0))[1]
-        reserved = int(reserved_by_variant.get(item.variantId, 0))
+        reserved = int(reserved_by_variant.get(item.variantId, 0)) + int(sales_reserved.get(item.variantId, 0))
         available = quantity - reserved
         if item.quantity > available:
             shortages.append({
@@ -178,3 +195,41 @@ def change_stock(
         ))
 
     return StockChangeResult(branchId=data.branchId, movementType=movement_type, reason=reason, items=results)
+
+
+def take_stock(db: Connection, actor: Actor, data: StockTakeInput) -> StockChangeResult:
+    variant_ids = [item.variantId for item in data.items]
+    require_branch_access(db, actor, data.branchId)
+    check_variants(db, actor.store_id, variant_ids)
+    rows = lock_inventory_rows(db, data.branchId, variant_ids, create_missing=True)
+    reserved_by_variant = dict(db.execute(
+        text(f"""
+            SELECT item.variant_id, SUM(item.allocated_quantity)
+            FROM preorders AS po
+            JOIN preorder_items AS item ON item.preorder_id = po.preorder_id
+            WHERE po.branch_id = :branch AND po.status IN ({OPEN_PREORDER_STATUSES})
+              AND item.variant_id IN :variants
+            GROUP BY item.variant_id
+        """).bindparams(bindparam("variants", expanding=True)),
+        {"branch": data.branchId, "variants": variant_ids},
+    ).all())
+    pending_sales = dict(db.execute(text("""
+        SELECT item.variant_id, SUM(item.quantity)
+        FROM sales_orders AS so JOIN sales_order_items AS item ON item.sales_order_id=so.sales_order_id
+        WHERE so.branch_id=:branch AND so.status='PENDING' AND item.variant_id IN :variants
+        GROUP BY item.variant_id
+    """).bindparams(bindparam("variants", expanding=True)), {"branch": data.branchId, "variants": variant_ids}).all())
+    results = []
+    for item in data.items:
+        inventory_id, before = rows[item.variantId]
+        reserved = int(reserved_by_variant.get(item.variantId, 0)) + int(pending_sales.get(item.variantId, 0))
+        if item.countedQuantity < reserved:
+            raise HTTPException(409, {"code": "STOCK_BELOW_RESERVED", "variantId": item.variantId, "reserved": reserved, "countedQuantity": item.countedQuantity})
+        delta = item.countedQuantity - before
+        db.execute(text("UPDATE inventory SET quantity = :quantity WHERE inventory_id = :id"), {"quantity": item.countedQuantity, "id": inventory_id})
+        movement = db.execute(text("""
+            INSERT INTO inventory_movements (inventory_id, movement_type, quantity_change, note, created_by)
+            VALUES (:inventory, 'ADJUSTMENT', :delta, :note, :user)
+        """), {"inventory": inventory_id, "delta": delta, "note": data.note, "user": actor.user_id})
+        results.append(StockLineResult(variantId=item.variantId, inventoryId=inventory_id, movementId=movement.lastrowid, quantityBefore=before, quantityChange=delta, quantityAfter=item.countedQuantity))
+    return StockChangeResult(branchId=data.branchId, movementType="ADJUSTMENT", reason=None, items=results)
