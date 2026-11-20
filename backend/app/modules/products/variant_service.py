@@ -26,6 +26,7 @@ def list_attributes(db: Connection, store_id: int) -> list[AttributeRecord]:
 
 
 def create_attribute(db: Connection, store_id: int, data: AttributeInput) -> AttributeRecord:
+    lock_store(db, store_id)
     result = db.execute(
         text("""
             INSERT INTO attributes (store_id, name, data_type, status)

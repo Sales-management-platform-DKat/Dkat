@@ -1,0 +1,21 @@
+product_name,category,variant_name,sku,price,cost_price,attributes
+Áo thun basic,Thời trang,Đen S,CSV111-AT-DEN-S,99000.00,55000.00,Size:S;Màu:Đen
+Áo thun basic,Thời trang,Đen M,CSV111-AT-DEN-M,99000.00,55000.00,Size:M;Màu:Đen
+Áo thun basic,Thời trang,Đen L,CSV111-AT-DEN-L,99000.00,55000.00,Size:L;Màu:Đen
+Áo thun basic,Thời trang,Đen XL,CSV111-AT-DEN-XL,99000.00,55000.00,Size:XL;Màu:Đen
+Áo thun basic,Thời trang,Trắng S,CSV111-AT-TRANG-S,99000.00,55000.00,Size:S;Màu:Trắng
+Áo thun basic,Thời trang,Trắng M,CSV111-AT-TRANG-M,99000.00,55000.00,Size:M;Màu:Trắng
+Áo thun basic,Thời trang,Trắng L,CSV111-AT-TRANG-L,99000.00,55000.00,Size:L;Màu:Trắng
+Áo thun basic,Thời trang,Trắng XL,CSV111-AT-TRANG-XL,99000.00,55000.00,Size:XL;Màu:Trắng
+Quần jean,Thời trang,Xanh 28,CSV111-QJ-XANH-28,299000.00,180000.00,Size:28;Màu:Xanh
+Quần jean,Thời trang,Xanh 29,CSV111-QJ-XANH-29,299000.00,180000.00,Size:29;Màu:Xanh
+Quần jean,Thời trang,Xanh 30,CSV111-QJ-XANH-30,299000.00,180000.00,Size:30;Màu:Xanh
+Quần jean,Thời trang,Xanh 31,CSV111-QJ-XANH-31,299000.00,180000.00,Size:31;Màu:Xanh
+Áo khoác,Thời trang,Đen M,CSV111-AK-DEN-M,399000.00,250000.00,Size:M;Màu:Đen
+Áo khoác,Thời trang,Đen L,CSV111-AK-DEN-L,399000.00,250000.00,Size:L;Màu:Đen
+Áo khoác,Thời trang,Xám M,CSV111-AK-XAM-M,399000.00,250000.00,Size:M;Màu:Xám
+Áo khoác,Thời trang,Xám L,CSV111-AK-XAM-L,399000.00,250000.00,Size:L;Màu:Xám
+Balo đi học,Phụ kiện,Đen 20L,CSV111-BL-DEN,249000.00,150000.00,Màu:Đen;Dung tích:20L
+Balo đi học,Phụ kiện,Xanh 20L,CSV111-BL-XANH,249000.00,150000.00,Màu:Xanh;Dung tích:20L
+Mũ lưỡi trai,Phụ kiện,Đen,CSV111-MU-DEN,79000.00,,Màu:Đen
+Mũ lưỡi trai,Phụ kiện,Trắng,CSV111-MU-TRANG,79000.00,,Màu:Trắng
