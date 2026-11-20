@@ -15,6 +15,7 @@ from app.modules.products.category_router import router as categories_router
 from app.modules.products.router import router as products_router
 from app.modules.sales.router import router as sales_router
 from app.modules.preorders.public_router import router as public_preorders_router
+from app.modules.preorders.router import router as preorders_router
 
 logger = logging.getLogger(__name__)
 app = FastAPI(title="DKat API")
@@ -32,6 +33,7 @@ app.include_router(categories_router)
 app.include_router(inventory_router)
 app.include_router(sales_router)
 app.include_router(public_preorders_router)
+app.include_router(preorders_router)
 
 
 @app.get("/health/db")

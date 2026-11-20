@@ -204,3 +204,17 @@ CSV phân cách bằng dấu phẩy, UTF-8 (chấp nhận BOM), tối đa 500 d�
 Cùng danh mục và tên sản phẩm được gom thành nhiều biến thể. Danh mục/thuộc tính chưa có được tạo mới (danh mục gốc, thuộc tính TEXT). Tên đã có được tìm trong cửa hàng của OWNER; tên trùng gây mơ hồ hoặc đối tượng INACTIVE bị từ chối. Thuộc tính NUMBER/BOOLEAN đã có dùng cùng bộ kiểm tra giá trị của API biến thể. Việc so tên/SKU theo đúng collation của cột database, gồm quy tắc chữ hoa và dấu. SKU đã tồn tại hoặc trùng trong file bị từ chối; import không cập nhật hay ghi đè SKU cũ. Sản phẩm mới nhận mã `CSV-<UUID>`. Mỗi biến thể mới có tồn 0 tại các chi nhánh ACTIVE, không có movement nhập kho.
 
 Kiểm thử: import `samples/pbi111-product-csv.postman_collection.json`, điền `accessToken` của OWNER và đặt thư mục làm việc Postman/Newman là thư mục gốc dự án để đọc `data/*.csv`. Dùng database kiểm thử chưa import các SKU mẫu. Bộ test MySQL riêng chạy bằng `.\scripts\test_pbi111_mysql.ps1` từ backend; có cả import thật 500 dòng, rollback SQL và hai yêu cầu đồng thời cùng SKU.
+
+## Thanh toán, danh sách và chi tiết đặt trước PBI 121
+
+1. Dùng schema mới hoặc migration 06 của PBI 110. Không có migration mới cho PBI 121. Tài khoản backend cần SELECT các bảng liên quan, UPDATE trên `preorders` và INSERT trên `payments`.
+2. Đăng nhập OWNER, MANAGER hoặc EMPLOYEE và Authorize. OWNER thao tác các chi nhánh trong cửa hàng; hai vai trò còn lại cần được phân công chi nhánh.
+3. Gọi `GET /preorders?branchId=1&status=WAITING_STOCK&paymentStatus=UNPAID&keyword=PD-&page=1&size=20`. Các bộ lọc đều tùy chọn. Keyword tìm theo mã, tên hoặc điện thoại snapshot (hỗ trợ số +84 đầy đủ). Mặc định 50 dòng, tối đa 100; cũ nhất trước, cùng thời điểm thì ID tăng dần. Mỗi đơn có khách, số tiền, trạng thái và dòng hàng kèm quantity/allocatedQuantity.
+4. Gọi `GET /preorders/{preorder_id}` để xem thêm toàn bộ lịch sử thanh toán, `fulfillment` (null khi chưa có), và `notifications` mới nhất trước. Tên, giá, SKU và thông tin khách lấy từ snapshot lúc đặt; thời gian trả theo UTC.
+5. Gọi `POST /preorders/{preorder_id}/confirm-payment` với `{"paymentMethod":"CASH","amount":"99000.00"}`; thay số tiền bằng đúng totalAmount của đơn. Hỗ trợ CASH, BANK_TRANSFER, CARD, OTHER. Thành công trả 200 với paymentStatus PAID, một payment SUCCESS, confirmedBy và confirmedAt. Đây là ghi nhận thủ công sau khi kiểm tra thanh toán bên ngoài; API không gọi ngân hàng.
+
+Chỉ đơn WAITING_STOCK/READY/NOTIFIED còn UNPAID được thanh toán; tổng bằng 0 vẫn được ghi nhận. Số tiền sai trả 422 PAYMENT_AMOUNT_MISMATCH; đơn không hợp lệ trả 409 PREORDER_NOT_PAYABLE; đã thanh toán/hoàn tiền hoặc đã có SUCCESS trả 409 PREORDER_ALREADY_PAID. Khóa dòng đơn chống ghi hai lần. Lỗi SQL trả 503 và rollback payment cùng payment_status. Trạng thái xử lý đơn, inventory, lượng phân bổ và movement giữ nguyên.
+
+Ngoài cửa hàng trả 404 PREORDER_NOT_FOUND, ngoài chi nhánh có quyền trả 403; danh sách tự giới hạn theo quyền. Ba API này cần token và không dùng limiter của API tạo đơn công khai.
+
+Thử nhanh: import `samples/pbi121-preorder-admin.postman_collection.json`, điền `accessToken` và `preorderId` của đơn UNPAID trên database kiểm thử, rồi chạy thư mục PreorderAdmin. Collection đọc kho trước/sau, thanh toán và thử gọi lặp. Chạy bộ test MySQL riêng bằng `.\scripts\test_pbi121_mysql.ps1` từ backend để kiểm tra thêm phân quyền, FIFO, dữ liệu cũ, thông báo, rollback và thanh toán đồng thời.
