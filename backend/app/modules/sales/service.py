@@ -10,6 +10,7 @@ from app.core.permissions import Actor, get_accessible_branch_ids, require_branc
 from app.modules.inventory.service import (
     OPEN_PREORDER_STATUSES, lock_inventory_rows, record_movement, reserved_quantities,
 )
+from app.modules.inventory.schemas import MAX_STOCK_QUANTITY
 from app.modules.sales.schemas import (
     ConfirmPaymentInput, OrderPayment, PendingSalesOrder, SalesOrderDetail, SalesOrderFilters,
     SalesOrderInput, SalesOrderLine, SalesOrderSummary,
@@ -137,6 +138,45 @@ def cancel_sales_order(db: Connection, actor: Actor, order_id: int, reason: str)
         """),
         {"id": order_id, "reason": reason},
     )
+    return get_sales_order(db, actor, order_id)
+
+
+def refund_sales_order(db: Connection, actor: Actor, order_id: int, reason: str) -> SalesOrderDetail:
+    order = get_sales_order(db, actor, order_id, lock=True)
+    if order.status != "PAID":
+        raise HTTPException(409, {"code": "ORDER_NOT_PAID"})
+    if not order.items:
+        raise HTTPException(409, {"code": "ORDER_HAS_NO_ITEMS"})
+    successful = [payment for payment in order.payments if payment.status == "SUCCESS"]
+    if (not successful or any(payment.status == "REFUNDED" for payment in order.payments)
+            or sum((payment.amount for payment in successful), Decimal("0.00")) != order.totalAmount):
+        raise HTTPException(409, {"code": "ORDER_PAYMENT_INCONSISTENT"})
+
+    quantities: dict[int, int] = {}
+    for item in order.items:
+        quantities[item.variantId] = quantities.get(item.variantId, 0) + item.quantity
+    variant_ids = sorted(quantities)
+    rows = lock_inventory_rows(db, order.branchId, variant_ids, create_missing=True)
+    for variant_id in variant_ids:
+        if rows[variant_id][1] + quantities[variant_id] > MAX_STOCK_QUANTITY:
+            raise HTTPException(409, {"code": "STOCK_LIMIT_EXCEEDED", "variantId": variant_id})
+
+    # Preserve the original payment confirmer/time and failed or pending attempts.
+    db.execute(text("""
+        UPDATE payments SET status='REFUNDED' WHERE sales_order_id=:id AND status='SUCCESS'
+    """), {"id": order_id})
+    for variant_id in variant_ids:
+        inventory_id, before = rows[variant_id]
+        record_movement(
+            db, actor, variant_id=variant_id, inventory_id=inventory_id, before=before,
+            after=before + quantities[variant_id], movement_type="ADJUSTMENT",
+            note=f"Hoàn đơn {order.orderCode}", reference_type="SALES_ORDER", reference_id=order_id,
+        )
+    cancelled_at = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+    db.execute(text("""
+        UPDATE sales_orders SET status='CANCELLED', cancel_reason=:reason, cancelled_at=:at
+        WHERE sales_order_id=:id
+    """), {"id": order_id, "reason": reason, "at": cancelled_at})
     return get_sales_order(db, actor, order_id)
 
 
