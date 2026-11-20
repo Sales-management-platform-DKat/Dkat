@@ -66,6 +66,10 @@ def require_owner(user: User = Depends(require_roles("owner"))) -> Actor:
     return Actor(store_id=user.shop_id, role=user.role, user_id=user.id)
 
 
+def require_owner_or_manager(user: User = Depends(require_roles("owner", "manager"))) -> Actor:
+    return Actor(store_id=user.shop_id, role=user.role, user_id=user.id)
+
+
 def get_accessible_branch_ids(db: Connection, actor: Actor, branch_id: int | None = None) -> list[int]:
     return list(db.execute(
         text("""
