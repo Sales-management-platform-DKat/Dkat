@@ -7,6 +7,8 @@ from app.core.query_schemas import DatePageFilters
 
 InventoryId = Annotated[int, Field(gt=0, le=9223372036854775807)]
 MAX_STOCK_QUANTITY = 2147483647
+MAX_STOCK_NOTE_LENGTH = 255
+StockNote = Annotated[str, StringConstraints(strip_whitespace=True, max_length=MAX_STOCK_NOTE_LENGTH)]
 ExportReason = Literal["HU_HONG", "MAU", "KHAC"]
 StockMovementType = Literal["IMPORT", "EXPORT", "ADJUSTMENT"]
 MovementType = Literal["IMPORT", "EXPORT", "ADJUSTMENT", "SALE", "PREORDER_FULFILLMENT"]
@@ -81,7 +83,7 @@ class StockBatchInput(BaseModel, Generic[StockLine]):
     model_config = ConfigDict(extra="forbid")
 
     branchId: InventoryId
-    note: Annotated[str, StringConstraints(strip_whitespace=True, max_length=255)] | None = None
+    note: StockNote | None = None
     items: list[StockLine] = Field(min_length=1, max_length=100)
 
     @model_validator(mode="after")

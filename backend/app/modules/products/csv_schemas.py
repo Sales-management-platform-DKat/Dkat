@@ -2,6 +2,7 @@ from typing import Annotated
 
 from pydantic import BaseModel, StringConstraints
 
+from app.core.csv import CsvIssue
 from app.modules.products.variant_schemas import Money, Sku
 
 
@@ -13,13 +14,6 @@ class CsvProductRow(BaseModel):
     price: Money
     cost_price: Money | None = None
     attributes: str = ""
-
-
-class CsvIssue(BaseModel):
-    line: int
-    field: str
-    code: str
-    message: str
 
 
 class ImportCounts(BaseModel):

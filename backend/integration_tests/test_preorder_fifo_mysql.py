@@ -3,6 +3,7 @@ import os
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
+from pathlib import Path
 from threading import Barrier, Event
 from unittest.mock import patch
 from uuid import uuid4
@@ -12,8 +13,11 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core import config
+from app.core.csv import MAX_FILE_BYTES
 from app.db.session import engine
 from app.main import app
+from app.modules.inventory.schemas import MAX_STOCK_QUANTITY
+from app.modules.inventory.service import change_stock
 from app.modules.preorders.services.allocation import (
     AllocationInvariantError, allocate_imported_preorders, allocate_preorders,
 )
@@ -50,7 +54,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
             cls.variants = [db.execute(text("""
                 INSERT INTO product_variants (product_id,sku,variant_name,price,status)
                 VALUES (:p,:sku,'QA',1,'ACTIVE')
-            """), {"p": product, "sku": suffix + str(i)}).lastrowid for i in range(2)]
+            """), {"p": product, "sku": "fifo-" + suffix + str(i)}).lastrowid for i in range(2)]
             for branch in cls.branches:
                 for variant in cls.variants:
                     db.execute(text("INSERT INTO inventory (branch_id,variant_id,quantity) VALUES (:b,:v,0)"), {"b": branch, "v": variant})
@@ -597,6 +601,168 @@ class PreorderFifoMySQLTests(unittest.TestCase):
             with TestClient(app):
                 self.assertTrue(completed.wait(timeout=5))
         self.assertEqual(self.state(order)[0].status, "EXPIRED")
+
+    def sku(self, variant=None):
+        with engine.connect() as db:
+            return db.execute(text("SELECT sku FROM product_variants WHERE variant_id=:id"),
+                              {"id": variant or self.variant}).scalar_one()
+
+    def import_csv(self, content, *, dry_run=True):
+        with TestClient(app) as client:
+            return client.post("/inventory/import-csv", headers=self.owner,
+                               params={"branchId": self.branch, "dryRun": dry_run},
+                               files={"file": ("stock.csv", content, "text/csv")})
+
+    def test_stock_csv_sample_twenty_lines_preview_and_import(self):
+        data_dir = Path(__file__).resolve().parents[2] / "data"
+        with TestClient(app) as client:
+            seeded = client.post("/products/import-csv", headers=self.owner, params={"dryRun": False}, files={
+                "file": ("sample-products.csv", (data_dir / "sample-products.csv").read_bytes(), "text/csv"),
+            })
+        self.assertEqual(seeded.status_code, 201, seeded.text)
+        content = (data_dir / "sample-import.csv").read_bytes()
+        before = self.stock_snapshot()
+        with patch("app.modules.inventory.router.process_committed_stock_import") as fifo:
+            preview = self.import_csv(content)
+            fifo.assert_not_called()
+        self.assertEqual(preview.status_code, 200, preview.text)
+        report = preview.json()
+        self.assertEqual((report["valid"], report["totalRows"], report["validRows"], report["items"]), (True, 20, 20, []))
+        self.assertEqual(self.stock_snapshot(), before)
+
+        response = self.import_csv(content, dry_run=False)
+        self.assertEqual(response.status_code, 201, response.text)
+        items = {item["variantId"]: item for item in response.json()["items"]}
+        self.assertEqual(len(items), 20)
+        for row in report["rows"]:
+            item = items[row["variantId"]]
+            self.assertEqual((item["quantityBefore"], item["quantityChange"], item["quantityAfter"]),
+                             (0, row["quantity"], row["quantity"]))
+            self.assertIsNotNone(item["movementId"])
+        self.assertEqual(self.stock_snapshot()[2] - before[2], 20)
+
+    def test_stock_csv_errors_keep_physical_line_numbers_and_reject_entire_batch(self):
+        sku = self.sku()
+        content = (f'\ufeffsku,quantity,note\r\n{sku},2,"Nhập lô, mới\r\nxác nhận"\r\n\r\n'
+                   f'SKU-LA,1,\r\n{sku},1.5,\r\n{sku},3,\r\n').encode()
+        before = self.stock_snapshot()
+        with patch("app.modules.inventory.router.process_committed_stock_import") as fifo:
+            preview = self.import_csv(content)
+            invalid = self.import_csv(content, dry_run=False)
+            fifo.assert_not_called()
+        self.assertEqual(preview.status_code, 200, preview.text)
+        self.assertEqual(invalid.status_code, 422, invalid.text)
+        details = preview.json()
+        self.assertEqual((details["valid"], details["totalRows"], details["validRows"]), (False, 4, 2))
+        self.assertEqual([row["line"] for row in details["rows"]], [2, 7])
+        self.assertEqual([(row["line"], row["field"], row["code"]) for row in details["errors"]],
+                         [(5, "sku", "SKU_NOT_FOUND"), (6, "quantity", "INVALID_VALUE")])
+        self.assertEqual(invalid.json()["detail"]["errors"], details["errors"])
+        self.assertEqual(self.stock_snapshot(), before)
+
+    def test_stock_csv_combines_duplicate_skus_and_notifies_after_fifo_commits(self):
+        sku = self.sku()
+        orders = [self.order(q) for q in (2, 3, 4)]
+        content = f'sku,quantity,note\n{sku},2,"Lô, A"\n{sku.upper()},3,Lô B\n{sku},1,Lô B\n'
+        observed = []
+
+        def observe(ready_ids):
+            snapshot = self.stock_snapshot()
+            observed.append((ready_ids, [self.state(order)[0].status for order in orders], snapshot[0], snapshot[2]))
+
+        before = self.stock_snapshot()
+        with patch("app.modules.inventory.post_import.notify_ready_preorders", side_effect=observe):
+            response = self.import_csv(content, dry_run=False)
+        self.assertEqual(response.status_code, 201, response.text)
+        body = response.json()
+        self.assertEqual([row["sku"] for row in body["rows"]], [sku, sku, sku])
+        item, = body["items"]
+        self.assertEqual((item["quantityBefore"], item["quantityChange"], item["quantityAfter"]), (0, 6, 6))
+        with engine.connect() as db:
+            movement = db.execute(text("SELECT movement_type,note FROM inventory_movements WHERE movement_id=:id"),
+                                  {"id": item["movementId"]}).one()
+        self.assertEqual(tuple(movement), ("IMPORT", "Lô, A | Lô B"))
+        self.assertEqual([self.state(order)[1][0].allocated_quantity for order in orders], [2, 3, 1])
+        ready_ids, statuses, stock, movement_count = observed[0]
+        self.assertEqual((len(observed), ready_ids, statuses), (1, orders[:2], ["READY", "READY", "WAITING_STOCK"]))
+        self.assertEqual(next(row.quantity for row in stock if row.inventory_id == item["inventoryId"]), 6)
+        self.assertEqual(movement_count, before[2] + 1)
+
+    def test_stock_csv_accepts_thousand_distinct_rows_and_rejects_next_row(self):
+        with engine.begin() as db:
+            product_id = db.execute(text("SELECT product_id FROM product_variants WHERE variant_id=:id"),
+                                    {"id": self.variant}).scalar_one()
+            db.execute(text("""
+                INSERT INTO product_variants (product_id,sku,variant_name,price,status)
+                VALUES (:p,:sku,'PBI147 batch',1,'ACTIVE')
+            """), [{"p": product_id, "sku": f"PBI147-{i:04d}"} for i in range(1000)])
+        content = "sku,quantity,note\n" + "".join(f"PBI147-{i:04d},1,\n" for i in range(1000))
+        too_many = self.import_csv(content + "PBI147-0000,1,\n", dry_run=False)
+        self.assertEqual(too_many.status_code, 422, too_many.text)
+        details = too_many.json()["detail"]
+        self.assertEqual([(row["line"], row["code"]) for row in details["errors"]], [(1002, "TOO_MANY_ROWS")])
+        response = self.import_csv(content, dry_run=False)
+        self.assertEqual(response.status_code, 201, response.text)
+        self.assertEqual(len(response.json()["items"]), 1000)
+
+    def test_stock_csv_reports_group_overflow_and_rechecks_locked_quantity(self):
+        sku, other = [self.sku(variant) for variant in self.variants]
+        self.stock(MAX_STOCK_QUANTITY - 2)
+        content = f"sku,quantity,note\n{sku},1,\n{sku},2,\n{other},1,\n"
+        before = self.stock_snapshot()
+        preview = self.import_csv(content)
+        self.assertEqual(preview.status_code, 200, preview.text)
+        self.assertEqual([row["line"] for row in preview.json()["rows"]], [4])
+        self.assertEqual([(row["line"], row["code"]) for row in preview.json()["errors"]],
+                         [(2, "STOCK_LIMIT_EXCEEDED"), (3, "STOCK_LIMIT_EXCEEDED")])
+        self.assertEqual(self.import_csv(content, dry_run=False).status_code, 422)
+        self.assertEqual(self.stock_snapshot(), before)
+
+        def raise_stock_before_write(db, actor, batch, **options):
+            self.stock(MAX_STOCK_QUANTITY)
+            return change_stock(db, actor, batch, **options)
+
+        with patch("app.modules.inventory.csv_import.change_stock", side_effect=raise_stock_before_write):
+            response = self.import_csv(f"sku,quantity,note\n{other},1,\n{sku},1,\n", dry_run=False)
+        self.assertEqual(response.status_code, 422, response.text)
+        self.assertEqual([row["line"] for row in response.json()["detail"]["errors"]], [3])
+        self.assertEqual(self.stock_snapshot()[2], before[2])
+
+    def test_stock_csv_rolls_back_late_movement_error_and_skips_fifo(self):
+        a, b = [self.sku(variant) for variant in self.variants]
+        order = self.order()
+        before = self.stock_snapshot()
+        with engine.begin() as db:
+            inventory_id = db.execute(text("SELECT inventory_id FROM inventory WHERE branch_id=:b AND variant_id=:v"),
+                                      {"b": self.branch, "v": self.variants[1]}).scalar_one()
+            db.exec_driver_sql(f"""
+                CREATE TRIGGER pbi147_fail_movement BEFORE INSERT ON inventory_movements FOR EACH ROW
+                BEGIN IF NEW.inventory_id={inventory_id} THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Test failure'; END IF; END
+            """)
+        try:
+            with self.assertLogs("app.modules.inventory.router", level="ERROR"):
+                with patch("app.modules.inventory.router.process_committed_stock_import") as fifo:
+                    response = self.import_csv(f"sku,quantity,note\n{a},2,\n{b},1,\n", dry_run=False)
+                    fifo.assert_not_called()
+            self.assertEqual(response.status_code, 503, response.text)
+            self.assertEqual(self.stock_snapshot(), before)
+            self.assertEqual(self.state(order)[0].status, "WAITING_STOCK")
+        finally:
+            with engine.begin() as db:
+                db.exec_driver_sql("DROP TRIGGER pbi147_fail_movement")
+
+    def test_stock_csv_rejects_file_limits_and_malformed_structure(self):
+        for content, code, line in (
+            (b"\xff", "INVALID_UTF8", 1), ("sku,quantity,x\n", "INVALID_HEADER", 1),
+            ("sku,quantity,note\n\n , , \n", "EMPTY_FILE", 4),
+            (f'sku,quantity,note\n{self.sku()},1,"unfinished\n', "INVALID_CSV", 2),
+        ):
+            with self.subTest(code=code):
+                response = self.import_csv(content, dry_run=False)
+                self.assertEqual(response.status_code, 422, response.text)
+                error = response.json()["detail"]["errors"][0]
+                self.assertEqual((error["code"], error["line"]), (code, line))
+        self.assertEqual(self.import_csv(b"x" * (MAX_FILE_BYTES + 1)).status_code, 413)
 
 
 if __name__ == '__main__':

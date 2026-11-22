@@ -442,6 +442,26 @@ class PreorderAdminMySQLTests(unittest.TestCase):
         error = self.request("POST", path, 409, body={"reason": "Khách không nhận"})
         self.assertEqual(error["detail"]["code"], "PREORDER_NOT_CANCELLABLE")
 
+    def test_stock_csv_reuses_stock_write_permissions_and_scopes_skus_to_store(self):
+        path = "/inventory/import-csv"
+        sku = self.suffix + "0"
+        files = {"file": ("stock.csv", f"sku,quantity,note\n{sku},1,\n", "text/csv")}
+        manager, _ = self.members["manager"]
+        staff, _ = self.members["staff"]
+        with TestClient(app) as client, patch.object(config, "ALLOW_EMPLOYEE_STOCK", False):
+            for auth, branch, code in (
+                ({}, self.branch, 401), (staff, self.branch, 403), (manager, self.branches[1], 403),
+                (self.other_owner, self.branch, 403),
+            ):
+                response = client.post(path, headers=auth, params={"branchId": branch}, files=files)
+                self.assertEqual(response.status_code, code, response.text)
+            preview = client.post(path, headers=manager, params={"branchId": self.branch}, files=files)
+            self.assertEqual(preview.status_code, 200, preview.text)
+            self.assertEqual((preview.json()["dryRun"], preview.json()["valid"]), (True, True))
+            other = client.post(path, headers=self.other_owner, params={"branchId": self.branches[2]}, files=files)
+            self.assertEqual(other.status_code, 200, other.text)
+            self.assertEqual(other.json()["errors"][0]["code"], "SKU_NOT_FOUND")
+
     def test_fulfill_cannot_consume_stock_allocated_to_other_orders(self):
         order, other = self.order(), self.order()
         self.reserve_for_fulfillment(order)
