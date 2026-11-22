@@ -92,3 +92,17 @@ Frontend: `npm test` và `npm run build`. Backend (từ thư mục `backend`): `
 Set `VITE_USE_MOCK=true` in `frontend/.env` to use browser-persisted API fixtures from `frontend/src/mocks/`; set it to `false` to call FastAPI. Mock login accepts usernames containing `owner`, `manager`, or `staff` with any non-empty password. The mock API covers auth, categories, products, branches, inventory, variants, and pending sales orders.
 
 The API client reads `VITE_API_BASE_URL`, adds the bearer token from the current session, converts API errors to `{ code, message, details }`, redirects expired sessions to login, and raises toast events for permission and network errors. API sales orders reserve available stock while pending payment.
+
+## Authentication session configuration
+
+Backend authentication uses 15-minute HS256 access tokens and rotating refresh tokens stored as hashes in `auth_sessions`. Refresh tokens are sent only in an `HttpOnly`, `SameSite=Lax` cookie. The login checkbox keeps that cookie for 30 days; without it, the browser receives a session cookie and the server session expires after 12 hours.
+
+Add these values to `backend/.env`:
+
+- `DKAT_AUTH_SECRET_KEY`: a private random value of at least 32 characters. Generate one with `python -c "import secrets; print(secrets.token_urlsafe(48))"` and keep it out of source control.
+- `DKAT_COOKIE_SECURE=auto`: enables the `Secure` cookie flag when the request is HTTPS or has `X-Forwarded-Proto: https`. Set it to `true` when the HTTPS proxy does not forward that header. Use `false` only for local HTTP development.
+- `DKAT_CORS_ORIGINS`: comma-separated frontend origins when the browser calls FastAPI directly. The Vite proxy already keeps local frontend API requests same-origin.
+
+Authentication endpoints are `POST /api/v1/auth/login`, `POST /api/v1/auth/refresh`, `POST /api/v1/auth/logout`, and `GET /api/v1/auth/me`. Refresh rotates and revokes the previous refresh token. Logout revokes the current session. No database migration is needed; the existing `auth_sessions` table stores the refresh-token hash and expiration.
+
+For backend tests, install `backend/requirements-dev.txt` (it includes Starlette's `httpx2` TestClient dependency), then run `python -m unittest discover -s tests -v` from `backend/`.

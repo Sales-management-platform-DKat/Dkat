@@ -47,16 +47,16 @@ class CatalogAuthTests(test_auth_flow.AuthFlowTests):
         self.assertEqual(self.provision().status_code, 201)
         token = self.login("owner1", "owner-password-123").json()["access_token"]
         headers = {"Authorization": f"Bearer {token}"}
-        self.assertEqual(self.client.get("/products").status_code, 401)
-        self.assertEqual(self.client.get("/categories", headers={"Authorization": "Bearer bad"}).status_code, 401)
-        category = self.client.post("/categories", headers=headers, json={"name": "Category"})
+        self.assertEqual(self.client.get("/api/v1/products").status_code, 401)
+        self.assertEqual(self.client.get("/api/v1/categories", headers={"Authorization": "Bearer bad"}).status_code, 401)
+        category = self.client.post("/api/v1/categories", headers=headers, json={"name": "Category"})
         self.assertEqual(category.status_code, 201, category.text)
         payload = {"categoryId": category.json()["categoryId"], "name": "Item", "productCode": "P1"}
-        created = self.client.post("/products", headers=headers, json=payload)
+        created = self.client.post("/api/v1/products", headers=headers, json=payload)
         self.assertEqual(created.status_code, 201, created.text)
         profile = self.client.get("/api/v1/auth/me", headers=headers).json()
         self.assertEqual(created.json()["createdBy"], profile["id"])
-        self.assertEqual(len(self.client.get("/products", headers=headers).json()), 1)
+        self.assertEqual(len(self.client.get("/api/v1/products", headers=headers).json()), 1)
         for role in ("manager", "staff"):
             response = self.client.post("/api/v1/users", headers=headers, json={
                 "username": role + "1", "full_name": role,
@@ -65,14 +65,14 @@ class CatalogAuthTests(test_auth_flow.AuthFlowTests):
             self.assertEqual(response.status_code, 201, response.text)
             login = self.login(role + "1:" + role, role + "-password-123")
             role_headers = {"Authorization": "Bearer " + login.json()["access_token"]}
-            self.assertEqual(self.client.get("/products", headers=role_headers).status_code, 200)
-            self.assertEqual(self.client.post("/products", headers=role_headers, json=payload).status_code, 403)
-            self.assertEqual(self.client.post("/categories", headers=role_headers, json={"name": "Denied"}).status_code, 403)
+            self.assertEqual(self.client.get("/api/v1/products", headers=role_headers).status_code, 200)
+            self.assertEqual(self.client.post("/api/v1/products", headers=role_headers, json=payload).status_code, 403)
+            self.assertEqual(self.client.post("/api/v1/categories", headers=role_headers, json={"name": "Denied"}).status_code, 403)
         self.assertEqual(self.provision("owner2").status_code, 201)
         token2 = self.login("owner2", "owner-password-123").json()["access_token"]
         headers2 = {"Authorization": "Bearer " + token2}
-        self.assertEqual(self.client.get("/products", headers=headers2).json(), [])
-        denied = self.client.put("/products/" + str(created.json()["productId"]), headers=headers2, json={
+        self.assertEqual(self.client.get("/api/v1/products", headers=headers2).json(), [])
+        denied = self.client.put("/api/v1/products/" + str(created.json()["productId"]), headers=headers2, json={
             "categoryId": category.json()["categoryId"], "name": "Other",
         })
         self.assertEqual(denied.status_code, 404)
@@ -80,4 +80,4 @@ class CatalogAuthTests(test_auth_flow.AuthFlowTests):
             user = db.scalar(select(User).where(User.id == profile["id"]))
             user.status = "LOCKED"
             db.commit()
-        self.assertEqual(self.client.get("/categories", headers=headers).status_code, 401)
+        self.assertEqual(self.client.get("/api/v1/categories", headers=headers).status_code, 401)

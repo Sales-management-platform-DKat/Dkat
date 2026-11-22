@@ -9,9 +9,10 @@ from app.core import config
 from app.core.permissions import Actor, get_accessible_branch_ids, require_auth, require_branch_access
 from app.db.session import engine, get_db
 from app.modules.inventory.schemas import (
-    InventoryId, InventoryItem, StockChangeResult, StockExportInput, StockImportInput, StockTakeInput,
+    InventoryId, InventoryItem, InventoryMovement, MovementFilters,
+    StockChangeResult, StockExportInput, StockImportInput, StocktakeInput,
 )
-from app.modules.inventory.service import change_stock, list_inventory, take_stock
+from app.modules.inventory.service import change_stock, list_inventory, list_inventory_movements
 from app.modules.preorders.services.allocation import allocate_preorders
 
 logger = logging.getLogger(__name__)
@@ -22,14 +23,14 @@ Database = Annotated[Session, Depends(get_db)]
 
 def require_stock_writer(actor: Reader) -> Actor:
     if actor.role == "EMPLOYEE" and not config.ALLOW_EMPLOYEE_STOCK:
-        raise HTTPException(403, "Bạn không có quyền nhập hoặc xuất kho.")
+        raise HTTPException(403, "Bạn không có quyền thay đổi tồn kho.")
     return actor
 
 
 StockWriter = Annotated[Actor, Depends(require_stock_writer)]
 
 
-def record_stock_change(actor: Actor, data: StockImportInput | StockExportInput) -> StockChangeResult:
+def record_stock_change(actor: Actor, data: StockImportInput | StocktakeInput) -> StockChangeResult:
     try:
         # Read the latest reservation totals after acquiring the inventory locks.
         with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
@@ -54,14 +55,9 @@ def export_inventory(data: StockExportInput, actor: StockWriter) -> StockChangeR
     return record_stock_change(actor, data)
 
 
-@router.post("/stocktake", status_code=201, response_model=StockChangeResult)
-def stocktake_inventory(data: StockTakeInput, actor: StockWriter) -> StockChangeResult:
-    try:
-        with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
-            return take_stock(db, actor, data)
-    except SQLAlchemyError:
-        logger.exception("Stocktake transaction failed")
-        raise HTTPException(503, "Database unavailable") from None
+@router.post("/stocktake", status_code=201)
+def stocktake_inventory(data: StocktakeInput, actor: StockWriter) -> StockChangeResult:
+    return record_stock_change(actor, data)
 
 
 @router.get("")
@@ -91,54 +87,16 @@ def get_inventory(
 
 @router.get("/movements")
 def get_inventory_movements(
-    actor: Reader,
-    session: Database,
-    branch_id: InventoryId | None = Query(default=None, alias="branchId"),
-    keyword: str | None = Query(default=None, max_length=200),
-    movement_type: str | None = Query(default=None, alias="type"),
-    date_from: str | None = Query(default=None, alias="dateFrom"),
-    date_to: str | None = Query(default=None, alias="dateTo"),
-    page: int = Query(default=1, ge=1, le=21474836),
-    size: int = Query(default=50, ge=1, le=100),
-):
-    from sqlalchemy import bindparam, text
+    actor: Reader, session: Database, filters: Annotated[MovementFilters, Query()],
+) -> list[InventoryMovement]:
     try:
         db = session.connection()
-        if branch_id is None:
-            branch_ids = get_accessible_branch_ids(db, actor)
+        if filters.branchId is None:
+            branches = get_accessible_branch_ids(db, actor)
         else:
-            require_branch_access(db, actor, branch_id)
-            branch_ids = [branch_id]
-        if not branch_ids:
-            return []
-        query = (keyword or "").strip()
-        rows = db.execute(text("""
-            SELECT b.branch_id AS branchId, b.name AS branchName, m.movement_id AS movementId,
-                   m.movement_type AS movementType, m.quantity_change AS quantityChange,
-                   m.export_reason AS reason, m.note, m.created_at AS createdAt,
-                   m.reference_type AS referenceType, m.reference_id AS referenceId,
-                   m.created_by AS createdBy, u.full_name AS actorName,
-                   v.variant_id AS variantId, v.sku, v.variant_name AS variantName,
-                   p.name AS productName
-            FROM inventory_movements m
-            JOIN inventory i ON i.inventory_id=m.inventory_id
-            JOIN branches b ON b.branch_id=i.branch_id
-            JOIN product_variants v ON v.variant_id=i.variant_id
-            JOIN products p ON p.product_id=v.product_id
-            LEFT JOIN users u ON u.user_id=m.created_by
-            WHERE b.store_id=:store AND b.branch_id IN :branches
-              AND (:type IS NULL OR m.movement_type=:type)
-              AND (:pattern IS NULL OR v.sku LIKE :pattern OR v.variant_name LIKE :pattern OR p.name LIKE :pattern)
-              AND (:date_from IS NULL OR m.created_at >= :date_from)
-              AND (:date_to IS NULL OR m.created_at < DATE_ADD(:date_to, INTERVAL 1 DAY))
-            ORDER BY m.created_at DESC, m.movement_id DESC LIMIT :limit OFFSET :offset
-        """).bindparams(bindparam("branches", expanding=True)), {
-            "store": actor.store_id, "branches": branch_ids,
-            "type": movement_type, "pattern": f"%{query}%" if query else None,
-            "date_from": date_from, "date_to": date_to,
-            "limit": size, "offset": (page-1)*size,
-        }).mappings()
-        return [dict(row) for row in rows]
+            require_branch_access(db, actor, filters.branchId)
+            branches = [filters.branchId]
+        return list_inventory_movements(db, actor.store_id, branches, filters)
     except SQLAlchemyError:
         raise HTTPException(503, "Database unavailable") from None
 

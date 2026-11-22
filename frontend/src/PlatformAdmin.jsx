@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { apiRequest } from './auth-client';
+import { getLocale, LanguageSwitcher } from './i18n';
+import { Button, Select } from './components/ui';
 
 function platformError(error) {
   const detail = error?.message || '';
@@ -18,7 +20,7 @@ const plans = [
 ];
 
 function formatDate(value) {
-  return value ? new Date(value).toLocaleDateString('vi-VN') : '—';
+  return value ? new Intl.DateTimeFormat(getLocale(), { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(value)) : '—';
 }
 
 function planName(value) {
@@ -125,8 +127,9 @@ export default function PlatformAdmin() {
           <span className="platform-admin-brand-label">QUẢN TRỊ HỆ THỐNG</span>
         </div>
         <div className="platform-admin-header-actions">
+          <LanguageSwitcher />
           <span className="platform-admin-access"><i /> CỔNG QUẢN TRỊ</span>
-          <a className="btn outline" href="#/login">Đăng nhập cửa hàng <span aria-hidden="true">↗</span></a>
+          <Button as="a" variant="outline" href="#/login">Đăng nhập cửa hàng <span aria-hidden="true">↗</span></Button>
         </div>
       </header>
       <section className="platform-admin-content">
@@ -151,9 +154,9 @@ export default function PlatformAdmin() {
               required
             />
           </label>
-          <button className="btn primary" type="submit" disabled={busy}>
+          <Button variant="primary" type="submit" loading={busy}>
             {busy ? 'Đang kết nối…' : 'Xác thực quản trị'}
-          </button>
+          </Button>
         </form>
 
         {message && <div className={`platform-admin-message ${messageKind}`} role={messageKind === 'error' ? 'alert' : 'status'}><span aria-hidden="true">{messageKind === 'error' ? '!' : '\u2713'}</span>{message}</div>}
@@ -185,13 +188,13 @@ export default function PlatformAdmin() {
               <div className="platform-admin-fields">
                 <label className="field">
                   Gói đăng ký
-                  <select name="plan" defaultValue="basic">
+                  <Select name="plan" defaultValue="basic">
                     {plans.map(([value, label, locked]) => (
                       <option key={value} value={value} disabled={locked}>
                         {label}{locked ? ' — Tạm khóa' : ''}
                       </option>
                     ))}
-                  </select>
+                  </Select>
                 </label>
                 <label className="field">
                   Thời hạn (tháng)
@@ -222,9 +225,9 @@ export default function PlatformAdmin() {
                 Hãy tạo mật khẩu riêng và gửi cho chủ doanh nghiệp qua kênh an toàn.
                 {'Ch\u1ee7 c\u1eeda h\u00e0ng c\u00f3 th\u1ec3 \u0111\u0103ng nh\u1eadp b\u1eb1ng email ho\u1eb7c t\u00ean \u0111\u0103ng nh\u1eadp kh\u00f4ng k\u00e8m h\u1eadu t\u1ed1.'}
               </p>
-              <button className="btn primary" type="submit" disabled={busy}>
+              <Button variant="primary" type="submit" loading={busy}>
                 {busy ? 'Đang cấp tài khoản…' : 'Cấp tài khoản và kích hoạt gói'}
-              </button>
+              </Button>
             </form>
 
             <section className="panel platform-admin-list">
@@ -248,7 +251,7 @@ export default function PlatformAdmin() {
                         <td><span className={`badge ${account.status === 'active' ? 'green' : 'amber'}`}>
                           {account.status === 'active' ? 'Đang hoạt động' : 'Đã khóa'}
                         </span></td>
-                        <td><button className="link" type="button" onClick={() => setEditing(account)}>S&#7917;a</button></td>
+                        <td><Button variant="ghost" size="small" className="link" type="button" onClick={() => setEditing(account)}>S&#7917;a</Button></td>
                       </tr>
                     )) : (
                       <tr><td colSpan="7">Chưa có doanh nghiệp nào.</td></tr>
@@ -270,13 +273,13 @@ export default function PlatformAdmin() {
                   </div>
                   <label className="field">Email ch&#7911; c&#7917;a h&#224;ng<input name="owner_email" type="email" pattern="[^@\s]+@[^@\s]+\.[^@\s]+" maxLength="255" defaultValue={editing.owner_email || ''} autoComplete="email" required /></label>
                   <div className="platform-admin-fields">
-                    <label className="field">G&#243;i &#273;&#259;ng k&#253;<select name="plan" defaultValue={editing.plan || 'basic'}>{plans.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+                    <label className="field">G&#243;i &#273;&#259;ng k&#253;<Select name="plan" defaultValue={editing.plan || 'basic'}>{plans.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
                     <label className="field">Ng&#224;y h&#7871;t h&#7841;n<input name="subscription_expires_at" type="date" defaultValue={editing.subscription_expires_at?.slice(0, 10) || ''} required /></label>
                   </div>
-                  <label className="field">Tr&#7841;ng th&#225;i g&#243;i<select name="subscription_status" defaultValue={editing.subscription_status || 'ACTIVE'}><option value="ACTIVE">&#272;ang ho&#7841;t &#273;&#7897;ng</option><option value="CANCELLED">&#272;&#227; h&#7911;y</option></select></label>
+                  <label className="field">Tr&#7841;ng th&#225;i g&#243;i<Select name="subscription_status" defaultValue={editing.subscription_status || 'ACTIVE'}><option value="ACTIVE">&#272;ang ho&#7841;t &#273;&#7897;ng</option><option value="CANCELLED">&#272;&#227; h&#7911;y</option></Select></label>
                   <label className="field">M&#7853;t kh&#7849;u m&#7899;i (&#273;&#7875; tr&#7889;ng n&#7871;u gi&#7919; nguy&#234;n)<input name="owner_password" type="password" minLength="12" maxLength="128" autoComplete="new-password" /></label>
                   <p className="muted small">&#272;&#7893;i t&#234;n &#273;&#259;ng nh&#7853;p, email ho&#7863;c m&#7853;t kh&#7849;u s&#7869; k&#7871;t th&#250;c c&#225;c phi&#234;n hi&#7879;n t&#7841;i c&#7911;a ch&#7911; c&#7917;a h&#224;ng.</p>
-                  <button className="btn primary" type="submit" disabled={busy}>{busy ? '\u0110ang l\u01b0u\u2026' : 'L\u01b0u thay \u0111\u1ed5i'}</button>
+                  <Button variant="primary" type="submit" loading={busy}>{busy ? '\u0110ang l\u01b0u\u2026' : 'L\u01b0u thay \u0111\u1ed5i'}</Button>
                 </form>
               </div>
             )}
