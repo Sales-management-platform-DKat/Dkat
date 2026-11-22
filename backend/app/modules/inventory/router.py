@@ -1,13 +1,15 @@
 import logging
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.core import config
+from app.core.csv import MAX_FILE_BYTES
 from app.core.permissions import Actor, get_accessible_branch_ids, require_auth, require_branch_access
 from app.db.session import engine, get_db
+from app.modules.inventory.csv_import import CsvStockImportResult, import_stock_csv
 from app.modules.inventory.post_import import process_committed_stock_import
 from app.modules.inventory.schemas import (
     InventoryId, InventoryItem, InventoryMovement, MovementFilters,
@@ -44,6 +46,30 @@ def record_stock_change(actor: Actor, data: StockImportInput | StocktakeInput) -
 def import_inventory(data: StockImportInput, actor: StockWriter) -> StockChangeResult:
     result = record_stock_change(actor, data)
     process_committed_stock_import(data.branchId, [item.variantId for item in data.items])
+    return result
+
+
+@router.post("/import-csv", responses={201: {"model": CsvStockImportResult}})
+def import_inventory_csv(
+    actor: StockWriter, response: Response, file: Annotated[UploadFile, File()],
+    branch_id: Annotated[InventoryId, Query(alias="branchId")],
+    dry_run: bool = Query(default=True, alias="dryRun"),
+) -> CsvStockImportResult:
+    try:
+        content = file.file.read(MAX_FILE_BYTES + 1)
+    finally:
+        file.file.close()
+    if len(content) > MAX_FILE_BYTES:
+        raise HTTPException(413, {"code": "CSV_FILE_TOO_LARGE", "maxBytes": MAX_FILE_BYTES})
+    try:
+        with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
+            result = import_stock_csv(db, actor, branch_id, content, dry_run)
+    except SQLAlchemyError:
+        logger.exception("Stock CSV transaction failed")
+        raise HTTPException(503, "Database unavailable") from None
+    if not dry_run:
+        response.status_code = 201
+        process_committed_stock_import(branch_id, [item.variantId for item in result.items])
     return result
 
 

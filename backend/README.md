@@ -259,3 +259,13 @@ Hook nhập kho hiện có gọi `allocate_imported_preorders(branch_id, variant
 - Hủy và hết hạn giải phóng hàng giữ chỗ rồi phân bổ lại FIFO trong cùng transaction. Tồn vật lý giữ nguyên. Đơn vừa `READY` đi qua luồng thông báo sau commit.
 
 Thử với `samples/pbi140-preorder-cancel-expiry.postman_collection.json` trên database kiểm thử. Tạo hai đơn cùng SKU đang hết hàng, rồi nhập vừa đủ cho đơn đầu. Chạy thư mục hủy theo hướng dẫn trong collection. Với kịch bản hết hạn, chuẩn bị cặp khác, đặt `expires_at` của đơn thử đầu về quá khứ và chạy một lượt job trước khi chạy thư mục kiểm tra hết hạn.
+
+## Nhập kho từ CSV PBI 147
+
+Trong Swagger, gọi `POST /inventory/import-csv?branchId=<id>&dryRun=true` và chọn file ở trường multipart `file`. API dùng cùng quyền nhập kho với `/inventory/import`. CSV UTF-8 có thể có BOM, phân cách bằng dấu phẩy và cần đủ ba cột `sku,quantity,note`. Giới hạn 1.000 dòng dữ liệu và 5 MiB. Dòng trống được bỏ qua, số dòng trong kết quả tính từ tiêu đề.
+
+- `dryRun=true` trả HTTP 200 cùng `rows` hợp lệ, `errors` và cờ `valid`. API mặc định chạy chế độ kiểm tra.
+- `dryRun=false` trả HTTP 201 cùng `items` chứa movement và số tồn trước/sau theo SKU. Mỗi SKU trùng trong file được cộng dồn. Ghi chú của các dòng cùng SKU được nối theo thứ tự xuất hiện và lưu tối đa 255 ký tự trong movement. FIFO và thông báo chạy sau khi lô nhập đã commit.
+- File có lỗi khi nhập thật trả HTTP 422 với `detail.code=INVALID_STOCK_CSV` và `detail.errors` theo số dòng. Toàn bộ lô được hoàn tác nếu ghi dữ liệu thất bại.
+
+File `data/sample-import.csv` dùng 20 SKU từ `data/sample-products.csv`. Trên database kiểm thử, nhập danh mục mẫu một lần qua `/products/import-csv` trước khi dùng file nhập kho, hoặc thay cột `sku` bằng SKU đã có trong cửa hàng. Kiểm tra với `dryRun=true` rồi đổi sang `false` khi `valid=true`.

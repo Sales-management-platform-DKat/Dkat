@@ -1,4 +1,3 @@
-import re
 from dataclasses import dataclass
 from uuid import uuid4
 
@@ -6,11 +5,13 @@ from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 
+from app.core.csv import issue
 from app.core.permissions import Actor
+from app.db.collation import column_collation
 from app.modules.products import category_service, service, variant_service
 from app.modules.products.catalog_transaction import CatalogConflict, CatalogInvalid, CatalogNotFound
 from app.modules.products.category_schemas import CategoryInput
-from app.modules.products.csv_parser import ParsedRow, issue, parse_csv
+from app.modules.products.csv_parser import ParsedRow, parse_csv
 from app.modules.products.csv_schemas import CsvImportResult, ImportedCsvRow, ImportCounts
 from app.modules.products.schemas import ProductCreate
 from app.modules.products.variant_schemas import AttributeInput, AttributeValueInput, VariantCreate
@@ -28,12 +29,7 @@ def collation_keys(db: Connection, values: list[str], table: str, column: str) -
     values = list(dict.fromkeys(values))
     if not values:
         return {}
-    collation = db.execute(text("""
-        SELECT COLLATION_NAME FROM information_schema.COLUMNS
-        WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=:table AND COLUMN_NAME=:column
-    """), {"table": table, "column": column}).scalar_one()
-    if not re.fullmatch(r"[a-zA-Z0-9_]+", collation):
-        raise ValueError("Unexpected catalog collation")
+    collation = column_collation(db, table, column)
     params = {f"v{i}": value for i, value in enumerate(values)}
     source = " UNION ALL ".join(f"SELECT {i} AS n, :v{i} AS value" for i in range(len(values)))
     ranks = db.execute(text(f"""

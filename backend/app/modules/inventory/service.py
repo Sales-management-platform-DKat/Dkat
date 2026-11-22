@@ -245,7 +245,8 @@ def record_stocktake(
 
 
 def change_stock(
-    db: Connection, actor: Actor, data: StockImportInput | StocktakeInput
+    db: Connection, actor: Actor, data: StockImportInput | StocktakeInput,
+    *, notes_by_variant: dict[int, str | None] | None = None,
 ) -> StockChangeResult:
     exporting = isinstance(data, StockExportInput)
     variant_ids = [item.variantId for item in data.items]
@@ -262,6 +263,7 @@ def change_stock(
     movement_type = "EXPORT" if exporting else "IMPORT"
     reason = data.reason if isinstance(data, StockExportInput) else None
     results = []
+    notes = notes_by_variant or {}
     for item in data.items:
         inventory_id, before = rows[item.variantId]
         delta = -item.quantity if exporting else item.quantity
@@ -270,7 +272,7 @@ def change_stock(
             raise HTTPException(409, {"code": "STOCK_LIMIT_EXCEEDED", "variantId": item.variantId})
         results.append(record_movement(
             db, actor, variant_id=item.variantId, inventory_id=inventory_id, before=before,
-            after=after, movement_type=movement_type, reason=reason, note=data.note,
+            after=after, movement_type=movement_type, reason=reason, note=notes.get(item.variantId, data.note),
         ))
 
     return StockChangeResult(branchId=data.branchId, movementType=movement_type, reason=reason, items=results)
