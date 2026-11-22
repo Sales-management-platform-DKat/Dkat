@@ -7,9 +7,12 @@ from sqlalchemy.exc import SQLAlchemyError
 from app.core.permissions import Actor, require_auth
 from app.db.session import engine
 from app.modules.preorders.schemas import (
-    FulfillmentInput, FulfillInput, PreorderDetail, PreorderFilters, PreorderRecordId, PreorderSummary,
+    CancelPreorderInput, FulfillmentInput, FulfillInput, PreorderDetail, PreorderFilters, PreorderRecordId, PreorderSummary,
 )
+from app.modules.preorders.services.allocation import AllocationInvariantError
 from app.modules.preorders.services.fulfillment import fulfill_preorder, set_preorder_fulfillment
+from app.modules.preorders.services.lifecycle import cancel_preorder
+from app.modules.preorders.services.notifications import notify_ready_preorders
 from app.modules.preorders.services.payment import confirm_preorder_payment
 from app.modules.preorders.services.queries import get_preorder, list_preorders
 from app.modules.sales.schemas import ConfirmPaymentInput
@@ -67,3 +70,15 @@ def fulfill(preorder_id: PreorderRecordId, actor: Reader, data: FulfillInput | N
     except SQLAlchemyError:
         logger.exception("Preorder fulfillment failed")
         raise HTTPException(503, "Database unavailable") from None
+
+
+@router.post("/{preorder_id}/cancel")
+def cancel(preorder_id: PreorderRecordId, data: CancelPreorderInput, actor: Reader) -> PreorderDetail:
+    try:
+        with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
+            order, ready_ids = cancel_preorder(db, actor, preorder_id, data.reason)
+    except (SQLAlchemyError, AllocationInvariantError):
+        logger.exception("Preorder cancellation failed")
+        raise HTTPException(503, "Could not cancel preorder") from None
+    notify_ready_preorders(ready_ids)
+    return order

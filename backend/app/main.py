@@ -1,4 +1,6 @@
+import asyncio
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,9 +18,23 @@ from app.modules.products.router import router as products_router
 from app.modules.sales.router import router as sales_router
 from app.modules.preorders.public_router import router as public_preorders_router
 from app.modules.preorders.router import router as preorders_router
+from app.workers.preorder_expiry import run_preorder_expiry
 
 logger = logging.getLogger(__name__)
-app = FastAPI(title="DKat API")
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    stop = asyncio.Event()
+    expiry_task = asyncio.create_task(run_preorder_expiry(stop))
+    try:
+        yield
+    finally:
+        stop.set()
+        await expiry_task
+
+
+app = FastAPI(title="DKat API", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=CORS_ORIGINS,

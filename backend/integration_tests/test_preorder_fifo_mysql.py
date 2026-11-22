@@ -3,7 +3,7 @@ import os
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
-from threading import Barrier
+from threading import Barrier, Event
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -17,6 +17,7 @@ from app.main import app
 from app.modules.preorders.services.allocation import (
     AllocationInvariantError, allocate_imported_preorders, allocate_preorders,
 )
+from app.workers import preorder_expiry
 
 
 @unittest.skipUnless(os.getenv("DKAT_FIFO_TEST_DB") == "1", "Requires isolated MySQL test database")
@@ -333,7 +334,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
         a,b,c = [self.order(q) for q in (2,3,4)]
         with TestClient(app) as client:
             with patch.dict("sys.modules", {"app.modules.notifications.service": None}):
-                with self.assertLogs("app.modules.inventory.post_import", level="WARNING"):
+                with self.assertLogs("app.modules.preorders.services.notifications", level="WARNING"):
                     response = client.post('/inventory/import',headers=self.owner,json={'branchId':self.branch,'items':[{'variantId':self.variant,'quantity':6}]})
             self.assertEqual(response.status_code,201,response.text)
             detail = client.get(f'/preorders/{a}',headers=self.owner)
@@ -394,7 +395,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
         ) as service:
             service.notifyPreorder.side_effect = notify
             payload = {"branchId": self.branch, "items": [{"variantId": self.variant, "quantity": 5}]}
-            with self.assertLogs("app.modules.inventory.post_import", level="WARNING") as logs:
+            with self.assertLogs("app.modules.preorders.services.notifications", level="WARNING") as logs:
                 response = client.post("/inventory/import", headers=self.owner, json=payload)
             self.assertEqual(response.status_code, 201, response.text)
             self.assertEqual(len(logs.records), 2)
@@ -450,8 +451,152 @@ class PreorderFifoMySQLTests(unittest.TestCase):
 
     def test_upgrade_migration_preserves_legacy_ready_order(self):
         with engine.connect() as db:
-            row = db.execute(text("SELECT customer_name,status,ready_at,expires_at FROM preorders WHERE preorder_code='LEGACY-PBI129'")).one()
-        self.assertEqual((row.customer_name,row.status,row.ready_at,row.expires_at),('Legacy before FIFO','READY',datetime(2026,1,1),None))
+            row = db.execute(text("""
+                SELECT customer_name,status,ready_at,expires_at,cancel_reason,cancelled_at
+                FROM preorders WHERE preorder_code='LEGACY-PBI129'
+            """)).one()
+        self.assertEqual(tuple(row), ("Legacy before FIFO", "READY", datetime(2026, 1, 1), None, None, None))
+
+    def cancel_order(self, order, reason="Khách không nhận"):
+        with TestClient(app) as client:
+            return client.post(f"/preorders/{order}/cancel", headers=self.owner, json={"reason": reason})
+
+    def pay_order(self, order, amount):
+        with TestClient(app) as client:
+            response = client.post(f"/preorders/{order}/confirm-payment", headers=self.owner,
+                                   json={"paymentMethod": "CASH", "amount": amount})
+        self.assertEqual(response.status_code, 200, response.text)
+        return response.json()["payments"][0]
+
+    def set_deadline(self, order, deadline):
+        with engine.begin() as db:
+            db.execute(text("UPDATE preorders SET expires_at=:at WHERE preorder_id=:id"), {"at": deadline, "id": order})
+
+    def test_cancel_paid_order_transfers_its_holds_to_next_fifo_order(self):
+        lines = [(self.variant, 2), (self.variants[1], 3)]
+        first = self.order(items=lines, allocated=dict(lines), status="READY")
+        next_order = self.order(items=lines)
+        newer = self.order(2)
+        for variant, quantity in lines:
+            self.stock(quantity, variant)
+        payment = self.pay_order(first, "5.00")
+        before = self.stock_snapshot()
+        observed = []
+
+        def observe(ready_ids):
+            observed.append((ready_ids, self.state(first)[0].status, self.state(next_order)[0].status))
+
+        with patch("app.modules.preorders.router.notify_ready_preorders", side_effect=observe):
+            response = self.cancel_order(first, "  Khách không nhận  ")
+        self.assertEqual(response.status_code, 200, response.text)
+        detail = response.json()
+        self.assertEqual((detail["status"], detail["paymentStatus"], detail["cancelReason"]),
+                         ("CANCELLED", "REFUNDED", "Khách không nhận"))
+        self.assertTrue(detail["cancelledAt"].endswith("Z"))
+        self.assertEqual(detail["payments"], [{**payment, "status": "REFUNDED"}])
+        self.assertEqual([item["allocatedQuantity"] for item in detail["items"]], [0, 0])
+        self.assertEqual(observed, [([next_order], "CANCELLED", "READY")])
+        self.assertEqual([row.allocated_quantity for row in self.state(next_order)[1]], [2, 3])
+        self.assertEqual(self.state(newer)[1][0].allocated_quantity, 0)
+        self.assertEqual(self.cancel_order(first).status_code, 409)
+        self.assertEqual(self.stock_snapshot(), before)
+
+    def test_cancel_releases_partially_reserved_waiting_order(self):
+        first = self.order(2, allocated={self.variant: 1})
+        next_order = self.order()
+        self.stock(1)
+        with patch("app.modules.preorders.router.notify_ready_preorders") as notify:
+            response = self.cancel_order(first)
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json()["paymentStatus"], "UNPAID")
+        self.assertEqual(self.state(first)[1][0].allocated_quantity, 0)
+        self.assertEqual(self.state(next_order)[1][0].allocated_quantity, 1)
+        notify.assert_called_once_with([next_order])
+
+    def test_expiry_pages_due_orders_without_refunding_and_preserves_future_and_legacy_orders(self):
+        due = self.order(status="READY", allocated={self.variant: 1})
+        notified_due = self.order(status="NOTIFIED", allocated={self.variant: 1})
+        legacy, future = [self.order(status="READY", allocated={self.variant: 1}) for _ in range(2)]
+        successor = self.order(2)
+        self.stock(4)
+        original_payment = self.pay_order(notified_due, "1.00")
+        for order in (due, notified_due):
+            self.set_deadline(order, datetime(2026, 1, 1))
+        self.set_deadline(future, datetime(2099, 1, 1))
+        before = self.stock_snapshot()
+        with patch.object(preorder_expiry, "BATCH_SIZE", 1), patch.object(preorder_expiry, "notify_ready_preorders") as notify:
+            self.assertEqual(preorder_expiry.expire_due_preorders(), 2)
+            self.assertEqual(preorder_expiry.expire_due_preorders(), 0)
+        self.assertEqual([call.args[0] for call in notify.call_args_list], [[], [successor]])
+        self.assertEqual([self.state(order)[0].status for order in (due, notified_due, legacy, future, successor)],
+                         ["EXPIRED", "EXPIRED", "READY", "READY", "READY"])
+        self.assertEqual([self.state(order)[1][0].allocated_quantity for order in (due, notified_due, legacy, future, successor)],
+                         [0, 0, 1, 1, 2])
+        with TestClient(app) as client:
+            detail = client.get(f"/preorders/{notified_due}", headers=self.owner).json()
+        self.assertEqual((detail["paymentStatus"], detail["payments"], detail["cancelledAt"]),
+                         ("PAID", [original_payment], None))
+        refunded = self.cancel_order(notified_due)
+        self.assertEqual(refunded.status_code, 200, refunded.text)
+        self.assertEqual(refunded.json()["paymentStatus"], "REFUNDED")
+        self.assertEqual(self.stock_snapshot(), before)
+
+    def test_release_failure_rolls_back_cancel_and_expiry_and_can_be_retried(self):
+        first = self.order(status="READY", allocated={self.variant: 1})
+        successor = self.order()
+        self.stock(1)
+        self.set_deadline(first, datetime(2026, 1, 1))
+        original_payment = self.pay_order(first, "1.00")
+        before = [self.state(order) for order in (first, successor)]
+        with engine.begin() as db:
+            db.exec_driver_sql(f"""
+                CREATE TRIGGER pbi140_fail_reallocation BEFORE UPDATE ON preorder_items FOR EACH ROW
+                BEGIN IF NEW.preorder_id={successor} THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Test failure'; END IF; END
+            """)
+        try:
+            with self.assertLogs("app.modules.preorders.router", level="ERROR"):
+                self.assertEqual(self.cancel_order(first).status_code, 503)
+            with self.assertLogs("app.workers.preorder_expiry", level="ERROR"):
+                self.assertEqual(preorder_expiry.expire_due_preorders(), 0)
+            self.assertEqual([self.state(order) for order in (first, successor)], before)
+            with TestClient(app) as client:
+                detail = client.get(f"/preorders/{first}", headers=self.owner).json()
+            self.assertEqual((detail["payments"], detail["cancelReason"]), ([original_payment], None))
+        finally:
+            with engine.begin() as db:
+                db.exec_driver_sql("DROP TRIGGER pbi140_fail_reallocation")
+        with patch.object(preorder_expiry, "notify_ready_preorders") as notify:
+            self.assertEqual(preorder_expiry.expire_due_preorders(), 1)
+        notify.assert_called_once_with([successor])
+
+    def test_two_expiry_workers_release_and_allocate_once(self):
+        first = self.order(status="READY", allocated={self.variant: 1})
+        successor = self.order()
+        self.stock(1)
+        self.set_deadline(first, datetime(2026, 1, 1))
+        with patch.object(preorder_expiry, "notify_ready_preorders") as notify:
+            results = self.concurrent([preorder_expiry.expire_due_preorders] * 2)
+        self.assertEqual(sorted(results), [0, 1])
+        self.assertEqual((self.state(first)[0].status, self.state(successor)[0].status), ("EXPIRED", "READY"))
+        notify.assert_called_once_with([successor])
+
+    def test_api_lifespan_runs_scheduled_expiry(self):
+        order = self.order(status="READY")
+        self.set_deadline(order, datetime(2026, 1, 1))
+        completed = Event()
+        expire_due = preorder_expiry.expire_due_preorders
+
+        def run_and_signal():
+            count = expire_due()
+            completed.set()
+            return count
+
+        with patch.object(preorder_expiry, "RUN_INTERVAL_SECONDS", 0.01), patch.object(
+            preorder_expiry, "expire_due_preorders", side_effect=run_and_signal,
+        ):
+            with TestClient(app):
+                self.assertTrue(completed.wait(timeout=5))
+        self.assertEqual(self.state(order)[0].status, "EXPIRED")
 
 
 if __name__ == '__main__':
