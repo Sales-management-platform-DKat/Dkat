@@ -7,7 +7,7 @@ from sqlalchemy.engine import Connection
 from app.core.permissions import Actor
 from app.modules.preorders.schemas import PreorderDetail
 from app.modules.preorders.services.queries import get_preorder
-from app.modules.sales.schemas import ConfirmPaymentInput
+from app.modules.sales.schemas import ConfirmPaymentInput, PaymentMethod
 
 PAYABLE_STATUSES = {"WAITING_STOCK", "READY", "NOTIFIED"}
 
@@ -18,15 +18,26 @@ def confirm_preorder_payment(
     order = get_preorder(db, actor, preorder_id, lock=True)
     if order.status not in PAYABLE_STATUSES:
         raise HTTPException(409, {"code": "PREORDER_NOT_PAYABLE"})
-    if order.paymentStatus != "UNPAID" or any(payment.status == "SUCCESS" for payment in order.payments):
-        raise HTTPException(409, {"code": "PREORDER_ALREADY_PAID"})
+    ensure_preorder_unpaid(order)
     if data.amount != order.totalAmount:
         raise HTTPException(422, {"code": "PAYMENT_AMOUNT_MISMATCH", "expectedAmount": str(order.totalAmount)})
     confirmed_at = datetime.now(timezone.utc).replace(tzinfo=None, microsecond=0)
+    record_preorder_payment(db, actor, order, data.paymentMethod, confirmed_at)
+    return get_preorder(db, actor, preorder_id)
+
+
+def ensure_preorder_unpaid(order: PreorderDetail) -> None:
+    if order.paymentStatus != "UNPAID" or any(payment.status == "SUCCESS" for payment in order.payments):
+        raise HTTPException(409, {"code": "PREORDER_ALREADY_PAID"})
+
+
+def record_preorder_payment(
+    db: Connection, actor: Actor, order: PreorderDetail, method: PaymentMethod, confirmed_at: datetime,
+) -> None:
+    """Record the full total after the caller has locked the preorder and checked its payment state."""
     db.execute(text("""
         INSERT INTO payments (preorder_id,payment_method,amount,status,confirmed_by,confirmed_at)
         VALUES (:order,:method,:amount,'SUCCESS',:user,:at)
-    """), {"order": preorder_id, "method": data.paymentMethod, "amount": data.amount,
+    """), {"order": order.preorderId, "method": method, "amount": order.totalAmount,
            "user": actor.user_id, "at": confirmed_at})
-    db.execute(text("UPDATE preorders SET payment_status='PAID' WHERE preorder_id=:id"), {"id": preorder_id})
-    return get_preorder(db, actor, preorder_id)
+    db.execute(text("UPDATE preorders SET payment_status='PAID' WHERE preorder_id=:id"), {"id": order.preorderId})

@@ -2,10 +2,10 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, StringConstraints, field_validator, model_validator
 
 from app.modules.customers.service import normalize_phone
-from app.modules.sales.schemas import OrderPayment
+from app.modules.sales.schemas import OrderPayment, PaymentMethod
 
 PreorderId = Annotated[int, Field(strict=True, gt=0, le=9223372036854775807)]
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=150)]
@@ -137,9 +137,25 @@ class PreorderSummary(PreorderTimestampModel):
     items: list[PreorderLine] = Field(default_factory=list)
 
 
+FulfillmentMethod = Literal["PICKUP", "DELIVERY"]
+
+
+class FulfillmentInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    method: FulfillmentMethod = Field(validation_alias=AliasChoices("method", "fulfillmentMethod"))
+    deliveryAddress: Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)] | None = None
+
+
+class FulfillInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    paymentMethod: PaymentMethod | None = None
+
+
 class PreorderFulfillment(PreorderTimestampModel):
     fulfillmentId: int
-    method: Literal["PICKUP", "DELIVERY"]
+    method: FulfillmentMethod
     deliveryAddress: str | None
     status: Literal["PENDING", "PROCESSING", "COMPLETED"]
     confirmedBy: int | None

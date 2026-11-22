@@ -1,9 +1,10 @@
-"""PBI 121: authenticated preorder queries and atomic manual payments on isolated MySQL."""
+"""Authenticated preorder queries, payments and fulfillment on isolated MySQL."""
 import itertools
 import os
 import unittest
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
+from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -78,6 +79,8 @@ class PreorderAdminMySQLTests(unittest.TestCase):
         self.tag = "QA121-" + uuid4().hex[:12]
         with engine.begin() as db:
             db.execute(text("UPDATE inventory SET quantity=0 WHERE branch_id IN (:a,:b)"),
+                       {"a": self.branch, "b": self.branches[1]})
+            db.execute(text("UPDATE preorders SET status='CANCELLED' WHERE branch_id IN (:a,:b)"),
                        {"a": self.branch, "b": self.branches[1]})
             db.execute(text("UPDATE products SET name='Original121' WHERE product_id=:p"), {"p": self.product})
             for variant, price in zip(self.variants, ("12.50", "7.25")):
@@ -311,6 +314,177 @@ class PreorderAdminMySQLTests(unittest.TestCase):
                     with engine.begin() as db:
                         db.exec_driver_sql("DROP TRIGGER pbi121_fail_payment")
                 self.pay(order)
+
+    def reserve_for_fulfillment(self, order, status="READY"):
+        with engine.begin() as db:
+            db.execute(text("""
+                UPDATE preorders SET status=:status, ready_at=UTC_TIMESTAMP(),
+                    expires_at=UTC_TIMESTAMP() + INTERVAL 7 DAY WHERE preorder_id=:id
+            """), {"id": order["preorderId"], "status": status})
+            db.execute(text("UPDATE preorder_items SET allocated_quantity=quantity WHERE preorder_id=:id"),
+                       {"id": order["preorderId"]})
+            for item in order["items"]:
+                db.execute(text("""
+                    UPDATE inventory SET quantity=quantity + :q WHERE branch_id=:b AND variant_id=:v
+                """), {"q": item["quantity"], "b": order["branchId"], "v": item["variantId"]})
+
+    def test_fulfillment_choice_can_be_edited_without_touching_stock(self):
+        order = self.order()
+        path = f"/preorders/{order['preorderId']}/fulfillment"
+        before = self.stock_snapshot()
+        chosen = self.request("PUT", path, body={"method": "DELIVERY"})
+        selected = chosen["fulfillment"]
+        self.assertEqual((chosen["status"], selected["status"], selected["deliveryAddress"]),
+                         ("WAITING_STOCK", "PENDING", "Địa chỉ snapshot"))
+        edited = self.request("PUT", path, body={"fulfillmentMethod": "DELIVERY", "deliveryAddress": "  Địa chỉ mới  "})
+        self.assertEqual(edited["fulfillment"]["deliveryAddress"], "Địa chỉ mới")
+        pickup = self.request("PUT", path, body={"method": "PICKUP"})["fulfillment"]
+        self.assertEqual((pickup["fulfillmentId"], pickup["method"], pickup["deliveryAddress"]),
+                         (selected["fulfillmentId"], "PICKUP", None))
+        with engine.begin() as db:
+            db.execute(text("UPDATE preorders SET customer_address=NULL WHERE preorder_id=:id"),
+                       {"id": order["preorderId"]})
+        error = self.request("PUT", path, 422, body={"method": "DELIVERY", "deliveryAddress": "  "})
+        self.assertEqual(error["detail"]["code"], "DELIVERY_ADDRESS_REQUIRED")
+        self.request("PUT", path, 422, body={"method": "COURIER"})
+        self.assertEqual(self.stock_snapshot(), before)
+
+    def test_fulfill_after_import_records_payment_delivery_and_exact_stock_deltas(self):
+        order = self.order()
+        preorder_id = order["preorderId"]
+        path = f"/preorders/{preorder_id}"
+        staff, staff_id = self.members["staff"]
+        with patch.dict("sys.modules", {"app.modules.notifications.service": None}):
+            self.request("POST", "/inventory/import", 201, body={
+                "branchId": self.branch, "items": [
+                    {"variantId": item["variantId"], "quantity": item["quantity"] + 1} for item in order["items"]
+                ],
+            })
+        before = self.stock_snapshot()
+        selected = self.request("PUT", path + "/fulfillment", auth=staff, body={"method": "DELIVERY"})
+        self.assertEqual((selected["status"], selected["paymentStatus"]), ("READY", "UNPAID"))
+        self.assertEqual(self.request("POST", path + "/fulfill", 422, staff, {})["detail"]["code"],
+                         "PAYMENT_METHOD_REQUIRED")
+        self.assertEqual(self.stock_snapshot(), before)
+
+        done = self.request("POST", path + "/fulfill", auth=staff, body={"paymentMethod": "CASH"})
+        self.assertEqual((done["status"], done["paymentStatus"]), ("FULFILLED", "PAID"))
+        fulfillment = done["fulfillment"]
+        self.assertEqual((fulfillment["fulfillmentId"], fulfillment["method"], fulfillment["deliveryAddress"]),
+                         (selected["fulfillment"]["fulfillmentId"], "DELIVERY", "Địa chỉ snapshot"))
+        self.assertEqual((fulfillment["status"], fulfillment["confirmedBy"], fulfillment["completedAt"]),
+                         ("COMPLETED", staff_id, done["fulfilledAt"]))
+        payment, = done["payments"]
+        self.assertEqual((payment["paymentMethod"], payment["status"], payment["amount"], payment["confirmedBy"]),
+                         ("CASH", "SUCCESS", order["totalAmount"], staff_id))
+        self.assertEqual(payment["confirmedAt"], done["fulfilledAt"])
+        self.assertTrue(done["fulfilledAt"].endswith("Z"))
+        self.assertEqual([item["allocatedQuantity"] for item in done["items"]], [0, 0])
+        for item in order["items"]:
+            inventory = self.request("GET", f"/inventory/{self.branch}/{item['variantId']}")
+            self.assertEqual((inventory["quantity"], inventory["reserved"], inventory["available"]), (1, 0, 1))
+        movements = self.request("GET", "/inventory/movements", params={"branchId": self.branch, "type": "PREORDER_FULFILLMENT"})
+        self.assertEqual({row["variantId"]: row["quantityChange"] for row in movements if row["referenceId"] == preorder_id},
+                         {item["variantId"]: -item["quantity"] for item in order["items"]})
+        after = self.stock_snapshot()
+        self.assertEqual(after[2] - before[2], 2)
+        self.request("POST", path + "/fulfill", 409, body={"paymentMethod": "CASH"})
+        self.request("PUT", path + "/fulfillment", 409, body={"method": "PICKUP"})
+        self.assertEqual(self.request("GET", path), done)
+        self.assertEqual(self.stock_snapshot(), after)
+
+    def test_fulfill_notified_paid_order_defaults_to_pickup_and_keeps_other_reservations(self):
+        order, waiting = self.order(), self.order()
+        self.reserve_for_fulfillment(order, "NOTIFIED")
+        self.reserve_for_fulfillment(waiting)
+        paid = self.pay(order, method="BANK_TRANSFER")
+        done = self.request("POST", f"/preorders/{order['preorderId']}/fulfill", body=None)
+        self.assertEqual(done["payments"], paid["payments"])
+        self.assertEqual((done["status"], done["fulfillment"]["method"]), ("FULFILLED", "PICKUP"))
+        for item in waiting["items"]:
+            stock = self.request("GET", f"/inventory/{self.branch}/{item['variantId']}")
+            self.assertEqual((stock["quantity"], stock["reserved"], stock["available"]),
+                             (item["quantity"], item["quantity"], 0))
+
+    def test_fulfill_rejects_closed_expired_and_unallocated_orders(self):
+        for status, code in (
+            ("WAITING_STOCK", "PREORDER_NOT_FULFILLABLE"), ("CANCELLED", "PREORDER_NOT_FULFILLABLE"),
+            ("EXPIRED", "PREORDER_NOT_FULFILLABLE"), ("FULFILLED", "PREORDER_NOT_FULFILLABLE"),
+            ("READY", "PREORDER_NOT_FULLY_ALLOCATED"), ("NOTIFIED", "PREORDER_EXPIRED"),
+        ):
+            with self.subTest(status=status):
+                order = self.order(status=status)
+                path = f"/preorders/{order['preorderId']}"
+                if status == "NOTIFIED":
+                    with engine.begin() as db:
+                        db.execute(text("UPDATE preorders SET expires_at=UTC_TIMESTAMP() WHERE preorder_id=:id"),
+                                   {"id": order["preorderId"]})
+                    self.assertEqual(self.request("PUT", path + "/fulfillment", 409, body={"method": "PICKUP"})["detail"]["code"], code)
+                before = self.stock_snapshot()
+                self.assertEqual(self.request("POST", path + "/fulfill", 409, body={"paymentMethod": "CASH"})["detail"]["code"], code)
+                self.assertEqual(self.request("GET", path)["payments"], [])
+                self.assertEqual(self.stock_snapshot(), before)
+
+    def test_fulfillment_routes_enforce_auth_branch_and_store(self):
+        order = self.order()
+        path = f"/preorders/{order['preorderId']}"
+        for auth, code in (({}, 401), (self.members["unassigned"][0], 403), (self.other_owner, 404)):
+            self.request("PUT", path + "/fulfillment", code, auth, {"method": "PICKUP"})
+            self.request("POST", path + "/fulfill", code, auth, {"paymentMethod": "CASH"})
+
+    def test_fulfill_cannot_consume_stock_allocated_to_other_orders(self):
+        order, other = self.order(), self.order()
+        self.reserve_for_fulfillment(order)
+        self.reserve_for_fulfillment(other)
+        with engine.begin() as db:
+            db.execute(text("UPDATE inventory SET quantity=quantity-1 WHERE branch_id=:b AND variant_id=:v"),
+                       {"b": self.branch, "v": self.variants[1]})
+        before = self.stock_snapshot()
+        path = f"/preorders/{order['preorderId']}"
+        result = self.request("POST", path + "/fulfill", 409, body={"paymentMethod": "CASH"})
+        self.assertEqual(result["detail"], {"code": "INSUFFICIENT_STOCK", "variantId": self.variants[1]})
+        self.assertEqual(self.request("GET", path)["payments"], [])
+        self.assertEqual(self.stock_snapshot(), before)
+
+    def test_fulfillment_sql_failure_rolls_back_payment_stock_movements_and_selection(self):
+        order = self.order()
+        self.reserve_for_fulfillment(order)
+        path = f"/preorders/{order['preorderId']}"
+        selected = self.request("PUT", path + "/fulfillment", body={"method": "DELIVERY"})
+        before = self.stock_snapshot()
+        with engine.begin() as db:
+            db.exec_driver_sql("""
+                CREATE TRIGGER pbi139_fail_fulfill BEFORE UPDATE ON preorders FOR EACH ROW
+                BEGIN IF NEW.status='FULFILLED' THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='Test failure'; END IF; END
+            """)
+        try:
+            with self.assertLogs("app.modules.preorders.router", level="ERROR"):
+                self.request("POST", path + "/fulfill", 503, body={"paymentMethod": "CARD"})
+            self.assertEqual(self.request("GET", path), selected)
+            self.assertEqual(self.stock_snapshot(), before)
+        finally:
+            with engine.begin() as db:
+                db.exec_driver_sql("DROP TRIGGER pbi139_fail_fulfill")
+        self.request("POST", path + "/fulfill", body={"paymentMethod": "CARD"})
+
+    def test_simultaneous_fulfill_requests_charge_and_deduct_once(self):
+        order = self.order()
+        self.reserve_for_fulfillment(order)
+        path = f"/preorders/{order['preorderId']}"
+        before = self.stock_snapshot()
+        barrier = Barrier(2)
+
+        def invoke():
+            barrier.wait(timeout=10)
+            with TestClient(app) as client:
+                return client.post(path + "/fulfill", headers=self.owner, json={"paymentMethod": "CASH"}).status_code
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            futures = [pool.submit(invoke) for _ in range(2)]
+            self.assertEqual(sorted(future.result(timeout=30) for future in futures), [200, 409])
+        done = self.request("GET", path)
+        self.assertEqual((done["status"], len(done["payments"])), ("FULFILLED", 1))
+        self.assertEqual(self.stock_snapshot()[2] - before[2], 2)
 
 
 if __name__ == "__main__":
