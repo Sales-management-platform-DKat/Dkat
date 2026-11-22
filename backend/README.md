@@ -230,3 +230,23 @@ Trong cùng transaction: khóa đơn và inventory theo variant_id tăng dần, 
 PENDING, CANCELLED hoặc hoàn lần hai trả 409 ORDER_NOT_PAID. Lịch sử thanh toán thiếu SUCCESS, đã có REFUNDED hoặc tổng SUCCESS khác totalAmount trả 409 ORDER_PAYMENT_INCONSISTENT để kiểm tra lại dữ liệu. Kho vượt giới hạn INT trả 409 STOCK_LIMIT_EXCEEDED và hoàn tác cả đơn. SQL lỗi trả 503 và rollback thanh toán, kho, movement, trạng thái đơn. Đơn có biến thể ngừng hoạt động vẫn hoàn theo snapshot; inventory cũ bị thiếu được tạo ở mức 0 rồi cộng lượng trả. Lượng giữ chỗ preorder giữ nguyên. EMPLOYEE trả 403; MANAGER ngoài chi nhánh trả 403; ngoài cửa hàng trả 404.
 
 Thử nhanh trên database kiểm thử: import `samples/pbi122-sales-refund.postman_collection.json`, điền accessToken OWNER/MANAGER và orderId của đơn PAID hợp lệ rồi chạy SalesRefund theo thứ tự. Collection kiểm tra kho trước/sau, movement, lịch sử và việc hoàn lần hai bị chặn. Chạy `.\scripts\test_pbi122_mysql.ps1` từ backend để kiểm tra thêm phân quyền, các phương thức thanh toán, dữ liệu cũ, rollback SQL, tràn kho và yêu cầu đồng thời.
+
+## Phân bổ FIFO PBI 129
+
+1. Database mới dùng `database/01_schema.sql`. Database cũ chạy `database/07_preorder_fifo_expiry.sql` để thêm `preorders.expires_at` (nullable, chạy lại được). Các đơn READY cũ giữ nguyên mốc thời gian hiện có.
+2. Cấu hình `PREORDER_READY_DAYS=7` trong `.env` nếu cần đổi hạn nhận hàng (số nguyên 1–365); khởi động lại backend sau khi sửa. API danh sách/chi tiết đặt trước trả thêm `expiresAt` theo UTC, null khi chưa có hạn nhận.
+3. Chạy `.\scripts\test_pbi129_mysql.ps1` từ backend để kiểm thử trên MySQL riêng. Script mô phỏng schema cũ, chạy migration hai lần, rồi kiểm tra FIFO, ngày hết hạn, chạy lặp, rollback và đồng thời. Kịch bản chính in kết quả: quỹ 6 → A nhận 2 READY, B nhận 3 READY, C nhận 1 WAITING_STOCK; chạy lại cấp thêm 0.
+
+Hàm lõi `app/modules/preorders/services/allocation.py::allocate_preorders(connection, branch_id, variant_id)` dùng transaction READ COMMITTED do bên gọi quản lý, không tự commit:
+
+```python
+with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
+    result = allocate_preorders(db, branch_id=1, variant_id=1)
+# Sau commit mới dùng result.ready_preorder_ids cho công việc bên ngoài transaction.
+```
+
+Quỹ = inventory.quantity trừ tổng allocated_quantity của WAITING_STOCK/READY/NOTIFIED. Chỉ cấp phần còn thiếu cho WAITING_STOCK, theo created_at tăng dần, hòa thì preorder_id. Mọi dòng đủ mới chuyển READY, đặt ready_at bằng UTC của database và expires_at = ready_at + số ngày cấu hình. Không đổi inventory.quantity, không ghi movement, không đổi thanh toán. READY/NOTIFIED giữ nguyên phân bổ và thời hạn; các đơn đóng không giữ quỹ. Nếu dữ liệu cũ đã giữ nhiều hơn tồn thực, hàm báo RESERVATION_EXCEEDS_STOCK để kiểm tra lại kho.
+
+Thứ tự khóa dùng chung: inventory → parent preorder → item; nhiều inventory phải khóa trước theo variant_id tăng dần, các parent theo FIFO. Hàm trả AllocationResult với lượng giữ sẵn, lượng cấp thêm, quỹ còn, thay đổi từng dòng và các ID vừa READY. Người gọi phải rollback transaction khi có lỗi; không gửi thông báo trước commit. Các chức năng hủy/nhận hàng sau này cần dùng cùng quy tắc khóa để thay đổi phân bổ.
+
+Hook nhập kho hiện có gọi `allocate_imported_preorders(branch_id, variant_ids)`: khóa trước toàn bộ inventory theo thứ tự, phân bổ cả lô trong một transaction riêng sau commit nhập kho, rồi trả danh sách ID vừa READY. Nếu hook lỗi, nhập kho vẫn đã commit và lỗi được ghi log; phân bổ rollback toàn bộ. PBI 130 xử lý gửi thông báo và các điểm tích hợp bổ sung; job hết hạn thuộc PBI 140.

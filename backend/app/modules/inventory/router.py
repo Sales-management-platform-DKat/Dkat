@@ -13,7 +13,7 @@ from app.modules.inventory.schemas import (
     StockChangeResult, StockExportInput, StockImportInput, StocktakeInput,
 )
 from app.modules.inventory.service import change_stock, list_inventory, list_inventory_movements
-from app.modules.preorders.services.allocation import allocate_preorders
+from app.modules.preorders.services.allocation import allocate_imported_preorders
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -44,7 +44,7 @@ def record_stock_change(actor: Actor, data: StockImportInput | StocktakeInput) -
 def import_inventory(data: StockImportInput, actor: StockWriter) -> StockChangeResult:
     result = record_stock_change(actor, data)
     try:
-        allocate_preorders(data.branchId, [item.variantId for item in data.items])
+        allocate_imported_preorders(data.branchId, [item.variantId for item in data.items])
     except Exception:
         logger.exception("Preorder allocation failed after import committed")
     return result

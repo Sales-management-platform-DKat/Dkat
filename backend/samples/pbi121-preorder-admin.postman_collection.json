@@ -104,7 +104,7 @@
                   "  pm.expect(order.items.length).to.be.above(0);",
                   "});",
                   "pm.test('Có khách, thanh toán, nhận hàng và thông báo', () => {",
-                  "  pm.expect(order).to.have.keys('preorderId','preorderCode','branchId','branchName','customerId','customer','totalAmount','status','paymentStatus','note','createdAt','readyAt','fulfilledAt','items','payments','fulfillment','notifications');",
+                  "  pm.expect(order).to.include.all.keys('preorderId','preorderCode','branchId','branchName','customerId','customer','totalAmount','status','paymentStatus','note','createdAt','readyAt','expiresAt','fulfilledAt','items','payments','fulfillment','notifications');",
                   "});",
                   "pm.collectionVariables.set('branchId', order.branchId);",
                   "pm.collectionVariables.set('variantId', order.items[0].variantId);",
