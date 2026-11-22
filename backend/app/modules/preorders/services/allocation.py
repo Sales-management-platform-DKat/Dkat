@@ -111,12 +111,17 @@ def allocate_imported_preorders(branch_id: int, variant_ids: list[int]) -> list[
     variants = sorted(set(variant_ids))
     if not variants:
         return []
-    ready_ids = []
     with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
         # Acquire the entire batch before any parent-order locks, preventing inverse
         # lock order when concurrent imports provide different subsets of variants.
         lock_inventory_rows(db, branch_id, variants, create_missing=False)
-        for variant in variants:
-            result = allocate_preorders(db, branch_id, variant)
-            ready_ids.extend(result.ready_preorder_ids)
+        return allocate_locked_variants(db, branch_id, variants)
+
+
+def allocate_locked_variants(db: Connection, branch_id: int, variant_ids: list[int]) -> list[int]:
+    """Allocate specific variants after the caller has locked all their inventory rows."""
+    ready_ids = []
+    for variant in sorted(set(variant_ids)):
+        result = allocate_preorders(db, branch_id, variant)
+        ready_ids.extend(result.ready_preorder_ids)
     return list(dict.fromkeys(ready_ids))

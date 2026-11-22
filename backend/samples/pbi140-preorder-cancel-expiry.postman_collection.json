@@ -1,0 +1,332 @@
+{
+  "info": {
+    "name": "DKat PBI 140 | Hủy, hết hạn và cấp lại hàng đặt trước",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Dùng database kiểm thử và token của tài khoản có quyền tại chi nhánh. Chạy từng thư mục theo thứ tự. Để kiểm tra hủy, chuẩn bị hai đơn A và B cùng một SKU và cùng số lượng, với A đã giữ đủ hàng và B đứng đầu hàng chờ. Với đơn đã thanh toán, chỉ ghi nhận hủy sau khi xử lý khoản hoàn bên ngoài. Để kiểm tra hết hạn, chạy job cho một cặp đơn khác rồi điền hai ID tương ứng."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "cancelOrderId",
+      "value": ""
+    },
+    {
+      "key": "nextOrderId",
+      "value": ""
+    },
+    {
+      "key": "expiredOrderId",
+      "value": ""
+    },
+    {
+      "key": "expiryNextOrderId",
+      "value": ""
+    },
+    {
+      "key": "expiryPaymentStatus",
+      "value": "PAID"
+    }
+  ],
+  "item": [
+    {
+      "name": "Hủy đơn và cấp lại FIFO",
+      "description": "Điền cancelOrderId và nextOrderId. Chuẩn bị A ở READY hoặc NOTIFIED, B ở WAITING_STOCK với phân bổ bằng 0. Dùng cùng một chi nhánh, SKU và số lượng. Tồn nhập vừa đủ cho A. Collection sẽ hủy A.",
+      "item": [
+        {
+          "name": "01. Đọc đơn A trước khi hủy",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/preorders/{{cancelOrderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const order = pm.response.json();",
+                  "const ready = ['READY', 'NOTIFIED'].includes(order.status) && order.items?.length === 1",
+                  "  && order.items[0].allocatedQuantity === order.items[0].quantity;",
+                  "pm.test('Đơn A đã giữ đủ một SKU', () => pm.expect(Boolean(ready)).to.be.true);",
+                  "if (pm.response.code !== 200 || !ready) {",
+                  "  pm.execution.setNextRequest(null);",
+                  "} else {",
+                  "  pm.collectionVariables.set('cancelBranchId', order.branchId);",
+                  "  pm.collectionVariables.set('cancelVariantId', order.items[0].variantId);",
+                  "  pm.collectionVariables.set('cancelQuantity', order.items[0].quantity);",
+                  "  pm.collectionVariables.set('cancelPaymentStatus', order.paymentStatus);",
+                  "  pm.collectionVariables.set('cancelPayments', JSON.stringify(order.payments));",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02. Đọc đơn B đang chờ",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/preorders/{{nextOrderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const order = pm.response.json();",
+                  "const waiting = order.status === 'WAITING_STOCK' && order.items?.length === 1",
+                  "  && order.branchId === Number(pm.collectionVariables.get('cancelBranchId'))",
+                  "  && order.items[0].variantId === Number(pm.collectionVariables.get('cancelVariantId'))",
+                  "  && order.items[0].quantity === Number(pm.collectionVariables.get('cancelQuantity'))",
+                  "  && order.items[0].allocatedQuantity === 0;",
+                  "pm.test('Đơn B chờ cùng SKU, chi nhánh và số lượng', () => pm.expect(Boolean(waiting)).to.be.true);",
+                  "if (pm.response.code !== 200 || !waiting) pm.execution.setNextRequest(null);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03. Đọc tồn kho trước khi hủy",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{cancelBranchId}}/{{cancelVariantId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const stock = pm.response.json();",
+                  "pm.collectionVariables.set('cancelStockBefore', stock.quantity);",
+                  "pm.collectionVariables.set('cancelReservedBefore', stock.reserved);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04. Hủy đơn A",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/preorders/{{cancelOrderId}}/cancel",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Khách không nhận hàng\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const order = pm.response.json();",
+                  "const before = pm.collectionVariables.get('cancelPaymentStatus');",
+                  "const ledger = JSON.parse(pm.collectionVariables.get('cancelPayments'));",
+                  "const expectedLedger = before === 'PAID'",
+                  "  ? ledger.map(entry => entry.status === 'SUCCESS' ? { ...entry, status: 'REFUNDED' } : entry) : ledger;",
+                  "pm.test('A đã hủy, có lý do, thời điểm và đã giải phóng hàng giữ', () => {",
+                  "  pm.expect(order.status).to.equal('CANCELLED');",
+                  "  pm.expect(order.cancelReason).to.equal('Khách không nhận hàng');",
+                  "  pm.expect(order.cancelledAt).to.match(/Z$/);",
+                  "  pm.expect(order.items[0].allocatedQuantity).to.equal(0);",
+                  "});",
+                  "pm.test('Cập nhật thanh toán đúng theo trạng thái ban đầu', () => {",
+                  "  pm.expect(order.paymentStatus).to.equal(before === 'PAID' ? 'REFUNDED' : before);",
+                  "  pm.expect(order.payments).to.deep.equal(expectedLedger);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05. Đơn B nhận đủ hàng theo FIFO",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/preorders/{{nextOrderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const order = pm.response.json();",
+                  "pm.test('B được cấp đủ và có hạn nhận', () => {",
+                  "  pm.expect(['READY', 'NOTIFIED']).to.include(order.status);",
+                  "  pm.expect(order.items[0].allocatedQuantity).to.equal(Number(pm.collectionVariables.get('cancelQuantity')));",
+                  "  pm.expect(order.expiresAt).to.match(/Z$/);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06. Hủy lại đơn A",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/preorders/{{cancelOrderId}}/cancel",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reason\": \"Gửi lại yêu cầu\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "pm.test('Đơn đã hủy trả PREORDER_NOT_CANCELLABLE', () => {",
+                  "  pm.expect(pm.response.json().detail.code).to.equal('PREORDER_NOT_CANCELLABLE');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07. Đối chiếu tồn kho sau khi hủy",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{cancelBranchId}}/{{cancelVariantId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const stock = pm.response.json();",
+                  "pm.test('Tồn vật lý và tổng lượng giữ của hai đơn giữ nguyên', () => {",
+                  "  pm.expect(stock.quantity).to.equal(Number(pm.collectionVariables.get('cancelStockBefore')));",
+                  "  pm.expect(stock.reserved).to.equal(Number(pm.collectionVariables.get('cancelReservedBefore')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Kiểm tra kết quả job hết hạn",
+      "description": "Chuẩn bị một cặp cùng chi nhánh, một SKU và cùng số lượng. Đơn đầu đã giữ đủ hàng và có hạn trong quá khứ, đơn sau đứng đầu hàng chờ. Chạy python -m app.workers.preorder_expiry từ backend trên database kiểm thử. Điền expiredOrderId và expiryNextOrderId. Nếu đơn đầu chưa thanh toán, đổi expiryPaymentStatus thành UNPAID.",
+      "item": [
+        {
+          "name": "01. Đơn hết hạn đã giải phóng hàng",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/preorders/{{expiredOrderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const order = pm.response.json();",
+                  "const expected = pm.variables.get('expiryPaymentStatus');",
+                  "pm.test('Đơn EXPIRED và đã giải phóng toàn bộ phân bổ', () => {",
+                  "  pm.expect(order.status).to.equal('EXPIRED');",
+                  "  pm.expect(order.items).to.have.lengthOf(1);",
+                  "  pm.expect(order.items[0].allocatedQuantity).to.equal(0);",
+                  "});",
+                  "pm.test('Job giữ nguyên trạng thái thanh toán', () => {",
+                  "  pm.expect(order.paymentStatus).to.equal(expected);",
+                  "  if (expected === 'PAID') pm.expect(order.payments.some(entry => entry.status === 'SUCCESS')).to.be.true;",
+                  "});",
+                  "if (pm.response.code !== 200 || order.status !== 'EXPIRED' || order.items?.length !== 1) {",
+                  "  pm.execution.setNextRequest(null);",
+                  "} else {",
+                  "  pm.collectionVariables.set('expiryBranchId', order.branchId);",
+                  "  pm.collectionVariables.set('expiryVariantId', order.items[0].variantId);",
+                  "  pm.collectionVariables.set('expiryQuantity', order.items[0].quantity);",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02. Đơn kế tiếp nhận hàng theo FIFO",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/preorders/{{expiryNextOrderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const order = pm.response.json();",
+                  "pm.test('Đơn kế tiếp giữ đủ hàng vừa giải phóng', () => {",
+                  "  pm.expect(['READY', 'NOTIFIED']).to.include(order.status);",
+                  "  pm.expect(order.branchId).to.equal(Number(pm.collectionVariables.get('expiryBranchId')));",
+                  "  pm.expect(order.items).to.have.lengthOf(1);",
+                  "  pm.expect(order.items[0].variantId).to.equal(Number(pm.collectionVariables.get('expiryVariantId')));",
+                  "  pm.expect(order.items[0].allocatedQuantity).to.equal(Number(pm.collectionVariables.get('expiryQuantity')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

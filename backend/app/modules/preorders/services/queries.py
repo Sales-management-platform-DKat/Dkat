@@ -17,7 +17,8 @@ HEADER_SELECT = """
            p.customer_email AS customerEmail, p.customer_address AS customerAddress,
            p.total_amount AS totalAmount, p.status, p.payment_status AS paymentStatus,
            p.note, p.created_at AS createdAt, p.ready_at AS readyAt,
-           p.expires_at AS expiresAt, p.fulfilled_at AS fulfilledAt
+           p.expires_at AS expiresAt, p.fulfilled_at AS fulfilledAt,
+           p.cancel_reason AS cancelReason, p.cancelled_at AS cancelledAt
     FROM preorders AS p
     JOIN branches AS b ON b.branch_id=p.branch_id AND b.store_id=:store
 """
@@ -90,6 +91,12 @@ def get_preorder_branch(db: Connection, actor: Actor, preorder_id: int, *, lock:
         raise HTTPException(404, {"code": "PREORDER_NOT_FOUND"})
     require_branch_access(db, actor, branch_id)
     return branch_id
+
+
+def get_preorder_variant_ids(db: Connection, preorder_id: int) -> list[int]:
+    return list(db.execute(text("""
+        SELECT DISTINCT variant_id FROM preorder_items WHERE preorder_id=:id
+    """), {"id": preorder_id}).scalars())
 
 
 def get_preorder(db: Connection, actor: Actor, preorder_id: int, *, lock: bool = False) -> PreorderDetail:

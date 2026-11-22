@@ -432,6 +432,16 @@ class PreorderAdminMySQLTests(unittest.TestCase):
             self.request("PUT", path + "/fulfillment", code, auth, {"method": "PICKUP"})
             self.request("POST", path + "/fulfill", code, auth, {"paymentMethod": "CASH"})
 
+    def test_preorder_cancel_validates_reason_access_and_closed_state(self):
+        order = self.order(status="FULFILLED")
+        path = f"/preorders/{order['preorderId']}/cancel"
+        for auth, code in (({}, 401), (self.members["unassigned"][0], 403), (self.other_owner, 404)):
+            self.request("POST", path, code, auth, {"reason": "Khách không nhận"})
+        for body in ({}, {"reason": "  "}, {"reason": "x" * 256}):
+            self.request("POST", path, 422, body=body)
+        error = self.request("POST", path, 409, body={"reason": "Khách không nhận"})
+        self.assertEqual(error["detail"]["code"], "PREORDER_NOT_CANCELLABLE")
+
     def test_fulfill_cannot_consume_stock_allocated_to_other_orders(self):
         order, other = self.order(), self.order()
         self.reserve_for_fulfillment(order)
