@@ -104,7 +104,7 @@ class PreorderFilters(BaseModel):
 
 
 class PreorderTimestampModel(BaseModel):
-    @field_validator("createdAt", "readyAt", "fulfilledAt", "completedAt", "sentAt", check_fields=False)
+    @field_validator("createdAt", "readyAt", "expiresAt", "fulfilledAt", "completedAt", "sentAt", check_fields=False)
     @classmethod
     def utc_timestamp(cls, value: datetime | None) -> datetime | None:
         if value is None:
@@ -132,6 +132,7 @@ class PreorderSummary(PreorderTimestampModel):
     note: str | None
     createdAt: datetime
     readyAt: datetime | None
+    expiresAt: datetime | None = None
     fulfilledAt: datetime | None
     items: list[PreorderLine] = Field(default_factory=list)
 
