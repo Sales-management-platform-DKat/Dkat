@@ -79,7 +79,7 @@ def list_preorders(db: Connection, actor: Actor, filters: PreorderFilters) -> li
     return list(orders.values())
 
 
-def get_preorder(db: Connection, actor: Actor, preorder_id: int, *, lock: bool = False) -> PreorderDetail:
+def get_preorder_branch(db: Connection, actor: Actor, preorder_id: int, *, lock: bool = False) -> int:
     # A subquery scopes the order without locking its branch along with it.
     branch_id = db.execute(text("""
         SELECT p.branch_id FROM preorders AS p WHERE p.preorder_id=:id AND EXISTS (
@@ -89,6 +89,11 @@ def get_preorder(db: Connection, actor: Actor, preorder_id: int, *, lock: bool =
     if branch_id is None:
         raise HTTPException(404, {"code": "PREORDER_NOT_FOUND"})
     require_branch_access(db, actor, branch_id)
+    return branch_id
+
+
+def get_preorder(db: Connection, actor: Actor, preorder_id: int, *, lock: bool = False) -> PreorderDetail:
+    get_preorder_branch(db, actor, preorder_id, lock=lock)
     header = db.execute(text(HEADER_SELECT + " WHERE p.preorder_id=:id"),
                         {"id": preorder_id, "store": actor.store_id}).mappings().one()
     summary = summary_from_row(header)

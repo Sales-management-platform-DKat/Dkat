@@ -6,7 +6,10 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.permissions import Actor, require_auth
 from app.db.session import engine
-from app.modules.preorders.schemas import PreorderDetail, PreorderFilters, PreorderRecordId, PreorderSummary
+from app.modules.preorders.schemas import (
+    FulfillmentInput, FulfillInput, PreorderDetail, PreorderFilters, PreorderRecordId, PreorderSummary,
+)
+from app.modules.preorders.services.fulfillment import fulfill_preorder, set_preorder_fulfillment
 from app.modules.preorders.services.payment import confirm_preorder_payment
 from app.modules.preorders.services.queries import get_preorder, list_preorders
 from app.modules.sales.schemas import ConfirmPaymentInput
@@ -43,4 +46,24 @@ def confirm_payment(preorder_id: PreorderRecordId, data: ConfirmPaymentInput, ac
             return confirm_preorder_payment(db, actor, preorder_id, data)
     except SQLAlchemyError:
         logger.exception("Preorder payment failed")
+        raise HTTPException(503, "Database unavailable") from None
+
+
+@router.put("/{preorder_id}/fulfillment")
+def set_fulfillment(preorder_id: PreorderRecordId, data: FulfillmentInput, actor: Reader) -> PreorderDetail:
+    try:
+        with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
+            return set_preorder_fulfillment(db, actor, preorder_id, data)
+    except SQLAlchemyError:
+        logger.exception("Preorder fulfillment choice failed")
+        raise HTTPException(503, "Database unavailable") from None
+
+
+@router.post("/{preorder_id}/fulfill")
+def fulfill(preorder_id: PreorderRecordId, actor: Reader, data: FulfillInput | None = None) -> PreorderDetail:
+    try:
+        with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
+            return fulfill_preorder(db, actor, preorder_id, data.paymentMethod if data else None)
+    except SQLAlchemyError:
+        logger.exception("Preorder fulfillment failed")
         raise HTTPException(503, "Database unavailable") from None
