@@ -1,4 +1,4 @@
-"""PBI 129: FIFO, transaction ownership and concurrent reservation allocation on MySQL."""
+"""FIFO and post-import preorder notifications on isolated MySQL."""
 import os
 import unittest
 from concurrent.futures import ThreadPoolExecutor
@@ -332,7 +332,9 @@ class PreorderFifoMySQLTests(unittest.TestCase):
     def test_stock_import_existing_hook_and_expiry_visible_in_detail(self):
         a,b,c = [self.order(q) for q in (2,3,4)]
         with TestClient(app) as client:
-            response = client.post('/inventory/import',headers=self.owner,json={'branchId':self.branch,'items':[{'variantId':self.variant,'quantity':6}]})
+            with patch.dict("sys.modules", {"app.modules.notifications.service": None}):
+                with self.assertLogs("app.modules.inventory.post_import", level="WARNING"):
+                    response = client.post('/inventory/import',headers=self.owner,json={'branchId':self.branch,'items':[{'variantId':self.variant,'quantity':6}]})
             self.assertEqual(response.status_code,201,response.text)
             detail = client.get(f'/preorders/{a}',headers=self.owner)
         self.assertEqual(detail.status_code,200,detail.text)
@@ -350,7 +352,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
                 BEGIN IF NEW.preorder_id={order} THEN SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT='PBI129 hook failure'; END IF; END
             """)
         try:
-            with self.assertLogs('app.modules.inventory.router',level='ERROR'):
+            with self.assertLogs('app.modules.inventory.post_import',level='ERROR'):
                 with TestClient(app) as client:
                     response = client.post('/inventory/import',headers=self.owner,json={'branchId':self.branch,'items':[{'variantId':self.variant,'quantity':6}]})
             self.assertEqual(response.status_code,201,response.text)
@@ -361,6 +363,90 @@ class PreorderFifoMySQLTests(unittest.TestCase):
         finally:
             with engine.begin() as db:
                 db.exec_driver_sql('DROP TRIGGER pbi129_fail_import')
+
+    def record_notification(self, preorder_id, channel, status):
+        with engine.begin() as db:
+            db.execute(text("""
+                INSERT INTO notifications (preorder_id, channel, recipient, message, status)
+                VALUES (:id, :channel, 'QA', 'PBI130 test notification', :status)
+            """), {"id": preorder_id, "channel": channel, "status": status})
+
+    def test_import_notifies_after_commits_and_uses_persisted_channel_statuses(self):
+        failed, pending, partly_sent, sent, waiting = [self.order(q) for q in (1, 1, 1, 1, 3)]
+        visible_during_send = []
+
+        def notify(preorder_id, event):
+            header, items = self.state(preorder_id)
+            with engine.connect() as db:
+                quantity = db.execute(text("""
+                    SELECT quantity FROM inventory WHERE branch_id=:b AND variant_id=:v
+                """), {"b": self.branch, "v": self.variant}).scalar_one()
+            visible_during_send.append((preorder_id, event, header.status, items[0].allocated_quantity, quantity))
+            if preorder_id in (failed, partly_sent):
+                self.record_notification(preorder_id, "SMS", "FAILED")
+                if preorder_id == partly_sent:
+                    self.record_notification(preorder_id, "EMAIL", "SENT")
+                raise RuntimeError("Test channel unavailable")
+            self.record_notification(preorder_id, "EMAIL", "PENDING" if preorder_id == pending else "SENT")
+
+        with TestClient(app) as client, patch(
+            "app.modules.notifications.service.NotificationService", create=True,
+        ) as service:
+            service.notifyPreorder.side_effect = notify
+            payload = {"branchId": self.branch, "items": [{"variantId": self.variant, "quantity": 5}]}
+            with self.assertLogs("app.modules.inventory.post_import", level="WARNING") as logs:
+                response = client.post("/inventory/import", headers=self.owner, json=payload)
+            self.assertEqual(response.status_code, 201, response.text)
+            self.assertEqual(len(logs.records), 2)
+            expected = {
+                failed: ("READY", {"SMS": "FAILED"}),
+                pending: ("READY", {"EMAIL": "PENDING"}),
+                partly_sent: ("NOTIFIED", {"SMS": "FAILED", "EMAIL": "SENT"}),
+                sent: ("NOTIFIED", {"EMAIL": "SENT"}),
+                waiting: ("WAITING_STOCK", {}),
+            }
+            for preorder_id, (status, notifications) in expected.items():
+                detail = client.get(f"/preorders/{preorder_id}", headers=self.owner)
+                self.assertEqual(detail.status_code, 200, detail.text)
+                body = detail.json()
+                self.assertEqual(body["status"], status)
+                self.assertEqual({row["channel"]: row["status"] for row in body["notifications"]}, notifications)
+                if preorder_id != waiting:
+                    self.assertTrue(body["expiresAt"].endswith("Z"))
+
+            payload["items"][0]["quantity"] = 1
+            response = client.post("/inventory/import", headers=self.owner, json=payload)
+            self.assertEqual(response.status_code, 201, response.text)
+            self.assertEqual(service.notifyPreorder.call_count, 4)
+
+        self.assertEqual(visible_during_send, [
+            (preorder_id, "PREORDER_READY", "READY", 1, 5)
+            for preorder_id in (failed, pending, partly_sent, sent)
+        ])
+
+    def test_notification_cannot_overwrite_closed_orders(self):
+        orders = {self.order(): status for status in ("CANCELLED", "FULFILLED")}
+
+        def notify(preorder_id, event):
+            with engine.begin() as db:
+                db.execute(text("UPDATE preorders SET status=:status WHERE preorder_id=:id"),
+                           {"id": preorder_id, "status": orders[preorder_id]})
+            self.record_notification(preorder_id, "EMAIL", "SENT")
+
+        with TestClient(app) as client, patch(
+            "app.modules.notifications.service.NotificationService", create=True,
+        ) as service:
+            service.notifyPreorder.side_effect = notify
+            response = client.post("/inventory/import", headers=self.owner, json={
+                "branchId": self.branch, "items": [{"variantId": self.variant, "quantity": 2}],
+            })
+            self.assertEqual(response.status_code, 201, response.text)
+            self.assertEqual(service.notifyPreorder.call_count, 2)
+            for preorder_id, status in orders.items():
+                detail = client.get(f"/preorders/{preorder_id}", headers=self.owner)
+                self.assertEqual(detail.status_code, 200, detail.text)
+                self.assertEqual(detail.json()["status"], status)
+                self.assertEqual(detail.json()["notifications"][0]["status"], "SENT")
 
     def test_upgrade_migration_preserves_legacy_ready_order(self):
         with engine.connect() as db:
