@@ -44,11 +44,14 @@ try {
     $schema = (Get-Content -LiteralPath $schemaPath -Raw -Encoding UTF8).Replace('dkat', 'dkat_pbi99_test')
     $schema | & $mysqlExe @mysqlArgs
     if ($LASTEXITCODE -ne 0) { throw 'Test schema import failed' }
+    $testPassword = [guid]::NewGuid().ToString('N')
+    & $mysqlExe @mysqlArgs "--execute=CREATE USER 'pbi99'@'127.0.0.1' IDENTIFIED BY '$testPassword'; GRANT ALL ON dkat_pbi99_test.* TO 'pbi99'@'127.0.0.1'"
+    if ($LASTEXITCODE -ne 0) { throw 'Test user creation failed' }
     $env:DB_HOST = '127.0.0.1'
     $env:DB_PORT = [string]$testPort
     $env:DB_NAME = 'dkat_pbi99_test'
-    $env:DB_USER = 'root'
-    $env:DB_PASSWORD = ''
+    $env:DB_USER = 'pbi99'
+    $env:DB_PASSWORD = $testPassword
     $env:DKAT_ADMIN_TOKEN = [guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')
     $env:DKAT_PAYMENT_TEST_DB = '1'
     Push-Location $backendDir

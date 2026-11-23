@@ -155,3 +155,39 @@ Chạy bộ kiểm thử MySQL riêng bằng PowerShell từ thư mục backend:
 ```
 
 Cần MySQL Server 8.0 và môi trường `.venv` đã cài `requirements-dev.txt`. Nếu MySQL nằm ở chỗ khác, thêm `-MySqlBin 'D:\MySQL\bin'`. Script tạo một MySQL tạm tại máy, nạp schema riêng `dkat_pbi99_test`, chạy các ca thanh toán, phân quyền, giữ chỗ, yêu cầu đồng thời và lỗi SQL ở ba giai đoạn, rồi tắt server. Database trong `.env` không được dùng. Log tạm được giữ tại đường dẫn cuối kết quả.
+
+## Tạo đơn đặt trước PBI 110
+
+1. Database mới chạy `database/01_schema.sql`. Database cũ chạy migration `database/06_public_preorders.sql` sau migration 04. API dùng thêm ba cột `preorders.customer_id`, `customer_address`, `note` và bảng `preorder_request_limits`. Tài khoản backend cần SELECT các bảng liên quan, INSERT/UPDATE trên `customers` và `preorder_request_limits`, INSERT trên `preorders` và `preorder_items`; quyền khóa inventory dùng lại từ các API kho.
+2. Khởi động backend, mở Swagger và gọi `POST /preorders` trong nhóm `preorders-public`. API công khai, không cần token:
+
+   ```json
+   {
+     "branchId": 1,
+     "customer": {
+       "fullName": "Nguyễn Văn An",
+       "phone": "0901234567",
+       "email": "an@example.com",
+       "address": "123 Nguyễn Trãi, TP.HCM"
+     },
+     "items": [{"variantId": 1, "quantity": 2}],
+     "note": "Gọi trước khi giao"
+   }
+   ```
+
+   Thay ID bằng dữ liệu thực. Từng dòng phải có tồn khả dụng nhỏ hơn lượng yêu cầu; chỉ một dòng còn đủ hàng cũng khiến cả đơn bị từ chối. `email` và `note` có thể bỏ qua. Điện thoại nhận số Việt Nam 10–11 chữ số bắt đầu bằng 0, hoặc dạng +84/84 tương ứng, có thể có khoảng trắng, dấu chấm, gạch ngang hoặc ngoặc; được chuẩn hóa về dạng bắt đầu bằng 0. Tối đa 100 biến thể khác nhau, số lượng nguyên dương.
+3. Thành công trả 201 với `preorderId`, `preorderCode`, `customerId`, tổng tiền, các dòng snapshot và trạng thái WAITING_STOCK / UNPAID. Kho, giữ chỗ và thanh toán giữ nguyên. Hàm dùng chung `app/modules/customers/service.py::upsert_customer_by_phone` tìm/tạo hồ sơ bằng `(store_id, phone)` trong cùng transaction; không ghi đè hồ sơ cũ từ dữ liệu công khai. Mỗi đơn giữ riêng tên, điện thoại, email và địa chỉ khách lúc đặt. Mã đơn dùng ngày Việt Nam và UUID để tránh trùng giữa các worker.
+
+Lỗi trả trực tiếp `{code, message, details:[{field, reason}]}`, không bọc `detail`. Thiếu/sai dữ liệu trả 422 INVALID_PREORDER và không tạo hồ sơ khách hay đơn. Còn đủ hàng trả 409 VARIANT_IN_STOCK; sản phẩm ngừng hoạt động trả 409 VARIANT_INACTIVE; chi nhánh hoặc biến thể không hợp lệ trả 404. Lỗi SQL trả 503 và rollback cả hồ sơ khách mới, đơn và dòng hàng.
+
+Giới hạn **5 yêu cầu/10 phút/IP theo cửa sổ trượt**, lưu trong database để dùng chung nhiều worker. Lần tiếp theo trả 429 RATE_LIMIT_EXCEEDED kèm Retry-After. Yêu cầu bị lỗi JSON, dữ liệu hoặc nghiệp vụ vẫn được tính. Địa chỉ IP lấy từ ASGI client; không tự tin header X-Forwarded-For. Khi đặt sau reverse proxy, cấu hình Uvicorn chỉ tin IP proxy thực tế (`--forwarded-allow-ips`); không đặt `*` cho máy chủ truy cập trực tiếp. Có thể định kỳ xóa các dòng limiter có `updated_at` cũ hơn một ngày bằng tài khoản vận hành.
+
+Thử qua Postman: import `samples/pbi110-public-preorders.postman_collection.json`, điền `accessToken` để đọc kho, `branchId`, `variantId` có available < 2 và `inStockVariantId` có available >= 1. Chạy thư mục Preorder từ IP chưa gửi yêu cầu trong 10 phút. Collection tạo hai đơn thật và kiểm tra lần thứ sáu bị giới hạn; token không được gửi vào API tạo đặt trước.
+
+Chạy test tự động trên MySQL riêng từ thư mục backend:
+
+```powershell
+.\scripts\test_pbi110_mysql.ps1
+```
+
+Script khởi tạo database tạm, kiểm tra migration chạy lại, kiểm thử tạo đơn, snapshot, validation, phạm vi cửa hàng, khách trùng số điện thoại, nhiều request đồng thời, giới hạn IP và lỗi SQL giữa chừng. Không kết nối database trong `.env`.

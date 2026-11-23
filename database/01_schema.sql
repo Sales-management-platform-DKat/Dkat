@@ -206,9 +206,12 @@ CREATE TABLE preorders (
     preorder_id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
     preorder_code VARCHAR(50) NOT NULL UNIQUE,
     branch_id BIGINT NOT NULL,
+    customer_id BIGINT,
     customer_name VARCHAR(150) NOT NULL,
     customer_phone VARCHAR(20),
     customer_email VARCHAR(255),
+    customer_address VARCHAR(255),
+    note VARCHAR(255),
     total_amount DECIMAL(12,2) NOT NULL,
     payment_status ENUM('UNPAID', 'PAID', 'REFUNDED') NOT NULL,
     status ENUM('WAITING_STOCK', 'READY', 'NOTIFIED', 'FULFILLED', 'CANCELLED', 'EXPIRED') NOT NULL,
@@ -218,7 +221,15 @@ CREATE TABLE preorders (
     KEY ix_preorders_branch_fifo (branch_id, status, created_at, preorder_id),
     CHECK (total_amount >= 0),
     CHECK (COALESCE(CHAR_LENGTH(TRIM(customer_phone)), 0) > 0 OR COALESCE(CHAR_LENGTH(TRIM(customer_email)), 0) > 0),
-    CONSTRAINT fk_preorders_branch_id FOREIGN KEY (branch_id) REFERENCES branches (branch_id) ON DELETE RESTRICT ON UPDATE RESTRICT
+    CONSTRAINT fk_preorders_branch_id FOREIGN KEY (branch_id) REFERENCES branches (branch_id) ON DELETE RESTRICT ON UPDATE RESTRICT,
+    CONSTRAINT fk_preorders_customer_id FOREIGN KEY (customer_id) REFERENCES customers (customer_id) ON DELETE RESTRICT
+) ENGINE=InnoDB;
+
+CREATE TABLE preorder_request_limits (
+    ip_key CHAR(64) NOT NULL PRIMARY KEY,
+    request_times JSON NOT NULL,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY ix_preorder_limits_updated (updated_at)
 ) ENGINE=InnoDB;
 
 CREATE TABLE preorder_items (
