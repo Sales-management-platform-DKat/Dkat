@@ -41,9 +41,15 @@ try {
     }
     if (-not $ready) { throw "Test MySQL did not become ready; see $testRoot" }
     $databaseDir = Join-Path (Split-Path $backendDir -Parent) 'database'
-    foreach ($scriptName in @('01_schema.sql', '07_preorder_fifo_expiry.sql', '07_preorder_fifo_expiry.sql')) {
+    foreach ($scriptName in @(
+        '01_schema.sql', '07_preorder_fifo_expiry.sql', '07_preorder_fifo_expiry.sql',
+        '08_preorder_cancellation.sql', '08_preorder_cancellation.sql'
+    )) {
         $schema = (Get-Content -LiteralPath (Join-Path $databaseDir $scriptName) -Raw -Encoding UTF8).Replace('dkat', 'dkat_pbi129_test')
-        if ($scriptName -eq '01_schema.sql') { $schema = [regex]::Replace($schema, '(?m)^    expires_at DATETIME,\r?\n', '') }
+        if ($scriptName -eq '01_schema.sql') {
+            $schema = [regex]::Replace($schema, '(?m)^    (?:expires_at DATETIME,|KEY ix_preorders_expiry \([^)]+\),)\r?\n', '')
+            $schema = [regex]::Replace($schema, '(?m)(^    fulfilled_at DATETIME,\r?\n)    cancel_reason VARCHAR\(255\),\r?\n    cancelled_at DATETIME,\r?\n', '$1')
+        }
         $schema | & $mysqlExe @mysqlArgs
         if ($LASTEXITCODE -ne 0) { throw "Test schema import failed: $scriptName" }
         if ($scriptName -eq '01_schema.sql') {

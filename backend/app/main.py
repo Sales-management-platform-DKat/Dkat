@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -17,6 +18,7 @@ from app.modules.preorders.public_router import router as public_preorders_route
 from app.modules.preorders.router import router as preorders_router
 from app.modules.sales.router import router as sales_router
 from app.modules.users.router import router as users_router
+from app.workers.preorder_expiry import run_preorder_expiry
 
 
 @asynccontextmanager

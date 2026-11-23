@@ -104,7 +104,9 @@ class PreorderFilters(BaseModel):
 
 
 class PreorderTimestampModel(BaseModel):
-    @field_validator("createdAt", "readyAt", "expiresAt", "fulfilledAt", "completedAt", "sentAt", check_fields=False)
+    @field_validator(
+        "createdAt", "readyAt", "expiresAt", "fulfilledAt", "cancelledAt", "completedAt", "sentAt", check_fields=False,
+    )
     @classmethod
     def utc_timestamp(cls, value: datetime | None) -> datetime | None:
         if value is None:
@@ -134,6 +136,8 @@ class PreorderSummary(PreorderTimestampModel):
     readyAt: datetime | None
     expiresAt: datetime | None = None
     fulfilledAt: datetime | None
+    cancelReason: str | None = None
+    cancelledAt: datetime | None = None
     items: list[PreorderLine] = Field(default_factory=list)
 
 
@@ -151,6 +155,12 @@ class FulfillInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     paymentMethod: PaymentMethod | None = None
+
+
+class CancelPreorderInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
 
 
 class PreorderFulfillment(PreorderTimestampModel):

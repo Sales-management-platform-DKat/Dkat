@@ -8,7 +8,7 @@ from app.core.permissions import Actor
 from app.modules.inventory.service import lock_inventory_rows, record_movement, reserved_quantities
 from app.modules.preorders.schemas import FulfillmentInput, PreorderDetail
 from app.modules.preorders.services.payment import ensure_preorder_unpaid, record_preorder_payment
-from app.modules.preorders.services.queries import get_preorder, get_preorder_branch
+from app.modules.preorders.services.queries import get_preorder, get_preorder_branch, get_preorder_variant_ids
 from app.modules.sales.schemas import PaymentMethod
 
 READY_STATUSES = {"READY", "NOTIFIED"}
@@ -47,9 +47,7 @@ def fulfill_preorder(
     branch_id = get_preorder_branch(db, actor, preorder_id)
     # Item identities are immutable after creation. Acquire inventory before the parent,
     # matching FIFO and the other reservation writers.
-    variant_ids = list(db.execute(text("""
-        SELECT DISTINCT variant_id FROM preorder_items WHERE preorder_id=:id
-    """), {"id": preorder_id}).scalars())
+    variant_ids = get_preorder_variant_ids(db, preorder_id)
     stock = lock_inventory_rows(db, branch_id, variant_ids, create_missing=False)
     order = get_preorder(db, actor, preorder_id, lock=True)
     now = db.execute(text("SELECT UTC_TIMESTAMP()")).scalar_one()

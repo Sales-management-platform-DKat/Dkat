@@ -250,3 +250,12 @@ Quỹ = inventory.quantity trừ tổng allocated_quantity của WAITING_STOCK/R
 Thứ tự khóa dùng chung: inventory → parent preorder → item; nhiều inventory phải khóa trước theo variant_id tăng dần, các parent theo FIFO. Hàm trả AllocationResult với lượng giữ sẵn, lượng cấp thêm, quỹ còn, thay đổi từng dòng và các ID vừa READY. Người gọi phải rollback transaction khi có lỗi; không gửi thông báo trước commit. Các chức năng hủy/nhận hàng sau này cần dùng cùng quy tắc khóa để thay đổi phân bổ.
 
 Hook nhập kho hiện có gọi `allocate_imported_preorders(branch_id, variant_ids)`: khóa trước toàn bộ inventory theo thứ tự, phân bổ cả lô trong một transaction riêng sau commit nhập kho, rồi trả danh sách ID vừa READY. Nếu hook lỗi, nhập kho vẫn đã commit và lỗi được ghi log; phân bổ rollback toàn bộ. PBI 130 xử lý gửi thông báo và các điểm tích hợp bổ sung; job hết hạn thuộc PBI 140.
+
+## Hủy và hết hạn đơn đặt trước PBI 140
+
+- Database hiện có chạy `database/08_preorder_cancellation.sql` sau migration 07 trước khi cập nhật backend. Database mới dùng `database/01_schema.sql`.
+- `POST /preorders/{id}/cancel` nhận `{"reason":"Khách không nhận hàng"}` và trả chi tiết đơn `CANCELLED` kèm `cancelReason` và `cancelledAt`. Với đơn `PAID`, thực hiện hoàn tiền bên ngoài trước khi gọi API để ghi nhận `REFUNDED`. Đơn đã hoàn tất hoặc đã hủy trả `409 PREORDER_NOT_CANCELLABLE`.
+- Backend quét mỗi giờ để chuyển đơn `READY`/`NOTIFIED` đã quá `expires_at` sang `EXPIRED`, giữ nguyên trạng thái thanh toán. Có thể chạy một lượt từ `backend` bằng `python -m app.workers.preorder_expiry`.
+- Hủy và hết hạn giải phóng hàng giữ chỗ rồi phân bổ lại FIFO trong cùng transaction. Tồn vật lý giữ nguyên. Đơn vừa `READY` đi qua luồng thông báo sau commit.
+
+Thử với `samples/pbi140-preorder-cancel-expiry.postman_collection.json` trên database kiểm thử. Tạo hai đơn cùng SKU đang hết hàng, rồi nhập vừa đủ cho đơn đầu. Chạy thư mục hủy theo hướng dẫn trong collection. Với kịch bản hết hạn, chuẩn bị cặp khác, đặt `expires_at` của đơn thử đầu về quá khứ và chạy một lượt job trước khi chạy thư mục kiểm tra hết hạn.
