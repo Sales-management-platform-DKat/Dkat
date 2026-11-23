@@ -65,6 +65,11 @@ class Settings(BaseSettings):
     # email. 0 = trust the acceptance (no fallback on later carrier refusal).
     NOTIFY_SMS_CONFIRM_SECONDS: float = 30.0
     NOTIFY_SMS_POLL_SECONDS: float = 5.0
+    # Automatic retry of FAILED notifications (FR-09.5, NFR-10)
+    NOTIFY_RETRY_ENABLED: bool = True  # background job started with the app
+    NOTIFY_RETRY_INTERVAL_SECONDS: float = 300.0  # every 5 minutes
+    NOTIFY_MAX_RETRIES: int = 3  # automatic re-sends per row; after that the row stays FAILED
+    NOTIFY_RETRY_BATCH: int = 50  # rows per run
 
     # ---- Audit (NFR-08) ----
     CUSTOMER_ACCESS_LOG_FILE: str = "logs/customer_access.log"  # who viewed which customer profile

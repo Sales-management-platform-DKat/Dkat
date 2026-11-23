@@ -1,7 +1,7 @@
 """Table `notifications` (see DKat_CSDL): one row per send attempt (SMS or EMAIL)."""
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, Enum, ForeignKey, String, Text, func
+from sqlalchemy import BigInteger, DateTime, Enum, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -24,3 +24,7 @@ class Notification(Base):
     error_message: Mapped[str | None] = mapped_column(Text)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime)  # UTC, set when the provider accepted the message
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+    # database/09_notification_retry.sql
+    retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # re-sends after the first attempt
+    event_type: Mapped[str | None] = mapped_column(String(40))
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime)  # UTC

@@ -107,3 +107,38 @@ Kết quả chạy thật ngày 24/11/2026 với đơn mẫu (`PREORDER_READY`):
 | 36 | EMAIL | SENT | Đã gửi thật, có `Message-ID` |
 
 Kết quả cuối: `status = SENT`, `finalChannel = EMAIL`.
+
+## Thử lại thông báo lỗi (FR-09.5, NFR-10)
+
+- **Bên cung cấp:** Tuấn, `backend/app/modules/notifications/retry.py` và `router.py`
+- **Cần chạy migration:** `database/09_notification_retry.sql` (thêm các cột `retry_count`, `event_type`, `last_attempt_at` và index `ix_notifications_retry`)
+
+### Job tự động
+
+Job khởi động cùng app và chạy mỗi `NOTIFY_RETRY_INTERVAL_SECONDS` (mặc định 300 giây = 5 phút). Muốn chạy ngay một lượt: `python -m scripts.retry_notifications`.
+
+**Job chọn các dòng thỏa cả 3 điều kiện:**
+- `status = 'FAILED'` và `retry_count < NOTIFY_MAX_RETRIES` (mặc định 3);
+- **lỗi không thuộc loại cố định:** `INVALID_INPUT`, `INVALID_PHONE`, `TEMPLATE_MISMATCH`, `BRANDNAME_INVALID`, `CARRIER_NOT_REGISTERED`, `CARRIER_REJECTED`, `BLOCKED_KEYWORD`, `PHONE_BLOCKED`, `UNSUPPORTED_TYPE`, `RECIPIENT_REFUSED`. Gửi lại cùng nội dung cho cùng người nhận thì các lỗi này vẫn lặp lại;
+- **sau dòng đó, đơn chưa có thông báo nào `SENT`.** Ví dụ SMS lỗi nhưng email chuyển sang đã tới khách, thì không gửi lại SMS, để khách không nhận hai lần.
+
+**Mỗi lần gửi lại:**
+- Gửi lại **chính dòng đó**: cùng kênh, cùng người nhận, cùng nội dung đã lưu. Riêng SMS dùng `RequestId` mới (`notification-<id>-r<lần>`).
+- `retry_count` tăng thêm 1, `last_attempt_at` được cập nhật. Kết quả ghi đè `status`, `provider_message_id`, `error_message`, `sent_at`.
+- Hết 3 lần vẫn lỗi thì dòng giữ `FAILED`, và `error_message = "RETRY_EXHAUSTED: đã gửi lại 3 lần vẫn lỗi, dừng tự động. Lỗi cuối: ..."`.
+
+**Không gửi trùng:** trước khi gửi, dòng được "giành" bằng một lệnh UPDATE nguyên tử `FAILED → PENDING`. Job và nhân viên bấm cùng lúc, hoặc server chạy nhiều worker, thì vẫn chỉ một bên gửi.
+
+### API
+
+| Endpoint | Quyền | Kết quả |
+|---|---|---|
+| `GET /api/v1/preorders/{id}/notifications` | Mọi nhân viên, trong chi nhánh của mình (khác chi nhánh → 403) | `{preorderId, preorderCode, maxAutoRetries, items[{id, preorderId, eventType, channel, recipient (đã che), message, status, retryCount, canResend, providerMessageId, errorMessage, sentAt, lastAttemptAt, createdAt}]}`, dòng cũ nhất trước |
+| `POST /api/v1/notifications/{id}/resend` | Mọi nhân viên, trong chi nhánh của mình | Gửi lại ngay, kể cả khi đã hết lượt tự động. 200 `{result: "SENT" \| "FAILED", notification}`. Thông báo đang `SENT` hoặc đang được gửi (`PENDING`) → 409 `NOTIFICATION_NOT_FAILED`. Không tồn tại → 404. |
+
+### Kiểm thử thật ngày 24/11/2026 (Gmail)
+
+| Kịch bản | Diễn biến |
+|---|---|
+| Sai khóa | Dòng #103 `FAILED` (`SMTP_AUTH_FAILED` 535) → sửa mật khẩu → `POST /notifications/103/resend` → 200, `SENT`, `retry_count = 1` |
+| Mất mạng | Dòng #104 `FAILED` (`CONNECTION_FAILED`) → khôi phục → job chạy một lượt → `SENT`, `retry_count = 1` |

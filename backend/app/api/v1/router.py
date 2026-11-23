@@ -13,6 +13,7 @@ from app.modules.catalog.router import router as catalog_router
 from app.modules.customers.router import router as customers_router
 from app.modules.health.router import router as health_router
 from app.modules.inventory.router import router as inventory_router
+from app.modules.notifications.router import router as notifications_router
 from app.modules.products.router import router as products_router
 from app.modules.reports.router import router as reports_router
 from app.modules.users.router import router as users_router
@@ -27,4 +28,5 @@ api_router.include_router(customers_router)
 api_router.include_router(products_router)
 api_router.include_router(inventory_router)
 api_router.include_router(reports_router)
+api_router.include_router(notifications_router)
 api_router.include_router(catalog_router)  # /public: no login, rate limited

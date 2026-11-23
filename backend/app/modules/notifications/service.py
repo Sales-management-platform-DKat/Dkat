@@ -58,33 +58,55 @@ async def _confirm_sms(sms_id: str) -> str | None:
     return None
 
 
-async def _try_sms(preorder_id: int, phone: str, text: str) -> tuple[int, bool, str | None]:
-    sms_text, _ = prepare_content(text, settings.SMS_UNICODE)  # store exactly what is sent
-    notification_id = await repository.insert_pending(preorder_id, "SMS", phone, sms_text or text)
+async def _deliver_sms(notification_id: int, phone: str, text: str, request_id: str) -> tuple[bool, str | None]:
+    """Send an SMS for an existing PENDING row and record the result on it."""
     try:
-        result = await send_sms(phone, text, request_id=f"notification-{notification_id}")
+        result = await send_sms(phone, text, request_id=request_id)
         error = result.error
         if result.success and result.provider_message_id and not settings.ESMS_SANDBOX:
             error = await _confirm_sms(result.provider_message_id)
         ok = result.success and error is None
         await repository.mark(notification_id, sent=ok, provider_message_id=result.provider_message_id, error=error)
-        return notification_id, ok, error
+        return ok, error
     except Exception as exc:  # noqa: BLE001 - keep the row consistent whatever happens
         error = f"UNKNOWN_ERROR: {exc.__class__.__name__}"
         await repository.mark(notification_id, sent=False, provider_message_id=None, error=error)
-        return notification_id, False, error
+        return False, error
 
 
-async def _try_email(preorder_id: int, email: str, subject: str, body: str) -> tuple[int, bool, str | None]:
-    notification_id = await repository.insert_pending(preorder_id, "EMAIL", email, f"{subject}\n\n{body}")
+async def _deliver_email(notification_id: int, email: str, subject: str, body: str) -> tuple[bool, str | None]:
+    """Send an email for an existing PENDING row and record the result on it."""
     try:
         result = await send_email(email, subject, body)
         await repository.mark(notification_id, sent=result.success, provider_message_id=result.provider_message_id, error=result.error)
-        return notification_id, result.success, result.error
+        return result.success, result.error
     except Exception as exc:  # noqa: BLE001
         error = f"UNKNOWN_ERROR: {exc.__class__.__name__}"
         await repository.mark(notification_id, sent=False, provider_message_id=None, error=error)
-        return notification_id, False, error
+        return False, error
+
+
+def _email_message(subject: str, body: str) -> str:
+    """How an email is stored in notifications.message (split back by _split_email on resend)."""
+    return f"{subject}\n\n{body}"
+
+
+def _split_email(message: str) -> tuple[str, str]:
+    subject, _, body = message.partition("\n\n")
+    return subject, body
+
+
+async def _try_sms(preorder_id: int, phone: str, text: str, event_type: str) -> tuple[int, bool, str | None]:
+    sms_text, _ = prepare_content(text, settings.SMS_UNICODE)  # store exactly what is sent
+    notification_id = await repository.insert_pending(preorder_id, "SMS", phone, sms_text or text, event_type)
+    ok, error = await _deliver_sms(notification_id, phone, text, f"notification-{notification_id}")
+    return notification_id, ok, error
+
+
+async def _try_email(preorder_id: int, email: str, subject: str, body: str, event_type: str) -> tuple[int, bool, str | None]:
+    notification_id = await repository.insert_pending(preorder_id, "EMAIL", email, _email_message(subject, body), event_type)
+    ok, error = await _deliver_email(notification_id, email, subject, body)
+    return notification_id, ok, error
 
 
 async def notify_preorder(preorder_id: int, event_type: str) -> NotificationOutcome:
@@ -110,7 +132,7 @@ async def notify_preorder(preorder_id: int, event_type: str) -> NotificationOutc
         message = render(event_type, preorder)
         errors: list[str] = []
         if phone:
-            nid, ok, err = await _try_sms(preorder_id, phone, message.sms)
+            nid, ok, err = await _try_sms(preorder_id, phone, message.sms, event_type)
             outcome.notification_ids.append(nid)
             outcome.final_channel = "SMS"
             if ok:
@@ -118,7 +140,7 @@ async def notify_preorder(preorder_id: int, event_type: str) -> NotificationOutc
                 return _log(outcome)
             errors.append(f"SMS {err}")
         if email:
-            nid, ok, err = await _try_email(preorder_id, email, message.email_subject, message.email_body)
+            nid, ok, err = await _try_email(preorder_id, email, message.email_subject, message.email_body, event_type)
             outcome.notification_ids.append(nid)
             outcome.final_channel = "EMAIL"
             if ok:

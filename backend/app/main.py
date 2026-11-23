@@ -1,4 +1,6 @@
 """Entry point. Run: uvicorn app.main:app --reload"""
+import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -9,6 +11,7 @@ from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
 from app.db.session import close_engine, ping_database
 from app.middlewares.request_logger import RequestLoggerMiddleware
+from app.modules.notifications.retry import run_retry_loop
 from app.utils.logger import get_logger, setup_logging
 
 setup_logging()
@@ -22,7 +25,14 @@ async def lifespan(app: FastAPI):
     else:
         # The server stays up; /health reports database: "down"
         logger.warning("MySQL not reachable. Check DB_* in .env")
+    # Automatic retry of FAILED notifications every NOTIFY_RETRY_INTERVAL_SECONDS (FR-09.5).
+    # With several workers each runs the job; rows are claimed atomically, so nothing is sent twice.
+    retry_task = asyncio.create_task(run_retry_loop()) if settings.NOTIFY_RETRY_ENABLED else None
     yield
+    if retry_task:
+        retry_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await retry_task
     await close_engine()
 
 
