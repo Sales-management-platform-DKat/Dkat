@@ -60,6 +60,12 @@ class Settings(BaseSettings):
     SMS_TIMEOUT_SECONDS: float = 10.0
     SMS_TEST_TO: str = ""  # default recipient of scripts/send_test_sms.py (the team phone)
 
+    # ---- Pre-order notifications (FR-09.3, FR-09.4) ----
+    # After eSMS accepts an SMS, wait up to this long for the carrier outcome: refused -> fall back to
+    # email. 0 = trust the acceptance (no fallback on later carrier refusal).
+    NOTIFY_SMS_CONFIRM_SECONDS: float = 30.0
+    NOTIFY_SMS_POLL_SECONDS: float = 5.0
+
     # ---- Audit (NFR-08) ----
     CUSTOMER_ACCESS_LOG_FILE: str = "logs/customer_access.log"  # who viewed which customer profile
 

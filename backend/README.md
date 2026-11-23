@@ -222,3 +222,12 @@ Cùng quy tắc doanh thu và phân quyền với `/reports/revenue`. `from`/`to
 - **Tài khoản dùng thử** chỉ gửi được mẫu `"<CODE> la ma xac minh dang ky Baotrixemay cua ban"` với brandname `Baotrixemay`; nội dung khác → `TEMPLATE_MISMATCH`. Cùng SĐT + cùng nội dung chỉ 1 tin / 5 phút. Gửi nội dung thông báo đặt trước thật cần đăng ký brandname + mẫu tin với eSMS.
 - `get_send_status(sms_id)` → `DELIVERED` / `FAILED` / `PENDING` / `UNKNOWN` (eSMS GetSendStatus, 7 ngày gần nhất).
 - Thử gửi thật: điền `ESMS_*` + `SMS_TEST_TO` rồi `python -m scripts.send_test_sms` (script chờ tối đa 60 giây để báo tin đã tới máy hay bị nhà mạng từ chối; exit 0 chỉ khi DELIVERED) (`--balance` xem số dư, `--sandbox` chỉ kiểm tra, `--wrong-key` thử sai khoá → `AUTH_FAILED`).
+
+## Thông báo đặt trước (FR-09.1 - FR-09.4)
+
+`NotificationService.notifyPreorder(preorder_id, event_type)` trong `app/modules/notifications/service.py`, hợp đồng chi tiết: [docs/api-contract.md](../docs/api-contract.md).
+
+- `event_type`: `PREORDER_CREATED`, `PREORDER_READY`, `PREORDER_CANCELLED`, `PREORDER_EXPIRED`.
+- Có SĐT → SMS trước; SMS lỗi (eSMS từ chối hoặc nhà mạng từ chối, kiểm tra trong `NOTIFY_SMS_CONFIRM_SECONDS`) mà có email → email. Mỗi lần thử 1 dòng `notifications` (`PENDING` → `SENT`/`FAILED`, `provider_message_id`, `error_message`, `sent_at` UTC).
+- Không ném lỗi, không động vào transaction của bên gọi; gọi sau khi commit. Đồng bộ: `notifyPreorder` (chờ xong); async: `notifyPreorderAsync`; chạy nền: `schedulePreorder`.
+- Thử thật: `python -m scripts.notify_preorder --sample` (đơn mẫu `PD-MAU-THONGBAO` với `SMS_TEST_TO` / `EMAIL_TEST_TO`).
