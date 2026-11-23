@@ -8,12 +8,12 @@ from sqlalchemy.orm import Session
 from app.core import config
 from app.core.permissions import Actor, get_accessible_branch_ids, require_auth, require_branch_access
 from app.db.session import engine, get_db
+from app.modules.inventory.post_import import process_committed_stock_import
 from app.modules.inventory.schemas import (
     InventoryId, InventoryItem, InventoryMovement, MovementFilters,
     StockChangeResult, StockExportInput, StockImportInput, StocktakeInput,
 )
 from app.modules.inventory.service import change_stock, list_inventory, list_inventory_movements
-from app.modules.preorders.services.allocation import allocate_imported_preorders
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/inventory", tags=["inventory"])
@@ -43,10 +43,7 @@ def record_stock_change(actor: Actor, data: StockImportInput | StocktakeInput) -
 @router.post("/import", status_code=201)
 def import_inventory(data: StockImportInput, actor: StockWriter) -> StockChangeResult:
     result = record_stock_change(actor, data)
-    try:
-        allocate_imported_preorders(data.branchId, [item.variantId for item in data.items])
-    except Exception:
-        logger.exception("Preorder allocation failed after import committed")
+    process_committed_stock_import(data.branchId, [item.variantId for item in data.items])
     return result
 
 

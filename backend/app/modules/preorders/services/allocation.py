@@ -107,7 +107,7 @@ def allocate_preorders(
 
 
 def allocate_imported_preorders(branch_id: int, variant_ids: list[int]) -> list[int]:
-    """Preserve the existing import hook; PBI 130 will dispatch READY notifications."""
+    """Allocate committed stock and return newly READY orders after allocation commits."""
     variants = sorted(set(variant_ids))
     if not variants:
         return []
