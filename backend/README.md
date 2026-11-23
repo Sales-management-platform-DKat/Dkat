@@ -156,3 +156,18 @@ ids = get_accessible_branch_ids(user)   # lọc danh sách theo chi nhánh user 
 - `categoryId` gồm cả danh mục con. `attr=Tên:Giá trị` lặp lại được (tối đa 5), cùng một biến thể phải khớp tất cả. `storeId` tuỳ chọn: bỏ trống = mọi cửa hàng.
 - Giới hạn `PUBLIC_RATE_LIMIT_PER_MINUTE` (mặc định 60) request/phút/IP, dùng chung cho mọi route `/public` → 429 `RATE_LIMIT_EXCEEDED` + `Retry-After`. Bộ đếm nằm trong bộ nhớ từng worker; không tin `X-Forwarded-For`.
 - Dữ liệu mẫu: `python -m scripts.seed_catalog` (sau `seed_auth`). Kiểm tra (gồm EXPLAIN index): `python -m scripts.check_public_catalog`. Postman: `postman/DKat_Public_Catalog.postman_collection.json`.
+
+## Khách hàng
+
+Cần bảng `customers`: chạy `database/04_sales_order_customers.sql` (cùng file với nhánh preorders/sales; sửa dòng `USE dkat;` nếu DB có tên khác). Khách vãng lai không cần hồ sơ.
+
+| Endpoint | Quyền | Ghi chú |
+|---|---|---|
+| `GET /api/v1/customers?keyword&page&size` | mọi vai trò | `keyword` khớp tên hoặc một phần SĐT (vd. 4 số cuối, có thể gõ dấu cách); `size` ≤ 100 |
+| `GET /api/v1/customers/{id}` | mọi vai trò | |
+| `POST /api/v1/customers` `{fullName, phone?, email?, address?, note?}` | mọi vai trò (POS) | SĐT 10 số bắt đầu bằng 0 (chấp nhận `+84`, dấu cách, dấu chấm và lưu dạng `0xxxxxxxxx`); trùng SĐT → 409 `DUPLICATE_CUSTOMER_PHONE`, `details.customerId` là id khách cũ |
+| `PUT /api/v1/customers/{id}` | OWNER, MANAGER | thay toàn bộ thông tin; đổi sang SĐT đã có → 409 |
+
+- Khách thuộc cửa hàng (không theo chi nhánh); SĐT duy nhất trong cửa hàng (`uq_customers_store_phone`). Nhiều khách không có SĐT vẫn được.
+- Cho module khác (đặt trước, bán hàng): `await customers.service.upsert_customer_by_phone(db, store_id=..., full_name=..., phone=..., email=..., address=...)` trả `customer_id`; chạy trong transaction của bên gọi, không ghi đè hồ sơ đã có.
+- Postman: `postman/DKat_Customers.postman_collection.json` (32 request).
