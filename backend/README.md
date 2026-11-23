@@ -1,4 +1,4 @@
-﻿# Backend DKat
+# Backend DKat
 
 1. Khởi tạo database từ 01_schema.sql nếu chưa có schema.
 2. Trong Workbench, chạy samples/02_auth_schema.sql bằng tài khoản quản trị. Script thêm auth_sessions, store_subscriptions và cấp quyền cho dkat_app. Script lấy kiểu ID từ schema hiện có để hỗ trợ BIGINT hoặc BIGINT UNSIGNED.
@@ -82,32 +82,6 @@ Mỗi request nhận từ 1 đến 100 biến thể khác nhau, số lượng t�
 
 Để chạy nhanh cả hai luồng trên database kiểm thử, import `samples/pbi74-75-stock.postman_collection.json` và điền `accessToken`, `branchId` và `variantId`. Collection thay đổi số lượng tồn và tạo biến động.
 
-## Chi nhánh (PBI branches)
-
-- Không có DELETE (405): chi nhánh chỉ chuyển INACTIVE. MANAGER/EMPLOYEE mất quyền vào chi nhánh INACTIVE.
-- `branchCode` được chuyển thành chữ hoa; so trùng không phân biệt hoa/thường.
-- Mở lại chi nhánh (ACTIVE) sẽ bổ sung dòng tồn kho còn thiếu cho biến thể tạo trong lúc đóng.
-- Postman: `postman/DKat_Branches.postman_collection.json` (40 request, chạy theo thứ tự; cần `python -m scripts.seed_auth`).
-
-## Tài khoản nội bộ (FR-01.3)
-
-| Endpoint | Ghi chú |
-|---|---|
-| `GET /api/v1/users?branchId&role&status&keyword&page&pageSize` | `{items, page, pageSize, total, totalPages}`; `pageSize` ≤ 100 (mặc định 20); `keyword` tìm trong username, họ tên, email, SĐT; `branchId` ngoài phạm vi → 403 |
-| `GET /api/v1/users/{id}` | chi tiết kèm `branches: [{id, branchCode, name, status}]` |
-| `PUT /api/v1/users/{id}/branches` `{branchIds}` | thay toàn bộ phân công (FR-02.4), chỉ ghi phần chênh lệch, không trùng cặp; OWNER → 409 `OWNER_HAS_ALL_BRANCHES` |
-| `POST /api/v1/users` `{username, password, fullName, email?, phone?, role, branchIds}` | 201; `role` chỉ `MANAGER`/`EMPLOYEE`; mật khẩu >= 8 ký tự (bcrypt); trùng username → 409 `DUPLICATE_USERNAME` |
-| `PUT /api/v1/users/{id}` `{fullName, email?, phone?, role?}` | thay họ tên/email/SĐT; `role` chỉ OWNER được đổi |
-| `PATCH /api/v1/users/{id}/status` `{status}` | `ACTIVE`/`LOCKED`; tự khóa mình → 409 `CANNOT_LOCK_SELF`; khóa OWNER đang hoạt động duy nhất → 409 `LAST_ACTIVE_OWNER` |
-| `POST /api/v1/users/{id}/reset-password` `{newPassword}` | không dùng cho chính mình → 409 `CANNOT_RESET_OWN_PASSWORD` (dùng `/auth/change-password`) |
-
-- Chỉ OWNER và MANAGER gọi được (EMPLOYEE → 403). OWNER quản lý mọi tài khoản của cửa hàng.
-- MANAGER chỉ quản lý tài khoản EMPLOYEE có **toàn bộ** chi nhánh ACTIVE nằm trong chi nhánh mình quản lý. Chỉ được tạo EMPLOYEE và gán vào chi nhánh của mình. Ngoài phạm vi → 403, kể cả id không tồn tại.
-- Response không bao giờ có `password_hash`. Khóa tài khoản có hiệu lực ngay: login → 403 `ACCOUNT_LOCKED`, token cũ cũng bị chặn.
-- Phân công: MANAGER chỉ dùng chi nhánh mình quản lý; phân công vào chi nhánh INACTIVE ngoài phạm vi của MANAGER được giữ nguyên. Thay đổi có hiệu lực ngay ở request kế tiếp (token cũ mất quyền chi nhánh bị gỡ) và khi đăng nhập lại.
-- Postman: `postman/DKat_Users.postman_collection.json` (55 request), `postman/DKat_UserBranches.postman_collection.json` (42 request). Mỗi lần chạy tạo tài khoản test và khóa lại ở cuối.
-
-
 ## Kiểm kê tồn kho PBI 82
 
 Gọi `POST /inventory/stocktake` với token của OWNER hoặc MANAGER được phân công chi nhánh. EMPLOYEE cần được phân công và có `ALLOW_EMPLOYEE_STOCK=true`. Backend dùng schema và quyền MySQL đã thiết lập cho PBI 74 và 75.
@@ -148,4 +122,36 @@ Bỏ `customerId` hoặc gửi `null` cho khách vãng lai. Với khách có h�
 
 Để thử qua Postman trên database kiểm thử, import `samples/pbi90-sales-order.postman_collection.json`, điền `accessToken`, `branchId`, `variantIdA` và `variantIdB`, rồi chạy thư mục SalesOrder theo thứ tự.
 
+## Danh sách, chi tiết và hủy đơn PBI 91
 
+Với database hiện có, chạy `database/05_sales_order_cancellation.sql` để thêm thời điểm và lý do hủy. Tài khoản backend cần SELECT và UPDATE trên sales_orders, cùng quyền đọc các bảng liên quan.
+
+- `GET /sales-orders?branchId=1&status=PENDING&keyword=DK-&page=1&size=20` trả các đơn theo quyền chi nhánh, mới nhất trước. Có thêm bộ lọc customerId, from và to. Ngày YYYY-MM-DD dùng giờ Việt Nam và bao gồm ngày cuối. Timestamp ISO dùng múi giờ được gửi, mặc định UTC khi thiếu múi giờ.
+- `GET /sales-orders/{id}` trả dòng hàng snapshot, lịch sử thanh toán, tên khách hoặc null, và người tạo. paymentMethods trong danh sách là các phương thức đã thanh toán SUCCESS.
+- `POST /sales-orders/{id}/cancel` nhận `{"reason":"Khách đổi ý"}` và trả HTTP 200 với trạng thái CANCELLED. Lý do là bắt buộc. Đơn không còn PENDING trả 409 ORDER_NOT_PENDING. Hai request hủy cùng đơn được tuần tự hóa bằng khóa dòng. Cả xem và hủy đều giới hạn trong chi nhánh có quyền.
+
+Import `samples/pbi91-sales-orders.postman_collection.json`. Điền accessToken, branchId, variantId còn hàng và paidOrderId của đơn PAID để chạy đầy đủ các ca.
+
+## Xác nhận thanh toán POS PBI 99
+
+1. Database mới chạy `database/01_schema.sql`. Database cũ cần các migration 02–05 đã liệt kê ở trên. PBI 99 không thêm bảng/cột. Tài khoản backend cần SELECT trên các bảng liên quan, UPDATE trên `sales_orders` và `inventory`, INSERT trên `payments` và `inventory_movements`.
+2. Đăng nhập OWNER, MANAGER hoặc EMPLOYEE có quyền tại chi nhánh của đơn. Trong Swagger gọi `POST /sales-orders/{order_id}/confirm-payment`:
+
+   ```json
+   {"paymentMethod": "CASH", "amount": "99000.00"}
+   ```
+
+   Thay ID và số tiền bằng `salesOrderId`, `totalAmount` vừa trả từ API tạo đơn. Phương thức nhận CASH, BANK_TRANSFER, CARD hoặc OTHER. `amount` là tiền thanh toán cho đơn; với tiền mặt, frontend tự tính tiền khách đưa và tiền thừa. Tổng bằng 0 vẫn được ghi nhận khi đơn giảm giá toàn bộ.
+3. HTTP 200 trả chi tiết đơn PAID, thời điểm thanh toán và một payment SUCCESS. Tồn kho giảm theo dòng hàng snapshot; movement SALE có `referenceType: SALES_ORDER`, `referenceId` là ID đơn. Thanh toán, tồn kho, movement và trạng thái đơn cùng commit hoặc cùng rollback.
+
+Số tiền không khớp trả 422 `PAYMENT_AMOUNT_MISMATCH`. Tồn khả dụng không đủ trả 409 `OUT_OF_STOCK` với chi tiết từng biến thể; hàng giữ chỗ cho preorder được bảo vệ. Đơn đã PAID/CANCELLED trả 409 `ORDER_NOT_PENDING`. Ngoài cửa hàng trả 404; ngoài chi nhánh được phân công trả 403. Lỗi database trả 503 và hoàn tác giao dịch. Gửi lại cùng đơn sau khi kết nối bị ngắt sẽ không trừ kho lần thứ hai; đọc GET chi tiết để kiểm tra trạng thái.
+
+Thử nhanh: import `samples/pbi99-confirm-payment.postman_collection.json`, điền `accessToken`, `branchId`, `variantId` còn hàng, rồi chạy thư mục SalesPayment trên database kiểm thử. Collection tạo và thanh toán một đơn thật.
+
+Chạy bộ kiểm thử MySQL riêng bằng PowerShell từ thư mục backend:
+
+```powershell
+.\scripts\test_pbi99_mysql.ps1
+```
+
+Cần MySQL Server 8.0 và môi trường `.venv` đã cài `requirements-dev.txt`. Nếu MySQL nằm ở chỗ khác, thêm `-MySqlBin 'D:\MySQL\bin'`. Script tạo một MySQL tạm tại máy, nạp schema riêng `dkat_pbi99_test`, chạy các ca thanh toán, phân quyền, giữ chỗ, yêu cầu đồng thời và lỗi SQL ở ba giai đoạn, rồi tắt server. Database trong `.env` không được dùng. Log tạm được giữ tại đường dẫn cuối kết quả.
