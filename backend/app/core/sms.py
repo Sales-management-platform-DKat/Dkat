@@ -194,6 +194,38 @@ def _fail(masked_phone: str, error: str) -> SmsResult:
     return SmsResult(success=False, error=error)
 
 
+async def get_send_status(sms_id: str, transport: httpx.AsyncBaseTransport | None = None) -> dict:
+    """Final outcome of an accepted SMS (eSMS GetSendStatus, last 7 days only).
+
+    {'status': 'DELIVERED' | 'FAILED' | 'PENDING' | 'UNKNOWN', 'sendSuccess', 'sendFailed', 'error'}
+    eSMS SendStatus: 1 waiting for approval, 2 waiting to send, 5 finished (then SendSuccess /
+    SendFailed tell the result). A message sent seconds ago may answer 105 (not found yet) -> PENDING.
+    Never raises.
+    """
+    if error := _config_error():
+        return {"status": "UNKNOWN", "sendSuccess": 0, "sendFailed": 0, "error": error}
+    try:
+        async with httpx.AsyncClient(timeout=settings.SMS_TIMEOUT_SECONDS, transport=transport) as client:
+            r = await client.get(
+                settings.ESMS_BASE_URL.rstrip("/") + "/GetSendStatus",
+                params={"RefId": sms_id, "ApiKey": settings.ESMS_API_KEY, "SecretKey": settings.ESMS_SECRET_KEY},
+            )
+        body = r.json()
+    except Exception as exc:  # noqa: BLE001
+        return {"status": "UNKNOWN", "sendSuccess": 0, "sendFailed": 0, "error": f"CONNECTION_FAILED: {exc.__class__.__name__}"}
+    code = str(body.get("CodeResponse"))
+    if code == "105":
+        return {"status": "PENDING", "sendSuccess": 0, "sendFailed": 0, "error": None}
+    if code != "100":
+        return {"status": "UNKNOWN", "sendSuccess": 0, "sendFailed": 0, "error": _provider_error(body)}
+    ok, failed = int(body.get("SendSuccess") or 0), int(body.get("SendFailed") or 0)
+    if str(body.get("SendStatus")) != "5":
+        status = "PENDING"
+    else:
+        status = "DELIVERED" if ok > 0 and failed == 0 else "FAILED" if failed > 0 else "UNKNOWN"
+    return {"status": status, "sendSuccess": ok, "sendFailed": failed, "error": None}
+
+
 async def get_balance(transport: httpx.AsyncBaseTransport | None = None) -> dict:
     """{'success', 'balance', 'error'}: eSMS account balance (used by scripts/send_test_sms.py)."""
     if error := _config_error():
