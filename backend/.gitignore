@@ -4,3 +4,4 @@ __pycache__/
 .env
 *.log
 _legacy_node/
+logs/

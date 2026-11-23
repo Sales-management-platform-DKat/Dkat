@@ -163,11 +163,13 @@ Cần bảng `customers`: chạy `database/04_sales_order_customers.sql` (cùng 
 
 | Endpoint | Quyền | Ghi chú |
 |---|---|---|
-| `GET /api/v1/customers?keyword&page&size` | mọi vai trò | `keyword` khớp tên hoặc một phần SĐT (vd. 4 số cuối, có thể gõ dấu cách); `size` ≤ 100 |
-| `GET /api/v1/customers/{id}` | mọi vai trò | |
+| `GET /api/v1/customers/quick-search?phone=` | mọi vai trò | POS tìm nhanh (≥ 3 chữ số, chấp nhận dấu cách/`+84`): tối đa 5 khách `{id, fullName, maskedPhone}`, SĐT che giữa `0912***678`; khớp đúng SĐT xếp đầu |
+| `GET /api/v1/customers?keyword&page&size` | mọi vai trò | `keyword` khớp tên hoặc một phần SĐT (vd. 4 số cuối); chỉ trả `{id, fullName, maskedPhone}`; `size` ≤ 100 |
+| `GET /api/v1/customers/{id}` | mọi vai trò | **duy nhất** trả hồ sơ đầy đủ (SĐT, email, địa chỉ, ghi chú); mỗi lần xem được ghi log truy cập |
 | `POST /api/v1/customers` `{fullName, phone?, email?, address?, note?}` | mọi vai trò (POS) | SĐT 10 số bắt đầu bằng 0 (chấp nhận `+84`, dấu cách, dấu chấm và lưu dạng `0xxxxxxxxx`); trùng SĐT → 409 `DUPLICATE_CUSTOMER_PHONE`, `details.customerId` là id khách cũ |
 | `PUT /api/v1/customers/{id}` | OWNER, MANAGER | thay toàn bộ thông tin; đổi sang SĐT đã có → 409 |
 
 - Khách thuộc cửa hàng (không theo chi nhánh); SĐT duy nhất trong cửa hàng (`uq_customers_store_phone`). Nhiều khách không có SĐT vẫn được.
 - Cho module khác (đặt trước, bán hàng): `await customers.service.upsert_customer_by_phone(db, store_id=..., full_name=..., phone=..., email=..., address=...)` trả `customer_id`; chạy trong transaction của bên gọi, không ghi đè hồ sơ đã có.
-- Postman: `postman/DKat_Customers.postman_collection.json` (32 request).
+- NFR-08: mọi route `/customers` cần đăng nhập (401). Log truy cập: `logs/customer_access.log` (`CUSTOMER_ACCESS_LOG_FILE`), mỗi dòng JSON `{time, event: CUSTOMER_VIEW, userId, role, storeId, customerId, ip}`, xoay vòng 5 MB × 10 file, không chứa tên/SĐT khách. Log request che giá trị query `phone`, `email`, `keyword` thành `***`.
+- Postman: `postman/DKat_Customers.postman_collection.json` (43 request).

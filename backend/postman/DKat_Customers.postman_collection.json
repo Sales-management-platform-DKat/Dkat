@@ -772,7 +772,7 @@
       "name": "2. Tìm / xem (GET /customers)",
       "item": [
         {
-          "name": "2.1 Tìm theo 4 số cuối SĐT -> ra đúng khách",
+          "name": "2.1 Tìm theo 4 số cuối SĐT -> ra đúng khách (SĐT đã che)",
           "request": {
             "method": "GET",
             "header": [
@@ -811,9 +811,10 @@
                 "exec": [
                   "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
                   "const page = pm.response.json().data; const ids = page.items.map(c => c.id);",
+                  "const items = page.items;",
                   "pm.test(\"Có khách vừa tạo\", () => pm.expect(ids).to.include(Number(pm.collectionVariables.get(\"customerId\"))));",
-                  "const l4 = pm.collectionVariables.get(\"last4\");",
-                  "pm.test(\"Mọi kết quả khớp 4 số cuối (SĐT hoặc tên)\", () => page.items.forEach(c => pm.expect((c.phone || \"\") + c.fullName).to.include(l4)));"
+                  "pm.test(\"Chỉ id, fullName, maskedPhone\", () => items.forEach(c => pm.expect(c).to.have.keys(\"id\", \"fullName\", \"maskedPhone\")));",
+                  "pm.test(\"Không chứa SĐT đầy đủ, email, địa chỉ\", () => { const t = pm.response.text(); pm.expect(t).to.not.include(pm.collectionVariables.get(\"phone\")); pm.expect(t).to.not.match(/email|address|note/i); });"
                 ]
               }
             }
@@ -991,7 +992,7 @@
           ]
         },
         {
-          "name": "2.6 Chi tiết khách -> 200",
+          "name": "2.6 Chi tiết khách -> 200, đủ SĐT/email/địa chỉ (được ghi log truy cập)",
           "request": {
             "method": "GET",
             "header": [
@@ -1020,7 +1021,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"Đúng khách\", () => pm.expect(pm.response.json().data.note).to.eql(\"Thích size M\"));"
+                  "const d = pm.response.json().data;",
+                  "pm.test(\"Hồ sơ đầy đủ\", () => { pm.expect(d.note).to.eql(\"Thích size M\"); pm.expect(d.phone).to.eql(pm.collectionVariables.get(\"phone\")); pm.expect(d.email).to.be.a(\"string\"); });"
                 ]
               }
             }
@@ -1409,6 +1411,496 @@
           ]
         }
       ]
+    },
+    {
+      "name": "4. Tìm nhanh (GET /customers/quick-search, NFR-08)",
+      "item": [
+        {
+          "name": "4.1 Không token -> 401",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/customers/quick-search?phone={{last4}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "customers",
+                "quick-search"
+              ],
+              "query": [
+                {
+                  "key": "phone",
+                  "value": "{{last4}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error.code = UNAUTHORIZED\", () => pm.expect(pm.response.json().error.code).to.eql(\"UNAUTHORIZED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.2 Token sai -> 401",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{badToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/customers/quick-search?phone={{last4}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "customers",
+                "quick-search"
+              ],
+              "query": [
+                {
+                  "key": "phone",
+                  "value": "{{last4}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error.code = INVALID_TOKEN\", () => pm.expect(pm.response.json().error.code).to.eql(\"INVALID_TOKEN\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.3 Tìm nhanh bằng SĐT đầy đủ",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEmployee}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/customers/quick-search?phone={{phone}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "customers",
+                "quick-search"
+              ],
+              "query": [
+                {
+                  "key": "phone",
+                  "value": "{{phone}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().data;",
+                  "pm.test(\"Khớp đúng SĐT xếp đầu\", () => pm.expect(items[0].id).to.eql(Number(pm.collectionVariables.get(\"customerId\"))));",
+                  "const p = pm.collectionVariables.get(\"phone\");",
+                  "pm.test(\"SĐT che giữa: 4 số đầu + *** + 3 số cuối\", () => pm.expect(items[0].maskedPhone).to.eql(p.slice(0, 4) + \"***\" + p.slice(-3)));",
+                  "pm.test(\"Chỉ id, fullName, maskedPhone\", () => items.forEach(c => pm.expect(c).to.have.keys(\"id\", \"fullName\", \"maskedPhone\")));",
+                  "pm.test(\"Không chứa SĐT đầy đủ, email, địa chỉ\", () => { const t = pm.response.text(); pm.expect(t).to.not.include(pm.collectionVariables.get(\"phone\")); pm.expect(t).to.not.match(/email|address|note/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.4 Tìm nhanh bằng SĐT có dấu cách",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEmployee}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/customers/quick-search?phone={{phoneSpaced}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "customers",
+                "quick-search"
+              ],
+              "query": [
+                {
+                  "key": "phone",
+                  "value": "{{phoneSpaced}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().data;",
+                  "pm.test(\"Khớp đúng SĐT xếp đầu\", () => pm.expect(items[0].id).to.eql(Number(pm.collectionVariables.get(\"customerId\"))));",
+                  "const p = pm.collectionVariables.get(\"phone\");",
+                  "pm.test(\"SĐT che giữa: 4 số đầu + *** + 3 số cuối\", () => pm.expect(items[0].maskedPhone).to.eql(p.slice(0, 4) + \"***\" + p.slice(-3)));",
+                  "pm.test(\"Chỉ id, fullName, maskedPhone\", () => items.forEach(c => pm.expect(c).to.have.keys(\"id\", \"fullName\", \"maskedPhone\")));",
+                  "pm.test(\"Không chứa SĐT đầy đủ, email, địa chỉ\", () => { const t = pm.response.text(); pm.expect(t).to.not.include(pm.collectionVariables.get(\"phone\")); pm.expect(t).to.not.match(/email|address|note/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.5 Tìm nhanh bằng SĐT dạng +84",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEmployee}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/customers/quick-search?phone={{phoneIntl}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "customers",
+                "quick-search"
+              ],
+              "query": [
+                {
+                  "key": "phone",
+                  "value": "{{phoneIntl}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().data;",
+                  "pm.test(\"Khớp đúng SĐT xếp đầu\", () => pm.expect(items[0].id).to.eql(Number(pm.collectionVariables.get(\"customerId\"))));",
+                  "const p = pm.collectionVariables.get(\"phone\");",
+                  "pm.test(\"SĐT che giữa: 4 số đầu + *** + 3 số cuối\", () => pm.expect(items[0].maskedPhone).to.eql(p.slice(0, 4) + \"***\" + p.slice(-3)));",
+                  "pm.test(\"Chỉ id, fullName, maskedPhone\", () => items.forEach(c => pm.expect(c).to.have.keys(\"id\", \"fullName\", \"maskedPhone\")));",
+                  "pm.test(\"Không chứa SĐT đầy đủ, email, địa chỉ\", () => { const t = pm.response.text(); pm.expect(t).to.not.include(pm.collectionVariables.get(\"phone\")); pm.expect(t).to.not.match(/email|address|note/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.6 Tìm nhanh theo 4 số cuối",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEmployee}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/customers/quick-search?phone={{last4}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "customers",
+                "quick-search"
+              ],
+              "query": [
+                {
+                  "key": "phone",
+                  "value": "{{last4}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().data;",
+                  "pm.test(\"<= 5 kết quả\", () => pm.expect(items.length).to.be.within(1, 5));",
+                  "pm.test(\"Chỉ id, fullName, maskedPhone\", () => items.forEach(c => pm.expect(c).to.have.keys(\"id\", \"fullName\", \"maskedPhone\")));",
+                  "pm.test(\"SĐT che giữa dạng 0912***678\", () => items.filter(c => c.maskedPhone).forEach(c => pm.expect(c.maskedPhone).to.match(/^\\d{4}\\*{3}\\d{3}$/)));",
+                  "pm.test(\"Không chứa SĐT đầy đủ, email, địa chỉ\", () => { const t = pm.response.text(); pm.expect(t).to.not.include(pm.collectionVariables.get(\"phone\")); pm.expect(t).to.not.match(/email|address|note/i); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.7 Nhiều hơn 5 khách khớp -> chỉ trả 5",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEmployee}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/customers/quick-search?phone={{groupDigits}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "customers",
+                "quick-search"
+              ],
+              "query": [
+                {
+                  "key": "phone",
+                  "value": "{{groupDigits}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const base = \"03\" + String(Date.now()).slice(-6);",
+                  "pm.collectionVariables.set(\"groupDigits\", base);",
+                  "const phones = [0, 1, 2, 3, 4, 5].map(i => base + \"1\" + i);",
+                  "pm.collectionVariables.set(\"groupPhones\", JSON.stringify(phones));",
+                  "phones.forEach((p, i) => pm.sendRequest({",
+                  "  url: pm.collectionVariables.get(\"baseUrl\") + \"/api/v1/customers\", method: \"POST\",",
+                  "  header: { \"Content-Type\": \"application/json\", \"Authorization\": \"Bearer \" + pm.collectionVariables.get(\"tokenOwner\") },",
+                  "  body: { mode: \"raw\", raw: JSON.stringify({ fullName: \"Nhóm tìm nhanh \" + i, phone: p }) },",
+                  "}, (err, res) => { if (err || res.code !== 201) { console.error('seed failed', err || res.code); } }));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const items = pm.response.json().data;",
+                  "pm.test(\"Đúng 5 kết quả\", () => pm.expect(items.length).to.eql(5));",
+                  "pm.test(\"Chỉ id, fullName, maskedPhone\", () => items.forEach(c => pm.expect(c).to.have.keys(\"id\", \"fullName\", \"maskedPhone\")));",
+                  "pm.test(\"SĐT che giữa dạng 0912***678\", () => items.filter(c => c.maskedPhone).forEach(c => pm.expect(c.maskedPhone).to.match(/^\\d{4}\\*{3}\\d{3}$/)));",
+                  "pm.test(\"Không chứa SĐT đầy đủ của nhóm\", () => JSON.parse(pm.collectionVariables.get(\"groupPhones\")).forEach(p => pm.expect(pm.response.text()).to.not.include(p)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.8 Thiếu phone -> 422",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEmployee}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/customers/quick-search",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "customers",
+                "quick-search"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"error.code = VALIDATION_ERROR\", () => pm.expect(pm.response.json().error.code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.9 phone có chữ -> 422",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEmployee}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/customers/quick-search?phone=abc",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "customers",
+                "quick-search"
+              ],
+              "query": [
+                {
+                  "key": "phone",
+                  "value": "abc"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"error.code = VALIDATION_ERROR\", () => pm.expect(pm.response.json().error.code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.10 phone chỉ 2 số -> 422",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEmployee}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/customers/quick-search?phone=09",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "customers",
+                "quick-search"
+              ],
+              "query": [
+                {
+                  "key": "phone",
+                  "value": "09"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"error.code = VALIDATION_ERROR\", () => pm.expect(pm.response.json().error.code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "4.11 Chi tiết đầy đủ chỉ qua GET /customers/{id}",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/customers/{{customerId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "customers",
+                "{{customerId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Có SĐT đầy đủ\", () => pm.expect(pm.response.json().data.phone).to.eql(pm.collectionVariables.get(\"phone\")));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ],
   "variable": [
@@ -1467,6 +1959,18 @@
     {
       "key": "customer2Id",
       "value": ""
+    },
+    {
+      "key": "groupDigits",
+      "value": ""
+    },
+    {
+      "key": "groupPhones",
+      "value": ""
+    },
+    {
+      "key": "badToken",
+      "value": "not-a-real-token"
     }
   ]
 }

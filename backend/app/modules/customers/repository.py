@@ -42,6 +42,17 @@ async def search(
     return list((await db.execute(page_stmt)).scalars()), total
 
 
+async def quick_search(db: AsyncSession, store_id: int, phone_digits: str, limit: int) -> list[Customer]:
+    """Phones containing `phone_digits`; an exact match comes first."""
+    stmt = (
+        select(Customer)
+        .where(Customer.store_id == store_id, Customer.phone.like(f"%{phone_digits}%"))
+        .order_by((Customer.phone == phone_digits).desc(), Customer.full_name, Customer.customer_id)
+        .limit(limit)
+    )
+    return list((await db.execute(stmt)).scalars())
+
+
 async def insert(db: AsyncSession, customer: Customer) -> Customer:
     db.add(customer)
     await db.flush()

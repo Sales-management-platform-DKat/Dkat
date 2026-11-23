@@ -1,18 +1,20 @@
-"""Customer profiles API.
+"""Customer profiles API. Every route needs a login (401 without token).
 
-GET  /customers?keyword&page&size   all staff (POS lookup); keyword = name or part of the phone
-GET  /customers/{id}                all staff
-POST /customers                     all staff (POS creates profiles); 409 DUPLICATE_CUSTOMER_PHONE + customerId
-PUT  /customers/{id}                OWNER / MANAGER
+GET  /customers/quick-search?phone   all staff; max 5 results, phone masked (NFR-08)
+GET  /customers?keyword&page&size    all staff; keyword = name or part of the phone; phone masked
+GET  /customers/{id}                 all staff; the ONLY read with full contact data; audited
+POST /customers                      all staff (POS creates profiles); 409 DUPLICATE_CUSTOMER_PHONE + customerId
+PUT  /customers/{id}                 OWNER / MANAGER
 Customers belong to the store (not to a branch).
 """
-from fastapi import APIRouter, Depends, Path, Query
+from fastapi import APIRouter, Depends, Path, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import ROLE_MANAGER, ROLE_OWNER, CurrentUser, require_auth, require_role
+from app.core.rate_limit import client_ip
 from app.db.session import get_db
 from app.modules.customers import service
-from app.modules.customers.schemas import MAX_PAGE_SIZE, CustomerIn, CustomerOut, CustomerPageOut
+from app.modules.customers.schemas import MAX_PAGE_SIZE, CustomerIn, CustomerOut, CustomerPageOut, CustomerSummaryOut
 from app.utils.response import SuccessResponse, ok
 
 router = APIRouter(prefix="/customers", tags=["customers"])
@@ -26,15 +28,30 @@ async def list_customers(
     user: CurrentUser = Depends(require_auth),
     db: AsyncSession = Depends(get_db),
 ):
-    """Tìm theo tên hoặc một phần SĐT (ví dụ 4 số cuối)."""
+    """Tìm theo tên hoặc một phần SĐT (ví dụ 4 số cuối). Chỉ trả id, tên, SĐT đã che."""
     return ok(await service.list_customers(db, user, keyword=keyword, page=page, size=size))
+
+
+# Declared before /{customer_id} so "quick-search" is not parsed as an id
+@router.get("/quick-search", response_model=SuccessResponse[list[CustomerSummaryOut]], response_model_by_alias=True)
+async def quick_search(
+    phone: str = Query(min_length=1, max_length=20, description="Một phần SĐT, ít nhất 3 chữ số"),
+    user: CurrentUser = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """POS tìm nhanh: tối đa 5 khách {id, fullName, maskedPhone: 0912***678}. Khớp đúng SĐT xếp đầu."""
+    return ok(await service.quick_search(db, user, phone))
 
 
 @router.get("/{customer_id}", response_model=SuccessResponse[CustomerOut], response_model_by_alias=True)
 async def get_customer(
-    customer_id: int = Path(gt=0), user: CurrentUser = Depends(require_auth), db: AsyncSession = Depends(get_db)
+    request: Request,
+    customer_id: int = Path(gt=0),
+    user: CurrentUser = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
 ):
-    return ok(await service.get_customer(db, user, customer_id))
+    """Hồ sơ đầy đủ (SĐT, email, địa chỉ, ghi chú). Mỗi lần xem được ghi vào log truy cập."""
+    return ok(await service.get_customer(db, user, customer_id, ip=client_ip(request)))
 
 
 @router.post("", status_code=201, response_model=SuccessResponse[CustomerOut], response_model_by_alias=True)

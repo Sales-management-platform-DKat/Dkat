@@ -2,7 +2,9 @@
 
 - One profile per phone per store: creating or changing to a phone that exists -> 409
   DUPLICATE_CUSTOMER_PHONE with the existing customerId, so the POS can reuse that profile.
-- Search by name or by any part of the phone (e.g. the last 4 digits).
+- Search by name or by any part of the phone (e.g. the last 4 digits). Lists and quick search return
+  only id, name and a masked phone (0912***678); the full profile comes from GET /customers/{id},
+  and each of those views is written to the audit log (NFR-08).
 - upsert_customer_by_phone(): for other modules (pre-orders, sales) inside their own transaction.
 Logs never contain phone/email (personal data), only ids.
 """
@@ -13,17 +15,26 @@ from sqlalchemy.dialects.mysql import insert as mysql_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.audit import log_customer_view
 from app.core.exceptions import AppError
 from app.core.permissions import CurrentUser
 from app.db.session import transaction
 from app.modules.customers import repository
 from app.modules.customers.models import Customer
-from app.modules.customers.schemas import CustomerIn, CustomerOut, CustomerPageOut, normalize_phone
+from app.modules.customers.schemas import (
+    CustomerIn,
+    CustomerOut,
+    CustomerPageOut,
+    CustomerSummaryOut,
+    mask_phone,
+    normalize_phone,
+)
 from app.utils.logger import get_logger
 
 logger = get_logger("app.customers")
 
 MIN_PHONE_SEARCH_DIGITS = 3
+QUICK_SEARCH_LIMIT = 5
 
 
 def _to_out(c: Customer) -> CustomerOut:
@@ -37,6 +48,10 @@ def _to_out(c: Customer) -> CustomerOut:
         created_at=c.created_at,
         updated_at=c.updated_at,
     )
+
+
+def _to_summary(c: Customer) -> CustomerSummaryOut:
+    return CustomerSummaryOut(id=c.customer_id, full_name=c.full_name, masked_phone=mask_phone(c.phone))
 
 
 def _duplicate_phone(existing: Customer) -> AppError:
@@ -111,7 +126,7 @@ async def list_customers(
         size=size,
     )
     return CustomerPageOut(
-        items=[_to_out(c) for c in customers],
+        items=[_to_summary(c) for c in customers],
         page=page,
         size=size,
         total=total,
@@ -119,10 +134,24 @@ async def list_customers(
     )
 
 
-async def get_customer(db: AsyncSession, actor: CurrentUser, customer_id: int) -> CustomerOut:
+async def quick_search(db: AsyncSession, actor: CurrentUser, phone: str) -> list[CustomerSummaryOut]:
+    """POS lookup by (part of) a phone: at most QUICK_SEARCH_LIMIT results, phone masked."""
+    digits = phone_search_digits(phone)
+    if digits is None:
+        raise AppError.validation(
+            f"Nhập ít nhất {MIN_PHONE_SEARCH_DIGITS} chữ số của số điện thoại",
+            [{"field": "phone", "message": f"At least {MIN_PHONE_SEARCH_DIGITS} digits", "type": "phone_digits"}],
+        )
+    customers = await repository.quick_search(db, actor.store_id, digits, QUICK_SEARCH_LIMIT)
+    return [_to_summary(c) for c in customers]
+
+
+async def get_customer(db: AsyncSession, actor: CurrentUser, customer_id: int, *, ip: str | None) -> CustomerOut:
+    """The only read that returns the full profile; every successful view is audited (NFR-08)."""
     customer = await repository.get_customer(db, actor.store_id, customer_id)
     if customer is None:
         raise AppError.not_found("Không tìm thấy khách hàng")
+    log_customer_view(user_id=actor.id, role=actor.role, store_id=actor.store_id, customer_id=customer_id, ip=ip)
     return _to_out(customer)
 
 

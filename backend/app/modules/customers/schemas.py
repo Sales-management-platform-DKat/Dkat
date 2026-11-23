@@ -81,8 +81,26 @@ class CustomerOut(CamelModel):
     updated_at: datetime
 
 
+def mask_phone(phone: str | None) -> str | None:
+    """'0912345678' -> '0912***678' (NFR-08: lists never show the full number)."""
+    if not phone:
+        return None
+    if len(phone) < 8:
+        return "***" + phone[-2:]
+    return phone[:4] + "***" + phone[-3:]
+
+
+class CustomerSummaryOut(CamelModel):
+    """Search results (list + quick search). No full phone, email, address or note:
+    the full profile is only returned by GET /customers/{id}, and every such view is logged."""
+
+    id: int
+    full_name: str
+    masked_phone: str | None
+
+
 class CustomerPageOut(CamelModel):
-    items: list[CustomerOut]
+    items: list[CustomerSummaryOut]
     page: int
     size: int
     total: int

@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     # ---- Public API (no login) ----
     PUBLIC_RATE_LIMIT_PER_MINUTE: int = 60  # per client IP, shared by all /public endpoints
 
+    # ---- Audit (NFR-08) ----
+    CUSTOMER_ACCESS_LOG_FILE: str = "logs/customer_access.log"  # who viewed which customer profile
+
     @property
     def is_production(self) -> bool:
         return self.APP_ENV.lower() == "production"
