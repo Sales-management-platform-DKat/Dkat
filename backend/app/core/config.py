@@ -47,6 +47,19 @@ class Settings(BaseSettings):
     SMTP_TIMEOUT_SECONDS: float = 10.0  # whole send (connect + login + send), not per step
     EMAIL_TEST_TO: str = ""  # default recipient of scripts/send_test_email.py (the team mailbox)
 
+    # ---- SMS via eSMS.vn (FR-09.1) ----
+    ESMS_API_KEY: str = ""
+    ESMS_SECRET_KEY: str = ""
+    ESMS_BRANDNAME: str = "Baotrixemay"  # eSMS test brandname; use your own once registered with the carriers
+    ESMS_SMS_TYPE: str = "2"  # 2 = brandname customer care (CSKH)
+    ESMS_SANDBOX: bool = False  # True: eSMS validates the request but sends nothing and charges nothing
+    ESMS_CALLBACK_URL: str = ""  # optional webhook for the final delivery status
+    ESMS_BASE_URL: str = "https://rest.esms.vn/MainService.svc/json"
+    SMS_UNICODE: bool = False  # False: Vietnamese accents are removed before sending (cheaper, 160 chars/part)
+    SMS_MAX_PARTS: int = 3  # longer content is refused (INVALID_INPUT)
+    SMS_TIMEOUT_SECONDS: float = 10.0
+    SMS_TEST_TO: str = ""  # default recipient of scripts/send_test_sms.py (the team phone)
+
     # ---- Audit (NFR-08) ----
     CUSTOMER_ACCESS_LOG_FILE: str = "logs/customer_access.log"  # who viewed which customer profile
 

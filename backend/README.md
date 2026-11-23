@@ -209,3 +209,15 @@ Cùng quy tắc doanh thu và phân quyền với `/reports/revenue`. `from`/`to
 - Toàn bộ lần gửi (kết nối + TLS + đăng nhập + gửi) giới hạn 10 giây. `providerMessageId` = header `Message-ID` do server tạo (SMTP không có id của nhà cung cấp) → lưu vào `notifications.provider_message_id`.
 - Chặn chèn header (xuống dòng trong người nhận/tiêu đề). Log không chứa mật khẩu, nội dung thư, và che địa chỉ người nhận (`n***@gmail.com`).
 - Thử gửi thật: điền SMTP + `EMAIL_TEST_TO` trong `.env` rồi `python -m scripts.send_test_email` (hoặc `--to ...`). Thử sai mật khẩu: `python -m scripts.send_test_email --wrong-password` → phải in `success: false`, `SMTP_AUTH_FAILED`.
+
+## Gửi SMS (FR-09.1)
+
+`app/core/sms.py`: `result = await send_sms(to, content, request_id=None)`. Kết quả **cùng dạng với `send_email`** (`{success, providerMessageId, error}`, `providerMessageId` = SMSID của eSMS).
+
+- Nhà cung cấp eSMS.vn, cấu hình hoàn toàn bằng `.env` (`ESMS_API_KEY`, `ESMS_SECRET_KEY`, `ESMS_BRANDNAME`, `ESMS_SMS_TYPE`, `ESMS_SANDBOX`, `ESMS_CALLBACK_URL`, `SMS_UNICODE`, `SMS_MAX_PARTS`, `SMS_TIMEOUT_SECONDS`), xem `.env.example`.
+- SĐT chuẩn hoá về `0xxxxxxxxx` (chấp nhận dấu cách, dấu chấm, `+84`, `84`); chỉ nhận đầu số di động 03/05/07/08/09.
+- `SMS_UNICODE=false` (mặc định): tự bỏ dấu tiếng Việt, 160 ký tự/tin; tối đa `SMS_MAX_PARTS` tin (3 tin ≈ 459 ký tự), dài hơn → `INVALID_INPUT`.
+- **Không bao giờ ném lỗi**; timeout 10 giây. Mã lỗi: `NOT_CONFIGURED`, `INVALID_INPUT`, `INVALID_PHONE`, `AUTH_FAILED` (eSMS 101), `QUOTA_EXCEEDED` (103: hết số dư / hạn mức tin thử), `BRANDNAME_INVALID` (104), `TEMPLATE_MISMATCH` (146), `DUPLICATE_REQUEST` (124), `ACCOUNT_ERROR`, `IP_NOT_WHITELISTED`, `CARRIER_NOT_REGISTERED`, `BLOCKED_KEYWORD`, `PROVIDER_ERROR`, `HTTP_ERROR`, `INVALID_RESPONSE`, `TIMEOUT`, `CONNECTION_FAILED`.
+- `success=true` (eSMS 100) chỉ nghĩa là eSMS **đã nhận** yêu cầu; trạng thái tới máy khách qua `ESMS_CALLBACK_URL`. Khi gửi lại cùng một thông báo, truyền `request_id` cố định (vd. `notification-42`) để eSMS chặn gửi trùng.
+- **Tài khoản dùng thử** chỉ gửi được mẫu `"<CODE> la ma xac minh dang ky Baotrixemay cua ban"` với brandname `Baotrixemay`; nội dung khác → `TEMPLATE_MISMATCH`. Cùng SĐT + cùng nội dung chỉ 1 tin / 5 phút. Gửi nội dung thông báo đặt trước thật cần đăng ký brandname + mẫu tin với eSMS.
+- Thử gửi thật: điền `ESMS_*` + `SMS_TEST_TO` rồi `python -m scripts.send_test_sms` (`--balance` xem số dư, `--sandbox` chỉ kiểm tra, `--wrong-key` thử sai khoá → `AUTH_FAILED`).
