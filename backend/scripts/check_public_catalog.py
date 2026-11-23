@@ -37,25 +37,38 @@ def leaks(body: str) -> list[str]:
     return [w for w in FORBIDDEN if re.search(re.escape(w), body, re.IGNORECASE)]
 
 
-async def load_ids() -> tuple[int, dict[str, int], dict[str, int]]:
+async def load_ids():
     async with standalone_transaction() as db:
         store_id = (await db.execute(text("SELECT store_id FROM users WHERE username = 'owner01'"))).scalar()
         cats = dict((await db.execute(text("SELECT name, category_id FROM categories WHERE store_id = :s"), {"s": store_id})).all())
         prods = dict((await db.execute(text("SELECT product_code, product_id FROM products WHERE store_id = :s"), {"s": store_id})).all())
+        variants = dict((await db.execute(text("SELECT sku, variant_id FROM product_variants WHERE sku LIKE 'SP-MAU-%'"))).all())
+        branches = dict(
+            (await db.execute(text("SELECT branch_code, branch_id FROM branches WHERE store_id = :s"), {"s": store_id})).all()
+        )
+        active_branches = set(
+            (
+                await db.execute(
+                    text("SELECT branch_id FROM branches WHERE store_id = :s AND status = 'ACTIVE'"), {"s": store_id}
+                )
+            ).scalars()
+        )
     if store_id is None or "Thời trang" not in cats or "SP-MAU-05" not in prods:
         sys.exit("Missing seed data. Run: python -m scripts.seed_auth && python -m scripts.seed_catalog")
-    return store_id, cats, prods
+    return store_id, cats, prods, variants, branches, active_branches
 
 
 # Per-store lookup tables with a handful of rows: MySQL rightly prefers a full scan over an index there
 SMALL_LOOKUP_TABLES = ("branches", "attributes")
 
 
-async def explain(store_id: int, category_ids: list[int], product_ids: list[int]) -> None:
+async def explain(
+    store_id: int, category_ids: list[int], product_ids: list[int], variant_ids: list[int], branch_ids: list[int]
+) -> None:
     """Large tables (products, variants, inventory, pre-orders, attribute values) must be reached
     through an index (EXPLAIN type != ALL), and MySQL must return a real plan."""
     async with engine.connect() as conn:
-        for name, stmt in repository.explain_targets(store_id, category_ids, product_ids).items():
+        for name, stmt in repository.explain_targets(store_id, category_ids, product_ids, variant_ids, branch_ids).items():
             sql = str(stmt.compile(dialect=mysql.dialect(), compile_kwargs={"literal_binds": True}))
             rows = (await conn.execute(text("EXPLAIN " + sql))).mappings().all()
             plan = ", ".join(f"{r['table']}:{r['type']}/{r['key']}" for r in rows)
@@ -69,7 +82,8 @@ async def explain(store_id: int, category_ids: list[int], product_ids: list[int]
 
 
 async def main() -> int:
-    store_id, cats, prods = await load_ids()
+    store_id, cats, prods, variants, branches, active_branches = await load_ids()
+    cn1, cn2, cn3 = branches["CN01"], branches["CN02"], branches["CN03"]
     p01, p02, p03 = prods["SP-MAU-01"], prods["SP-MAU-02"], prods["SP-MAU-03"]
     public_limiter.reset()
     transport = httpx.ASGITransport(app=create_app())
@@ -109,6 +123,74 @@ async def main() -> int:
         check("Cây danh mục: Thời trang > Áo, Quần", names.get("Thời trang") == ["Áo", "Quần"], str(names))
         check("Ẩn danh mục INACTIVE và cả nhánh con", "Ngừng kinh doanh" not in names and "Hàng thanh lý" not in rc.text, str(list(names)))
         check("Cây danh mục không chứa trường nội bộ", not leaks(rc.text), f"lộ: {leaks(rc.text)}")
+
+        # ---- 1b. product detail + branches (FR-07.4)
+        rb = await c.get(f"{API}/public/branches", params={"storeId": store_id})
+        blist = rb.json()["data"] if rb.status_code == 200 else []
+        check("GET /public/branches không token -> 200", rb.status_code == 200, str(rb.status_code))
+        check("Chỉ chi nhánh ACTIVE", {b["id"] for b in blist} == active_branches, str([b["id"] for b in blist]))
+        check(
+            "Chi nhánh chỉ có id, name, address, phone",
+            bool(blist) and all(set(b) == {"id", "name", "address", "phone"} for b in blist),
+            str(blist[:1]),
+        )
+        check("Danh sách chi nhánh không lộ trường nội bộ", not leaks(rb.text), f"lộ: {leaks(rb.text)}")
+
+        rd = await c.get(f"{API}/public/products/{p02}")
+        detail = rd.json()["data"] if rd.status_code == 200 else {}
+        check("GET /public/products/{id} không token -> 200", rd.status_code == 200, str(rd.status_code))
+        # SKU and branch ids are part of the detail page on purpose (pre-order form)
+        detail_leaks = [w for w in leaks(rd.text) if w not in ("sku", "SP-MAU", "branch")]
+        check("Chi tiết không lộ giá vốn, số lượng, trạng thái, id nội bộ", not detail_leaks, f"lộ: {detail_leaks}")
+        check(
+            "Chi tiết có tên, mô tả, ảnh, danh mục, khoảng giá, biến thể",
+            set(detail) == {"id", "name", "description", "imageUrl", "category", "priceMin", "priceMax", "inStock", "variants"},
+            str(sorted(detail)),
+        )
+        vmap = {v["sku"]: v for v in detail.get("variants", [])}
+        check("Chỉ biến thể ACTIVE (không có SP-MAU-02-CU)", set(vmap) == {"SP-MAU-02-XANH-M", "SP-MAU-02-DO-L"}, str(list(vmap)))
+        xanh = vmap.get("SP-MAU-02-XANH-M", {})
+        check(
+            "Biến thể có id, sku, name, price, attributes, branches",
+            set(xanh) == {"id", "sku", "name", "price", "attributes", "branches"} and xanh.get("id") == variants["SP-MAU-02-XANH-M"],
+            str(sorted(xanh)),
+        )
+        check(
+            "Thuộc tính biến thể (Màu Xanh, Size M)",
+            xanh.get("attributes") == [{"name": "Màu", "value": "Xanh"}, {"name": "Size", "value": "M"}],
+            str(xanh.get("attributes")),
+        )
+        check("Giá biến thể 250000", xanh.get("price") == 250000, str(xanh.get("price")))
+
+        def availability(v):
+            return {b["branchId"]: b["availability"] for b in v.get("branches", [])}
+
+        av = availability(xanh)
+        check("Mỗi biến thể liệt kê đủ chi nhánh ACTIVE", set(av) == active_branches, str(sorted(av)))
+        check(
+            "Xanh M: CN02 IN_STOCK, chi nhánh khác OUT_OF_STOCK",
+            av.get(cn2) == "IN_STOCK" and all(s == "OUT_OF_STOCK" for b, s in av.items() if b != cn2),
+            str(av),
+        )
+        av_do = availability(vmap.get("SP-MAU-02-DO-L", {}))
+        check("Đỏ L (tồn 0): mọi chi nhánh OUT_OF_STOCK", set(av_do.values()) == {"OUT_OF_STOCK"}, str(av_do))
+        d3 = (await c.get(f"{API}/public/products/{p03}")).json()["data"]
+        av3 = availability(d3["variants"][0])
+        check(
+            "Quần kaki: tồn CN01 bị đặt trước hết -> CN01 OUT_OF_STOCK",
+            av3.get(cn1) == "OUT_OF_STOCK" and d3["inStock"] is False,
+            str(av3),
+        )
+        d1 = (await c.get(f"{API}/public/products/{p01}")).json()["data"]
+        av1 = availability(next(v for v in d1["variants"] if v["sku"] == "SP-MAU-01-S"))
+        check("Áo thun S: CN01, CN02, CN03 IN_STOCK", all(av1.get(b) == "IN_STOCK" for b in (cn1, cn2, cn3)), str(av1))
+        for code, label in [("SP-MAU-04", "sản phẩm INACTIVE"), ("SP-MAU-05", "danh mục bị ẩn")]:
+            r = await c.get(f"{API}/public/products/{prods[code]}")
+            check(f"Chi tiết {label} -> 404", r.status_code == 404 and r.json()["error"]["code"] == "NOT_FOUND", str(r.status_code))
+        r = await c.get(f"{API}/public/products/999999999")
+        check("Chi tiết id không tồn tại -> 404", r.status_code == 404, str(r.status_code))
+        r = await c.get(f"{API}/public/products/0")
+        check("Chi tiết id = 0 -> 422", r.status_code == 422, str(r.status_code))
 
         # ---- 2. filters
         _, ids = await products(keyword="sơ mi")
@@ -174,7 +256,13 @@ async def main() -> int:
         public_limiter.reset()
 
     # ---- 4. index use
-    await explain(store_id, [cats["Thời trang"], cats["Áo"], cats["Quần"]], [p01, p02, p03])
+    await explain(
+        store_id,
+        [cats["Thời trang"], cats["Áo"], cats["Quần"]],
+        [p01, p02, p03],
+        [variants["SP-MAU-02-XANH-M"], variants["SP-MAU-02-DO-L"], variants["SP-MAU-03-M"]],
+        sorted(active_branches),
+    )
     await close_engine()
 
     width = max(len(n) for _, n, _ in results)

@@ -1,16 +1,18 @@
 """Public catalog API: no login (FR-07.1 - FR-07.3), rate limited per IP.
 
 GET /public/products?keyword&categoryId&attr&inStock&page&size&storeId
+GET /public/products/{id}         detail page + pre-order form (FR-07.4)
+GET /public/branches?storeId      ACTIVE branches
 GET /public/categories?storeId
 """
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Path, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.rate_limit import SlidingWindowLimiter, rate_limit
 from app.db.session import get_db
 from app.modules.catalog import service
-from app.modules.catalog.schemas import PublicCategoryNode, PublicProductPageOut
+from app.modules.catalog.schemas import PublicBranchOut, PublicCategoryNode, PublicProductDetailOut, PublicProductPageOut
 from app.utils.response import SuccessResponse, ok
 
 # One budget per IP shared by every /public route (e.g. 60 requests / minute)
@@ -47,6 +49,22 @@ async def search_products(
             size=size,
         )
     )
+
+
+@router.get("/products/{product_id}", response_model=SuccessResponse[PublicProductDetailOut], response_model_by_alias=True)
+async def product_detail(product_id: int = Path(gt=0), db: AsyncSession = Depends(get_db)):
+    """Trang chi tiết + form đặt trước: mô tả, biến thể (id, sku, tên, thuộc tính, giá) và với mỗi
+    chi nhánh ACTIVE: IN_STOCK / OUT_OF_STOCK (không có số lượng). Sản phẩm ẩn / không tồn tại -> 404."""
+    return ok(await service.product_detail(db, product_id))
+
+
+@router.get("/branches", response_model=SuccessResponse[list[PublicBranchOut]], response_model_by_alias=True)
+async def list_branches(
+    store_id: int | None = Query(default=None, alias="storeId", gt=0),
+    db: AsyncSession = Depends(get_db),
+):
+    """Chi nhánh ACTIVE: id, tên, địa chỉ, SĐT."""
+    return ok(await service.list_branches(db, store_id))
 
 
 @router.get("/categories", response_model=SuccessResponse[list[PublicCategoryNode]], response_model_by_alias=True)

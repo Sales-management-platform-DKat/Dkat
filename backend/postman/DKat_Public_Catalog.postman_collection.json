@@ -77,7 +77,149 @@
               "const shirt = items.find(p => p.name === \"Áo sơ mi mẫu\");",
               "pm.test(\"Khoảng giá 250000 - 280000\", () => { pm.expect(shirt.priceMin).to.eql(250000); pm.expect(shirt.priceMax).to.eql(280000); });",
               "pm.test(\"Quần kaki mẫu hết hàng khả dụng\", () => pm.expect(items.find(p => p.name === \"Quần kaki mẫu\").inStock).to.eql(false));",
-              "pm.test(\"Không có sản phẩm INACTIVE / danh mục ẩn\", () => { const n = items.map(p => p.name); pm.expect(n).to.not.include(\"Áo ngừng bán mẫu\"); pm.expect(n).to.not.include(\"Áo thanh lý mẫu\"); });"
+              "pm.test(\"Không có sản phẩm INACTIVE / danh mục ẩn\", () => { const n = items.map(p => p.name); pm.expect(n).to.not.include(\"Áo ngừng bán mẫu\"); pm.expect(n).to.not.include(\"Áo thanh lý mẫu\"); });",
+              "pm.collectionVariables.set(\"shirtId\", shirt.id); pm.collectionVariables.set(\"pantsId\", items.find(p => p.name === \"Quần kaki mẫu\").id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2a. Chi nhánh ACTIVE (không đăng nhập)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/branches",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "branches"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const list = pm.response.json().data;",
+              "pm.test(\"Chỉ id, name, address, phone\", () => list.forEach(b => pm.expect(b).to.have.keys(\"id\", \"name\", \"address\", \"phone\")));",
+              "pm.test(\"Có Quận 1, Cầu Giấy, Hải Châu\", () => { const n = list.map(b => b.name); [\"Chi nhánh Quận 1\", \"Chi nhánh Cầu Giấy\", \"Chi nhánh Hải Châu\"].forEach(x => pm.expect(n).to.include(x)); });",
+              "pm.test(\"Không lộ trường nội bộ\", () => pm.expect(pm.response.text()).to.not.match(/status|storeId|branchCode|created|CN0/i));",
+              "pm.collectionVariables.set(\"branchIds\", JSON.stringify(list.map(b => b.id).sort((a, b) => a - b)));",
+              "pm.collectionVariables.set(\"cauGiayId\", list.find(b => b.name === \"Chi nhánh Cầu Giấy\").id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2b. Chi tiết Áo sơ mi mẫu (trang chi tiết + form đặt trước)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/products/{{shirtId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "products",
+            "{{shirtId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const d = pm.response.json().data; const ids = JSON.parse(pm.collectionVariables.get(\"branchIds\"));",
+              "pm.test(\"Có tên, mô tả, ảnh, danh mục, giá, biến thể\", () => pm.expect(d).to.have.keys(\"id\", \"name\", \"description\", \"imageUrl\", \"category\", \"priceMin\", \"priceMax\", \"inStock\", \"variants\"));",
+              "pm.test(\"Biến thể: id, sku, name, price, attributes, branches\", () => d.variants.forEach(v => pm.expect(v).to.have.keys(\"id\", \"sku\", \"name\", \"price\", \"attributes\", \"branches\")));",
+              "pm.test(\"Chỉ biến thể ACTIVE\", () => pm.expect(d.variants.map(v => v.sku).sort()).to.eql([\"SP-MAU-02-DO-L\", \"SP-MAU-02-XANH-M\"]));",
+              "pm.test(\"Mỗi biến thể đủ chi nhánh ACTIVE, chỉ IN_STOCK/OUT_OF_STOCK\", () => d.variants.forEach(v => { pm.expect(v.branches.map(b => b.branchId).sort((a, b) => a - b)).to.eql(ids); v.branches.forEach(b => pm.expect([\"IN_STOCK\", \"OUT_OF_STOCK\"]).to.include(b.availability)); }));",
+              "const xanh = d.variants.find(v => v.sku === \"SP-MAU-02-XANH-M\"); const inStock = xanh.branches.filter(b => b.availability === \"IN_STOCK\").map(b => b.branchId);",
+              "pm.test(\"Xanh M chỉ còn ở Cầu Giấy\", () => pm.expect(inStock).to.eql([Number(pm.collectionVariables.get(\"cauGiayId\"))]));",
+              "pm.test(\"Thuộc tính Màu Xanh, Size M\", () => pm.expect(xanh.attributes).to.eql([{name: \"Màu\", value: \"Xanh\"}, {name: \"Size\", value: \"M\"}]));",
+              "pm.test(\"Không lộ giá vốn / số lượng / trạng thái nội bộ\", () => pm.expect(pm.response.text()).to.not.match(/cost|123456|quantity|reserved|allocated|productCode|barcode|storeId|created|status|ACTIVE\"/i));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2c. Chi tiết Quần kaki mẫu: tồn bị đặt trước hết -> mọi chi nhánh OUT_OF_STOCK",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/products/{{pantsId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "products",
+            "{{pantsId}}"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const d = pm.response.json().data;",
+              "pm.test(\"inStock false, mọi chi nhánh OUT_OF_STOCK\", () => { pm.expect(d.inStock).to.eql(false); d.variants.forEach(v => v.branches.forEach(b => pm.expect(b.availability).to.eql(\"OUT_OF_STOCK\"))); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2d. Chi tiết sản phẩm không tồn tại -> 404",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/products/999999999",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "products",
+            "999999999"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 404\", () => pm.response.to.have.status(404));",
+              "pm.test(\"error.code = NOT_FOUND\", () => pm.expect(pm.response.json().error.code).to.eql(\"NOT_FOUND\"));"
             ]
           }
         }
@@ -486,6 +628,22 @@
     },
     {
       "key": "catShirt",
+      "value": ""
+    },
+    {
+      "key": "shirtId",
+      "value": ""
+    },
+    {
+      "key": "pantsId",
+      "value": ""
+    },
+    {
+      "key": "branchIds",
+      "value": ""
+    },
+    {
+      "key": "cauGiayId",
       "value": ""
     }
   ]

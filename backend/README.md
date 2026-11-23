@@ -145,11 +145,14 @@ ids = get_accessible_branch_ids(user)   # lọc danh sách theo chi nhánh user 
 | Endpoint | Ghi chú |
 |---|---|
 | `GET /api/v1/public/products?keyword&categoryId&attr&inStock&page&size&storeId` | `{items, page, size, total, totalPages}`; `size` ≤ 50 |
+| `GET /api/v1/public/products/{id}` | trang chi tiết + form đặt trước (FR-07.4): `{id, name, description, imageUrl, category, priceMin, priceMax, inStock, variants: [{id, sku, name, price, attributes: [{name, value}], branches: [{branchId, availability}]}]}`; sản phẩm ẩn / không tồn tại → 404 |
+| `GET /api/v1/public/branches?storeId` | chi nhánh ACTIVE `[{id, name, address, phone}]` |
 | `GET /api/v1/public/categories?storeId` | cây danh mục ACTIVE `[{id, name, children}]` |
 
 - Mỗi sản phẩm chỉ có: `id, name, imageUrl, category{id,name}, priceMin, priceMax, inStock`. Không bao giờ trả giá vốn, số lượng tồn, SKU/mã sản phẩm, id chi nhánh/cửa hàng, trạng thái (FR-07.5).
 - Chỉ sản phẩm ACTIVE có ít nhất một biến thể ACTIVE, thuộc danh mục hiển thị (danh mục và mọi danh mục cha đều ACTIVE). Khoảng giá chỉ tính biến thể ACTIVE.
 - `inStock`: có chi nhánh ACTIVE còn tồn khả dụng > 0 (`quantity` trừ `allocated_quantity` của đơn đặt trước WAITING_STOCK/READY/NOTIFIED).
+- Chi tiết: `availability` là `IN_STOCK` / `OUT_OF_STOCK` cho **mọi** chi nhánh ACTIVE của cửa hàng (không có dòng tồn = `OUT_OF_STOCK`), không bao giờ trả số lượng. Form đặt trước gửi `variants[].id` làm `variantId` và `branchId` lấy từ `GET /public/branches`.
 - `categoryId` gồm cả danh mục con. `attr=Tên:Giá trị` lặp lại được (tối đa 5), cùng một biến thể phải khớp tất cả. `storeId` tuỳ chọn: bỏ trống = mọi cửa hàng.
 - Giới hạn `PUBLIC_RATE_LIMIT_PER_MINUTE` (mặc định 60) request/phút/IP, dùng chung cho mọi route `/public` → 429 `RATE_LIMIT_EXCEEDED` + `Retry-After`. Bộ đếm nằm trong bộ nhớ từng worker; không tin `X-Forwarded-For`.
 - Dữ liệu mẫu: `python -m scripts.seed_catalog` (sau `seed_auth`). Kiểm tra (gồm EXPLAIN index): `python -m scripts.check_public_catalog`. Postman: `postman/DKat_Public_Catalog.postman_collection.json`.

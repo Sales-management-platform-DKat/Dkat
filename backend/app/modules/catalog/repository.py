@@ -7,7 +7,8 @@ Only ACTIVE branches and ACTIVE variants count.
 
 Index use (checked with EXPLAIN, see scripts/check_public_catalog.py):
 - variants of a product    -> product_variants.idx_variants_product_status (product_id, status)
-- stock of a variant       -> inventory.idx_inventory_variant (variant_id), branches PRIMARY
+- stock of a variant       -> inventory.idx_inventory_variant (variant_id) or uq_inventory_branch_variant
+                              (branch_id, variant_id), branches PRIMARY
 - reservations             -> preorder_items.idx_pi_variant_preorder (variant_id, preorder_id), preorders PRIMARY
 - attribute filter         -> variant_attribute_values.uq_variant_attribute (variant_id, attribute_id)
 - category / store filter  -> products.idx_products_store_cat_status / idx_products_category
@@ -32,10 +33,10 @@ def _escape_like(value: str) -> str:
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
-def _has_available_stock(product_id_col):
-    """EXISTS: an ACTIVE variant of the product has available stock > 0 at an ACTIVE branch."""
-    variant = aliased(ProductVariant)
-    reserved = (
+def _reserved_for_inventory_row():
+    """Correlated scalar: quantity held by open pre-orders for the enclosing inventory row's
+    (branch, variant). Available stock = Inventory.quantity - this."""
+    return (
         select(func.coalesce(func.sum(_preorder_items.c.allocated_quantity), 0))
         .select_from(_preorder_items.join(_preorders, _preorders.c.preorder_id == _preorder_items.c.preorder_id))
         .where(
@@ -45,12 +46,25 @@ def _has_available_stock(product_id_col):
         )
         .scalar_subquery()
     )
+
+
+def _has_available_stock(product_id_col):
+    """EXISTS: an ACTIVE variant of the product has available stock > 0 at an ACTIVE branch."""
+    variant = aliased(ProductVariant)
     return (
         select(Inventory.inventory_id)
         .join(variant, and_(variant.variant_id == Inventory.variant_id, variant.status == "ACTIVE"))
         .join(Branch, and_(Branch.branch_id == Inventory.branch_id, Branch.status == "ACTIVE"))
-        .where(variant.product_id == product_id_col, Inventory.quantity > reserved)
+        .where(variant.product_id == product_id_col, Inventory.quantity > _reserved_for_inventory_row())
         .exists()
+    )
+
+
+def _available_pairs_stmt(variant_ids: list[int], branch_ids: list[int]):
+    return select(Inventory.variant_id, Inventory.branch_id).where(
+        Inventory.variant_id.in_(variant_ids),
+        Inventory.branch_id.in_(branch_ids),
+        Inventory.quantity > _reserved_for_inventory_row(),
     )
 
 
@@ -167,6 +181,65 @@ async def product_cards(db: AsyncSession, product_ids: list[int]) -> dict[int, d
     return cards
 
 
+async def get_product(db: AsyncSession, product_id: int):
+    """The product row with its category, or None. Visibility is decided by the service."""
+    return (
+        await db.execute(
+            select(
+                Product.product_id,
+                Product.store_id,
+                Product.status,
+                Product.name,
+                Product.description,
+                Product.image_url,
+                Product.category_id,
+                Category.name.label("category_name"),
+            )
+            .join(Category, Category.category_id == Product.category_id)
+            .where(Product.product_id == product_id)
+        )
+    ).first()
+
+
+async def active_variants(db: AsyncSession, product_id: int) -> list:
+    stmt = (
+        select(ProductVariant.variant_id, ProductVariant.sku, ProductVariant.variant_name, ProductVariant.price)
+        .where(ProductVariant.product_id == product_id, ProductVariant.status == "ACTIVE")
+        .order_by(ProductVariant.variant_id)
+    )
+    return list((await db.execute(stmt)).all())
+
+
+async def variant_attributes(db: AsyncSession, variant_ids: list[int]) -> dict[int, list[tuple[str, str]]]:
+    """ACTIVE attribute (name, value) pairs per variant, ordered by attribute name."""
+    if not variant_ids:
+        return {}
+    stmt = (
+        select(VariantAttributeValue.variant_id, Attribute.name, VariantAttributeValue.value)
+        .join(Attribute, and_(Attribute.attribute_id == VariantAttributeValue.attribute_id, Attribute.status == "ACTIVE"))
+        .where(VariantAttributeValue.variant_id.in_(variant_ids))
+        .order_by(VariantAttributeValue.variant_id, Attribute.name)
+    )
+    result: dict[int, list[tuple[str, str]]] = {}
+    for variant_id, name, value in (await db.execute(stmt)).all():
+        result.setdefault(variant_id, []).append((name, value))
+    return result
+
+
+async def active_branches(db: AsyncSession, store_id: int | None) -> list[Branch]:
+    stmt = select(Branch).where(Branch.status == "ACTIVE")
+    if store_id is not None:
+        stmt = stmt.where(Branch.store_id == store_id)
+    return list((await db.execute(stmt.order_by(Branch.name, Branch.branch_id))).scalars())
+
+
+async def available_pairs(db: AsyncSession, variant_ids: list[int], branch_ids: list[int]) -> set[tuple[int, int]]:
+    """(variant_id, branch_id) pairs with available stock > 0. A missing inventory row = not available."""
+    if not variant_ids or not branch_ids:
+        return set()
+    return {(v, b) for v, b in (await db.execute(_available_pairs_stmt(variant_ids, branch_ids))).all()}
+
+
 async def list_categories(db: AsyncSession, store_id: int | None) -> list[Category]:
     stmt = select(Category)
     if store_id is not None:
@@ -174,10 +247,13 @@ async def list_categories(db: AsyncSession, store_id: int | None) -> list[Catego
     return list((await db.execute(stmt.order_by(Category.name, Category.category_id))).scalars())
 
 
-def explain_targets(store_id: int, category_ids: list[int], product_ids: list[int]):
+def explain_targets(
+    store_id: int, category_ids: list[int], product_ids: list[int], variant_ids: list[int], branch_ids: list[int]
+):
     """Statements whose plans scripts/check_public_catalog.py inspects with EXPLAIN.
     Pass ids that exist: MySQL returns no plan for an impossible WHERE."""
     return {
+        "availability": _available_pairs_stmt(variant_ids, branch_ids),
         "search": _search_stmt(category_ids=category_ids, store_id=store_id, keyword=None, attrs=[("Size", "M")], in_stock=True),
         "price_range": select(ProductVariant.product_id, func.min(ProductVariant.price), func.max(ProductVariant.price))
         .where(ProductVariant.product_id.in_(product_ids), ProductVariant.status == "ACTIVE")

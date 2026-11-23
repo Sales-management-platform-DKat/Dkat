@@ -9,7 +9,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppError
 from app.modules.catalog import repository
-from app.modules.catalog.schemas import PublicCategoryNode, PublicProductOut, PublicProductPageOut
+from app.modules.catalog.schemas import (
+    PublicAttributeValue,
+    PublicBranchAvailability,
+    PublicBranchOut,
+    PublicCategoryNode,
+    PublicCategoryRef,
+    PublicProductDetailOut,
+    PublicProductOut,
+    PublicProductPageOut,
+    PublicVariantOut,
+)
 from app.modules.products.models import Category
 
 MAX_ATTR_FILTERS = 5
@@ -78,6 +88,58 @@ async def category_tree(db: AsyncSession, store_id: int | None) -> list[PublicCa
         return PublicCategoryNode(id=c.category_id, name=c.name, children=[build(x) for x in children.get(c.category_id, [])])
 
     return [build(c) for c in children.get(None, [])]
+
+
+async def product_detail(db: AsyncSession, product_id: int) -> PublicProductDetailOut:
+    """Detail page + pre-order form (FR-07.4). Hidden products answer 404 like unknown ids."""
+    row = await repository.get_product(db, product_id)
+    variants = await repository.active_variants(db, product_id) if row else []
+    if (
+        row is None
+        or row.status != "ACTIVE"
+        or row.category_id not in _visible_categories(await repository.list_categories(db, row.store_id))
+        or not variants
+    ):
+        raise AppError.not_found("Không tìm thấy sản phẩm")
+
+    variant_ids = [v.variant_id for v in variants]
+    branch_ids = [b.branch_id for b in await repository.active_branches(db, row.store_id)]
+    attributes = await repository.variant_attributes(db, variant_ids)
+    available = await repository.available_pairs(db, variant_ids, branch_ids)
+    prices = [float(v.price) for v in variants]
+    return PublicProductDetailOut(
+        id=row.product_id,
+        name=row.name,
+        description=row.description,
+        image_url=row.image_url,
+        category=PublicCategoryRef(id=row.category_id, name=row.category_name),
+        price_min=min(prices),
+        price_max=max(prices),
+        in_stock=bool(available),  # same rule as inStock in the search results
+        variants=[
+            PublicVariantOut(
+                id=v.variant_id,
+                sku=v.sku,
+                name=v.variant_name,
+                price=float(v.price),
+                attributes=[PublicAttributeValue(name=n, value=val) for n, val in attributes.get(v.variant_id, [])],
+                branches=[
+                    PublicBranchAvailability(
+                        branch_id=b, availability="IN_STOCK" if (v.variant_id, b) in available else "OUT_OF_STOCK"
+                    )
+                    for b in branch_ids
+                ],
+            )
+            for v in variants
+        ],
+    )
+
+
+async def list_branches(db: AsyncSession, store_id: int | None) -> list[PublicBranchOut]:
+    return [
+        PublicBranchOut(id=b.branch_id, name=b.name, address=b.address, phone=b.phone)
+        for b in await repository.active_branches(db, store_id)
+    ]
 
 
 async def search_products(
