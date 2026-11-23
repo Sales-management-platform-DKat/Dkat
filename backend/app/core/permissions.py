@@ -118,6 +118,7 @@ def require_role(*roles: str):
             raise AppError.forbidden(FORBIDDEN_ROLE_MESSAGE)
         return user
 
+    checker.dkat_roles = roles  # read by scripts/gen_api_docs.py to document who may call a route
     return checker
 
 
@@ -213,4 +214,5 @@ def require_branch_access(param: str = "branch_id", *, required: bool = False):
         request.state.branch_id = branch_id
         return user
 
+    checker.dkat_branch_scope = True  # read by scripts/gen_api_docs.py
     return checker

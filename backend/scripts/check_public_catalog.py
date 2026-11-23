@@ -73,12 +73,20 @@ async def explain(
             rows = (await conn.execute(text("EXPLAIN " + sql))).mappings().all()
             plan = ", ".join(f"{r['table']}:{r['type']}/{r['key']}" for r in rows)
             print(f"  EXPLAIN {name}: {plan}")
+            # MySQL picks a full scan on tiny tables even when an index exists (e.g. on a freshly seeded DB),
+            # so the data-independent rule is: every table must HAVE a usable index (possible_keys) or use one.
+            # Internal temporary tables (<subqueryN>, <derivedN>) are MySQL's own and have no index to check.
             scans = [
                 r["table"]
                 for r in rows
-                if r["table"] is None or (r["type"] == "ALL" and not str(r["table"]).startswith(SMALL_LOOKUP_TABLES))
+                if r["table"] is None
+                or (
+                    r["type"] == "ALL"
+                    and not r["possible_keys"]
+                    and not str(r["table"]).startswith(("<",) + SMALL_LOOKUP_TABLES)
+                )
             ]
-            check(f"EXPLAIN {name}: bảng lớn đều dùng index", not scans, plan if scans else "")
+            check(f"EXPLAIN {name}: bảng lớn đều có index dùng được", not scans, plan if scans else "")
 
 
 async def main() -> int:

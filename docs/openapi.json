@@ -1,0 +1,5038 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "DKat API",
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Health Check",
+        "description": "Always 200 while the server is alive; `database` reports the MySQL connection status.",
+        "operationId": "health_check_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/db": {
+      "get": {
+        "tags": [
+          "health"
+        ],
+        "summary": "Database Check",
+        "description": "Detailed DB connection check: 200 if connected, 503 DATABASE_UNAVAILABLE if not.\n\nReturns: DB name, MySQL version, latency, charset, table list and whether all 18 tables exist.\nOWNER only (401 without token, 403 FORBIDDEN for MANAGER/EMPLOYEE).",
+        "operationId": "database_check_api_v1_health_db_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "description": "Đăng nhập: trả JWT (hạn 8 giờ) và thông tin user. 401 INVALID_CREDENTIALS / 403 ACCOUNT_LOCKED.",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_LoginOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Me",
+        "description": "Thông tin user hiện tại (frontend gọi để khôi phục phiên khi tải lại trang).",
+        "operationId": "me_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_AuthUserOut_"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Logout",
+        "description": "Ghi log đăng xuất. Token do client tự xóa (JWT không lưu phía server).",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/change-password": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Change Password",
+        "description": "Đổi mật khẩu: kiểm tra mật khẩu cũ, mật khẩu mới >= 8 ký tự và khác mật khẩu cũ.",
+        "operationId": "change_password_api_v1_auth_change_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/branches": {
+      "get": {
+        "tags": [
+          "branches"
+        ],
+        "summary": "List Branches",
+        "description": "Danh sách chi nhánh. `?status=ACTIVE|INACTIVE` để lọc.",
+        "operationId": "list_branches_api_v1_branches_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "ACTIVE",
+                    "INACTIVE"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_list_BranchOut__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "branches"
+        ],
+        "summary": "Create Branch",
+        "description": "Tạo chi nhánh (OWNER). Bắt buộc branchCode, name, address. 409 DUPLICATE_BRANCH_CODE nếu trùng mã.",
+        "operationId": "create_branch_api_v1_branches_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BranchIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_BranchCreatedOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/branches/{branch_id}": {
+      "get": {
+        "tags": [
+          "branches"
+        ],
+        "summary": "Get Branch",
+        "description": "Chi tiết chi nhánh. MANAGER/EMPLOYEE xem chi nhánh không được phân công -> 403.",
+        "operationId": "get_branch_api_v1_branches__branch_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "branch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Branch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_BranchOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "branches"
+        ],
+        "summary": "Update Branch",
+        "description": "Cập nhật mã, tên, địa chỉ, SĐT (OWNER). Trạng thái đổi qua PATCH /status.",
+        "operationId": "update_branch_api_v1_branches__branch_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "branch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Branch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BranchIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_BranchOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/branches/{branch_id}/status": {
+      "patch": {
+        "tags": [
+          "branches"
+        ],
+        "summary": "Change Branch Status",
+        "description": "ACTIVE/INACTIVE (OWNER). 409 BRANCH_HAS_OPEN_PREORDERS khi còn đơn WAITING_STOCK/READY/NOTIFIED.",
+        "operationId": "change_branch_status_api_v1_branches__branch_id__status_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "branch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Branch Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BranchStatusIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_BranchOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "List Users",
+        "description": "OWNER: mọi tài khoản. MANAGER: nhân viên thuộc chi nhánh mình; branchId ngoài phạm vi -> 403.\nkeyword tìm trong username, họ tên, email, SĐT.",
+        "operationId": "list_users_api_v1_users_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "branchId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branchid"
+            }
+          },
+          {
+            "name": "role",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "OWNER",
+                    "MANAGER",
+                    "EMPLOYEE"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Role"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "ACTIVE",
+                    "LOCKED"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Pagesize"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_UserPageOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Create User",
+        "description": "Tạo MANAGER/EMPLOYEE. 409 DUPLICATE_USERNAME, 422 mật khẩu < 8 ký tự hoặc chi nhánh không hợp lệ.",
+        "operationId": "create_user_api_v1_users_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserCreateIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_UserOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{user_id}": {
+      "get": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Get User",
+        "operationId": "get_user_api_v1_users__user_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_UserOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Update User",
+        "description": "Sửa họ tên, email, SĐT. `role` chỉ OWNER được đổi (MANAGER -> 403).",
+        "operationId": "update_user_api_v1_users__user_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserUpdateIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_UserOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{user_id}/branches": {
+      "put": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Assign Branches",
+        "description": "Thay toàn bộ phân công chi nhánh. MANAGER chỉ dùng chi nhánh mình quản lý (khác -> 403).\nCó hiệu lực ngay ở request kế tiếp và khi đăng nhập lại.",
+        "operationId": "assign_branches_api_v1_users__user_id__branches_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserBranchesIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_UserOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{user_id}/status": {
+      "patch": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Change User Status",
+        "description": "ACTIVE/LOCKED. 409 CANNOT_LOCK_SELF, 409 LAST_ACTIVE_OWNER.",
+        "operationId": "change_user_status_api_v1_users__user_id__status_patch",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserStatusIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_UserOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/users/{user_id}/reset-password": {
+      "post": {
+        "tags": [
+          "users"
+        ],
+        "summary": "Reset Password",
+        "description": "Đặt mật khẩu mới (>= 8 ký tự). Không dùng cho chính mình: 409 CANNOT_RESET_OWN_PASSWORD.",
+        "operationId": "reset_password_api_v1_users__user_id__reset_password_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResetPasswordIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/customers": {
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "summary": "List Customers",
+        "description": "Tìm theo tên hoặc một phần SĐT (ví dụ 4 số cuối). Chỉ trả id, tên, SĐT đã che.",
+        "operationId": "list_customers_api_v1_customers_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CustomerPageOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "customers"
+        ],
+        "summary": "Create Customer",
+        "description": "fullName bắt buộc; SĐT 10 số bắt đầu bằng 0; trùng SĐT -> 409 kèm customerId của khách cũ.",
+        "operationId": "create_customer_api_v1_customers_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CustomerOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/customers/quick-search": {
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "summary": "Quick Search",
+        "description": "POS tìm nhanh: tối đa 5 khách {id, fullName, maskedPhone: 0912***678}. Khớp đúng SĐT xếp đầu.",
+        "operationId": "quick_search_api_v1_customers_quick_search_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "phone",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20,
+              "description": "Một phần SĐT, ít nhất 3 chữ số",
+              "title": "Phone"
+            },
+            "description": "Một phần SĐT, ít nhất 3 chữ số"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_list_CustomerSummaryOut__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/customers/{customer_id}": {
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "summary": "Get Customer",
+        "description": "Hồ sơ đầy đủ (SĐT, email, địa chỉ, ghi chú). Mỗi lần xem được ghi vào log truy cập.",
+        "operationId": "get_customer_api_v1_customers__customer_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CustomerOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "customers"
+        ],
+        "summary": "Update Customer",
+        "description": "Thay toàn bộ thông tin khách (OWNER/MANAGER). Đổi sang SĐT đã có -> 409.",
+        "operationId": "update_customer_api_v1_customers__customer_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Customer Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CustomerOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/customers/{customer_id}/orders": {
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "summary": "Order History",
+        "description": "Lịch sử mua: đơn bán POS + đơn đặt trước của khách, mới nhất trước, kèm thống kê\n(số lần mua, tổng chi tiêu: chỉ đơn PAID / FULFILLED). MANAGER/EMPLOYEE chỉ thấy chi nhánh được phân công.",
+        "operationId": "order_history_api_v1_customers__customer_id__orders_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD, tính từ đầu ngày",
+              "title": "From"
+            },
+            "description": "YYYY-MM-DD, tính từ đầu ngày"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD, tính hết ngày",
+              "title": "To"
+            },
+            "description": "YYYY-MM-DD, tính hết ngày"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CustomerOrderHistoryOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/customers/{customer_id}/orders/{order_key}": {
+      "get": {
+        "tags": [
+          "customers"
+        ],
+        "summary": "Order Detail",
+        "description": "Chi tiết 1 đơn: dòng hàng (snapshot trên đơn) và các lần thanh toán. Đơn ở chi nhánh khác -> 403.",
+        "operationId": "order_detail_api_v1_customers__customer_id__orders__order_key__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "customer_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Customer Id"
+            }
+          },
+          {
+            "name": "order_key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "maxLength": 30,
+              "description": "SALE-<id> hoặc PREORDER-<id> (trường `key` trong lịch sử)",
+              "title": "Order Key"
+            },
+            "description": "SALE-<id> hoặc PREORDER-<id> (trường `key` trong lịch sử)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_CustomerOrderDetailOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/products": {
+      "post": {
+        "tags": [
+          "products"
+        ],
+        "summary": "Create Product",
+        "description": "Tạo sản phẩm (chỉ OWNER). MANAGER/EMPLOYEE -> 403 FORBIDDEN. 409 nếu trùng productCode.",
+        "operationId": "create_product_api_v1_products_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProductCreateIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_ProductOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/branches/{branch_id}/inventory": {
+      "get": {
+        "tags": [
+          "inventory"
+        ],
+        "summary": "List Branch Inventory",
+        "description": "Tồn kho của 1 chi nhánh. OWNER: mọi chi nhánh; MANAGER/EMPLOYEE: chỉ chi nhánh được phân công, khác -> 403.",
+        "operationId": "list_branch_inventory_api_v1_branches__branch_id__inventory_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "branch_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Branch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_InventoryListOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inventory": {
+      "get": {
+        "tags": [
+          "inventory"
+        ],
+        "summary": "List Inventory",
+        "description": "Tồn kho các chi nhánh user được xem (lọc bằng get_accessible_branch_ids).\n`?branch_id=` để lọc 1 chi nhánh: chi nhánh ngoài phạm vi -> 403.",
+        "operationId": "list_inventory_api_v1_inventory_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "branch_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branch Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_InventoryListOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/revenue": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Revenue",
+        "description": "Doanh thu theo kỳ (giờ Việt Nam, tuần bắt đầu thứ Hai), kỳ không có đơn = 0.\nDoanh thu = đơn bán PAID (theo paid_at) + đơn đặt trước FULFILLED chưa hoàn tiền (theo fulfilled_at).",
+        "operationId": "revenue_api_v1_reports_revenue_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "granularity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "day",
+                "week",
+                "month",
+                "year"
+              ],
+              "type": "string",
+              "default": "day",
+              "title": "Granularity"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD giờ VN (mặc định theo granularity)",
+              "title": "From"
+            },
+            "description": "YYYY-MM-DD giờ VN (mặc định theo granularity)"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD giờ VN, tính hết ngày (mặc định hôm nay)",
+              "title": "To"
+            },
+            "description": "YYYY-MM-DD giờ VN, tính hết ngày (mặc định hôm nay)"
+          },
+          {
+            "name": "branchId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branchid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_RevenueReportOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/revenue/export": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Revenue Export",
+        "description": "Tải báo cáo doanh thu dạng CSV (UTF-8 có BOM, mở bằng Excel không lỗi tiếng Việt).\nCùng số liệu, tham số và phân quyền với GET /reports/revenue; thêm dòng Tổng cộng.",
+        "operationId": "revenue_export_api_v1_reports_revenue_export_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "granularity",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "day",
+                "week",
+                "month",
+                "year"
+              ],
+              "type": "string",
+              "default": "day",
+              "title": "Granularity"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD giờ VN",
+              "title": "From"
+            },
+            "description": "YYYY-MM-DD giờ VN"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD giờ VN, tính hết ngày",
+              "title": "To"
+            },
+            "description": "YYYY-MM-DD giờ VN, tính hết ngày"
+          },
+          {
+            "name": "branchId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branchid"
+            }
+          },
+          {
+            "name": "delimiter",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "comma",
+                "semicolon"
+              ],
+              "type": "string",
+              "description": "semicolon nếu Excel của máy dùng dấu ; làm dấu phân cách danh sách",
+              "default": "comma",
+              "title": "Delimiter"
+            },
+            "description": "semicolon nếu Excel của máy dùng dấu ; làm dấu phân cách danh sách"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "CSV UTF-8 (BOM)",
+            "content": {
+              "text/csv": {}
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/summary": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Summary",
+        "description": "Thẻ số dashboard: doanh thu, số đơn, giá trị trung bình/đơn và % thay đổi so với kỳ trước\n(cùng số ngày, liền trước `from`; null khi kỳ trước = 0).",
+        "operationId": "summary_api_v1_reports_summary_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD giờ VN (mặc định 30 ngày)",
+              "title": "From"
+            },
+            "description": "YYYY-MM-DD giờ VN (mặc định 30 ngày)"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD giờ VN (mặc định hôm nay)",
+              "title": "To"
+            },
+            "description": "YYYY-MM-DD giờ VN (mặc định hôm nay)"
+          },
+          {
+            "name": "branchId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branchid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_RevenueSummaryOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports/top-products": {
+      "get": {
+        "tags": [
+          "reports"
+        ],
+        "summary": "Top Products",
+        "description": "Top sản phẩm theo SKU: tên (snapshot mới nhất), tổng số lượng, doanh thu dòng hàng.\nCùng quy tắc tính doanh thu với /reports/revenue.",
+        "operationId": "top_products_api_v1_reports_top_products_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 10,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "revenue",
+                "quantity"
+              ],
+              "type": "string",
+              "default": "revenue",
+              "title": "Sortby"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD giờ VN (mặc định 30 ngày)",
+              "title": "From"
+            },
+            "description": "YYYY-MM-DD giờ VN (mặc định 30 ngày)"
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "YYYY-MM-DD giờ VN (mặc định hôm nay)",
+              "title": "To"
+            },
+            "description": "YYYY-MM-DD giờ VN (mặc định hôm nay)"
+          },
+          {
+            "name": "branchId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Branchid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_TopProductsOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/preorders/{preorder_id}/notifications": {
+      "get": {
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Preorder Notifications",
+        "description": "Lịch sử thông báo của đơn đặt trước: mỗi lần gửi 1 dòng (kênh, người nhận đã che, trạng thái, số lần gửi lại, lỗi).",
+        "operationId": "preorder_notifications_api_v1_preorders__preorder_id__notifications_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "preorder_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Preorder Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_PreorderNotificationsOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/notifications/{notification_id}/resend": {
+      "post": {
+        "tags": [
+          "notifications"
+        ],
+        "summary": "Resend",
+        "description": "Gửi lại ngay một thông báo FAILED (cùng kênh, người nhận, nội dung), tăng retryCount.\n200 + result SENT/FAILED; 409 NOTIFICATION_NOT_FAILED nếu đã SENT hoặc đang gửi.",
+        "operationId": "resend_api_v1_notifications__notification_id__resend_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "notification_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Notification Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_ResendOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/products": {
+      "get": {
+        "tags": [
+          "public"
+        ],
+        "summary": "Search Products",
+        "description": "Tra cứu sản phẩm ACTIVE. categoryId gồm cả danh mục con. attr: biến thể phải có đủ mọi giá trị.\ninStock=true: còn hàng khả dụng ở ít nhất một chi nhánh; false: hết hàng.",
+        "operationId": "search_products_api_v1_public_products_get",
+        "parameters": [
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 100
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "name": "categoryId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Categoryid"
+            }
+          },
+          {
+            "name": "attr",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Lặp lại được: attr=Màu:Đỏ&attr=Size:M",
+              "default": [],
+              "title": "Attr"
+            },
+            "description": "Lặp lại được: attr=Màu:Đỏ&attr=Size:M"
+          },
+          {
+            "name": "inStock",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Instock"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Size"
+            }
+          },
+          {
+            "name": "storeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Storeid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_PublicProductPageOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/products/{product_id}": {
+      "get": {
+        "tags": [
+          "public"
+        ],
+        "summary": "Product Detail",
+        "description": "Trang chi tiết + form đặt trước: mô tả, biến thể (id, sku, tên, thuộc tính, giá) và với mỗi\nchi nhánh ACTIVE: IN_STOCK / OUT_OF_STOCK (không có số lượng). Sản phẩm ẩn / không tồn tại -> 404.",
+        "operationId": "product_detail_api_v1_public_products__product_id__get",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "exclusiveMinimum": 0,
+              "title": "Product Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_PublicProductDetailOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/branches": {
+      "get": {
+        "tags": [
+          "public"
+        ],
+        "summary": "List Branches",
+        "description": "Chi nhánh ACTIVE: id, tên, địa chỉ, SĐT.",
+        "operationId": "list_branches_api_v1_public_branches_get",
+        "parameters": [
+          {
+            "name": "storeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Storeid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_list_PublicBranchOut__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/public/categories": {
+      "get": {
+        "tags": [
+          "public"
+        ],
+        "summary": "Category Tree",
+        "description": "Cây danh mục ACTIVE (danh mục con của danh mục ngừng hoạt động bị ẩn).",
+        "operationId": "category_tree_api_v1_public_categories_get",
+        "parameters": [
+          {
+            "name": "storeId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "exclusiveMinimum": 0
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Storeid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse_list_PublicCategoryNode__"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AssignedBranchOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "branchCode": {
+            "type": "string",
+            "title": "Branchcode"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "branchCode",
+          "name",
+          "status"
+        ],
+        "title": "AssignedBranchOut"
+      },
+      "AuthUserOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "fullName": {
+            "type": "string",
+            "title": "Fullname"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "storeId": {
+            "type": "integer",
+            "title": "Storeid"
+          },
+          "branches": {
+            "items": {
+              "$ref": "#/components/schemas/BranchBrief"
+            },
+            "type": "array",
+            "title": "Branches"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "fullName",
+          "username",
+          "role",
+          "storeId",
+          "branches"
+        ],
+        "title": "AuthUserOut"
+      },
+      "BranchBrief": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "BranchBrief"
+      },
+      "BranchCreatedOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "storeId": {
+            "type": "integer",
+            "title": "Storeid"
+          },
+          "branchCode": {
+            "type": "string",
+            "title": "Branchcode"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "address": {
+            "type": "string",
+            "title": "Address"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "inventoryRowsCreated": {
+            "type": "integer",
+            "title": "Inventoryrowscreated"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "storeId",
+          "branchCode",
+          "name",
+          "address",
+          "phone",
+          "status",
+          "createdAt",
+          "inventoryRowsCreated"
+        ],
+        "title": "BranchCreatedOut"
+      },
+      "BranchIn": {
+        "properties": {
+          "branchCode": {
+            "type": "string",
+            "maxLength": 30,
+            "minLength": 1,
+            "title": "Branchcode"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 150,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "address": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Address"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "branchCode",
+          "name",
+          "address"
+        ],
+        "title": "BranchIn",
+        "description": "Body of POST /branches and PUT /branches/{id} (PUT replaces every field below)."
+      },
+      "BranchOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "storeId": {
+            "type": "integer",
+            "title": "Storeid"
+          },
+          "branchCode": {
+            "type": "string",
+            "title": "Branchcode"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "address": {
+            "type": "string",
+            "title": "Address"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "storeId",
+          "branchCode",
+          "name",
+          "address",
+          "phone",
+          "status",
+          "createdAt"
+        ],
+        "title": "BranchOut"
+      },
+      "BranchStatusIn": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "INACTIVE"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "BranchStatusIn"
+      },
+      "ChangePasswordIn": {
+        "properties": {
+          "oldPassword": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Oldpassword"
+          },
+          "newPassword": {
+            "type": "string",
+            "maxLength": 72,
+            "minLength": 8,
+            "title": "Newpassword"
+          }
+        },
+        "type": "object",
+        "required": [
+          "oldPassword",
+          "newPassword"
+        ],
+        "title": "ChangePasswordIn"
+      },
+      "CountMetric": {
+        "properties": {
+          "value": {
+            "type": "integer",
+            "title": "Value"
+          },
+          "previous": {
+            "type": "integer",
+            "title": "Previous"
+          },
+          "changePercent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changepercent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "previous",
+          "changePercent"
+        ],
+        "title": "CountMetric"
+      },
+      "CustomerIn": {
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "maxLength": 150,
+            "minLength": 1,
+            "title": "Fullname"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fullName"
+        ],
+        "title": "CustomerIn",
+        "description": "POST /customers and PUT /customers/{id} (PUT replaces every field)."
+      },
+      "CustomerOrderDetailOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "SALE",
+              "PREORDER"
+            ],
+            "title": "Type"
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "branch": {
+            "$ref": "#/components/schemas/OrderBranchRef"
+          },
+          "totalAmount": {
+            "type": "number",
+            "title": "Totalamount"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "paymentStatus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paymentstatus"
+          },
+          "paymentMethods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Paymentmethods"
+          },
+          "subtotal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subtotal"
+          },
+          "discountAmount": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discountamount"
+          },
+          "lines": {
+            "items": {
+              "$ref": "#/components/schemas/OrderLineOut"
+            },
+            "type": "array",
+            "title": "Lines"
+          },
+          "payments": {
+            "items": {
+              "$ref": "#/components/schemas/OrderPaymentOut"
+            },
+            "type": "array",
+            "title": "Payments"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "type",
+          "id",
+          "code",
+          "createdAt",
+          "branch",
+          "totalAmount",
+          "status",
+          "paymentStatus",
+          "paymentMethods",
+          "subtotal",
+          "discountAmount",
+          "lines",
+          "payments"
+        ],
+        "title": "CustomerOrderDetailOut"
+      },
+      "CustomerOrderHistoryOut": {
+        "properties": {
+          "customerId": {
+            "type": "integer",
+            "title": "Customerid"
+          },
+          "stats": {
+            "$ref": "#/components/schemas/CustomerOrderStats"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerOrderOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "totalPages": {
+            "type": "integer",
+            "title": "Totalpages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "customerId",
+          "stats",
+          "items",
+          "page",
+          "size",
+          "total",
+          "totalPages"
+        ],
+        "title": "CustomerOrderHistoryOut"
+      },
+      "CustomerOrderOut": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "SALE",
+              "PREORDER"
+            ],
+            "title": "Type"
+          },
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "branch": {
+            "$ref": "#/components/schemas/OrderBranchRef"
+          },
+          "totalAmount": {
+            "type": "number",
+            "title": "Totalamount"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "paymentStatus": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paymentstatus"
+          },
+          "paymentMethods": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Paymentmethods"
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "type",
+          "id",
+          "code",
+          "createdAt",
+          "branch",
+          "totalAmount",
+          "status",
+          "paymentStatus",
+          "paymentMethods"
+        ],
+        "title": "CustomerOrderOut"
+      },
+      "CustomerOrderStats": {
+        "properties": {
+          "purchaseCount": {
+            "type": "integer",
+            "title": "Purchasecount"
+          },
+          "totalSpent": {
+            "type": "number",
+            "title": "Totalspent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "purchaseCount",
+          "totalSpent"
+        ],
+        "title": "CustomerOrderStats",
+        "description": "Only completed purchases count: sales orders PAID + pre-orders FULFILLED."
+      },
+      "CustomerOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "fullName": {
+            "type": "string",
+            "title": "Fullname"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "address": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Address"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "fullName",
+          "phone",
+          "email",
+          "address",
+          "note",
+          "createdAt",
+          "updatedAt"
+        ],
+        "title": "CustomerOut"
+      },
+      "CustomerPageOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerSummaryOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "totalPages": {
+            "type": "integer",
+            "title": "Totalpages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "page",
+          "size",
+          "total",
+          "totalPages"
+        ],
+        "title": "CustomerPageOut"
+      },
+      "CustomerSummaryOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "fullName": {
+            "type": "string",
+            "title": "Fullname"
+          },
+          "maskedPhone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maskedphone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "fullName",
+          "maskedPhone"
+        ],
+        "title": "CustomerSummaryOut",
+        "description": "Search results (list + quick search). No full phone, email, address or note:\nthe full profile is only returned by GET /customers/{id}, and every such view is logged."
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "InventoryItemOut": {
+        "properties": {
+          "branchId": {
+            "type": "integer",
+            "title": "Branchid"
+          },
+          "variantId": {
+            "type": "integer",
+            "title": "Variantid"
+          },
+          "sku": {
+            "type": "string",
+            "title": "Sku"
+          },
+          "variantName": {
+            "type": "string",
+            "title": "Variantname"
+          },
+          "productId": {
+            "type": "integer",
+            "title": "Productid"
+          },
+          "productName": {
+            "type": "string",
+            "title": "Productname"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updatedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "branchId",
+          "variantId",
+          "sku",
+          "variantName",
+          "productId",
+          "productName",
+          "quantity",
+          "updatedAt"
+        ],
+        "title": "InventoryItemOut"
+      },
+      "InventoryListOut": {
+        "properties": {
+          "branchIds": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Branchids"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InventoryItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "branchIds",
+          "items"
+        ],
+        "title": "InventoryListOut"
+      },
+      "LoginIn": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginIn"
+      },
+      "LoginOut": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "tokenType": {
+            "type": "string",
+            "title": "Tokentype",
+            "default": "Bearer"
+          },
+          "expiresIn": {
+            "type": "integer",
+            "title": "Expiresin"
+          },
+          "user": {
+            "$ref": "#/components/schemas/AuthUserOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "expiresIn",
+          "user"
+        ],
+        "title": "LoginOut"
+      },
+      "NotificationOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "preorderId": {
+            "type": "integer",
+            "title": "Preorderid"
+          },
+          "eventType": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Eventtype"
+          },
+          "channel": {
+            "type": "string",
+            "title": "Channel"
+          },
+          "recipient": {
+            "type": "string",
+            "title": "Recipient"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "retryCount": {
+            "type": "integer",
+            "title": "Retrycount"
+          },
+          "canResend": {
+            "type": "boolean",
+            "title": "Canresend"
+          },
+          "providerMessageId": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Providermessageid"
+          },
+          "errorMessage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errormessage"
+          },
+          "sentAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sentat"
+          },
+          "lastAttemptAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lastattemptat"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "preorderId",
+          "eventType",
+          "channel",
+          "recipient",
+          "message",
+          "status",
+          "retryCount",
+          "canResend",
+          "providerMessageId",
+          "errorMessage",
+          "sentAt",
+          "lastAttemptAt",
+          "createdAt"
+        ],
+        "title": "NotificationOut"
+      },
+      "OrderBranchRef": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "OrderBranchRef"
+      },
+      "OrderLineOut": {
+        "properties": {
+          "productName": {
+            "type": "string",
+            "title": "Productname"
+          },
+          "sku": {
+            "type": "string",
+            "title": "Sku"
+          },
+          "unitPrice": {
+            "type": "number",
+            "title": "Unitprice"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "lineTotal": {
+            "type": "number",
+            "title": "Linetotal"
+          }
+        },
+        "type": "object",
+        "required": [
+          "productName",
+          "sku",
+          "unitPrice",
+          "quantity",
+          "lineTotal"
+        ],
+        "title": "OrderLineOut",
+        "description": "Snapshot stored on the order: later product renames/price changes do not alter history."
+      },
+      "OrderPaymentOut": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "amount": {
+            "type": "number",
+            "title": "Amount"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "confirmedAt": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmedat"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "amount",
+          "status",
+          "confirmedAt"
+        ],
+        "title": "OrderPaymentOut"
+      },
+      "PeriodRef": {
+        "properties": {
+          "dateFrom": {
+            "type": "string",
+            "format": "date",
+            "title": "Datefrom"
+          },
+          "dateTo": {
+            "type": "string",
+            "format": "date",
+            "title": "Dateto"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dateFrom",
+          "dateTo"
+        ],
+        "title": "PeriodRef"
+      },
+      "PreorderNotificationsOut": {
+        "properties": {
+          "preorderId": {
+            "type": "integer",
+            "title": "Preorderid"
+          },
+          "preorderCode": {
+            "type": "string",
+            "title": "Preordercode"
+          },
+          "maxAutoRetries": {
+            "type": "integer",
+            "title": "Maxautoretries"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/NotificationOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "preorderId",
+          "preorderCode",
+          "maxAutoRetries",
+          "items"
+        ],
+        "title": "PreorderNotificationsOut"
+      },
+      "ProductCreateIn": {
+        "properties": {
+          "categoryId": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Categoryid"
+          },
+          "productCode": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 1,
+            "title": "Productcode"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "imageUrl": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imageurl"
+          }
+        },
+        "type": "object",
+        "required": [
+          "categoryId",
+          "productCode",
+          "name"
+        ],
+        "title": "ProductCreateIn"
+      },
+      "ProductOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "storeId": {
+            "type": "integer",
+            "title": "Storeid"
+          },
+          "categoryId": {
+            "type": "integer",
+            "title": "Categoryid"
+          },
+          "productCode": {
+            "type": "string",
+            "title": "Productcode"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "imageUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imageurl"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "createdBy": {
+            "type": "integer",
+            "title": "Createdby"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "storeId",
+          "categoryId",
+          "productCode",
+          "name",
+          "description",
+          "imageUrl",
+          "status",
+          "createdAt",
+          "createdBy"
+        ],
+        "title": "ProductOut"
+      },
+      "PublicAttributeValue": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "PublicAttributeValue"
+      },
+      "PublicBranchAvailability": {
+        "properties": {
+          "branchId": {
+            "type": "integer",
+            "title": "Branchid"
+          },
+          "availability": {
+            "type": "string",
+            "enum": [
+              "IN_STOCK",
+              "OUT_OF_STOCK"
+            ],
+            "title": "Availability"
+          }
+        },
+        "type": "object",
+        "required": [
+          "branchId",
+          "availability"
+        ],
+        "title": "PublicBranchAvailability"
+      },
+      "PublicBranchOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "address": {
+            "type": "string",
+            "title": "Address"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "address",
+          "phone"
+        ],
+        "title": "PublicBranchOut"
+      },
+      "PublicCategoryNode": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "children": {
+            "items": {
+              "$ref": "#/components/schemas/PublicCategoryNode"
+            },
+            "type": "array",
+            "title": "Children"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "children"
+        ],
+        "title": "PublicCategoryNode"
+      },
+      "PublicCategoryRef": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "PublicCategoryRef"
+      },
+      "PublicProductDetailOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "imageUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imageurl"
+          },
+          "category": {
+            "$ref": "#/components/schemas/PublicCategoryRef"
+          },
+          "priceMin": {
+            "type": "number",
+            "title": "Pricemin"
+          },
+          "priceMax": {
+            "type": "number",
+            "title": "Pricemax"
+          },
+          "inStock": {
+            "type": "boolean",
+            "title": "Instock"
+          },
+          "variants": {
+            "items": {
+              "$ref": "#/components/schemas/PublicVariantOut"
+            },
+            "type": "array",
+            "title": "Variants"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "description",
+          "imageUrl",
+          "category",
+          "priceMin",
+          "priceMax",
+          "inStock",
+          "variants"
+        ],
+        "title": "PublicProductDetailOut"
+      },
+      "PublicProductOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "imageUrl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imageurl"
+          },
+          "category": {
+            "$ref": "#/components/schemas/PublicCategoryRef"
+          },
+          "priceMin": {
+            "type": "number",
+            "title": "Pricemin"
+          },
+          "priceMax": {
+            "type": "number",
+            "title": "Pricemax"
+          },
+          "inStock": {
+            "type": "boolean",
+            "title": "Instock"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "imageUrl",
+          "category",
+          "priceMin",
+          "priceMax",
+          "inStock"
+        ],
+        "title": "PublicProductOut"
+      },
+      "PublicProductPageOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublicProductOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "size": {
+            "type": "integer",
+            "title": "Size"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "totalPages": {
+            "type": "integer",
+            "title": "Totalpages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "page",
+          "size",
+          "total",
+          "totalPages"
+        ],
+        "title": "PublicProductPageOut"
+      },
+      "PublicVariantOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "sku": {
+            "type": "string",
+            "title": "Sku"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "price": {
+            "type": "number",
+            "title": "Price"
+          },
+          "attributes": {
+            "items": {
+              "$ref": "#/components/schemas/PublicAttributeValue"
+            },
+            "type": "array",
+            "title": "Attributes"
+          },
+          "branches": {
+            "items": {
+              "$ref": "#/components/schemas/PublicBranchAvailability"
+            },
+            "type": "array",
+            "title": "Branches"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "sku",
+          "name",
+          "price",
+          "attributes",
+          "branches"
+        ],
+        "title": "PublicVariantOut"
+      },
+      "ResendOut": {
+        "properties": {
+          "result": {
+            "type": "string",
+            "enum": [
+              "SENT",
+              "FAILED"
+            ],
+            "title": "Result"
+          },
+          "notification": {
+            "$ref": "#/components/schemas/NotificationOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "result",
+          "notification"
+        ],
+        "title": "ResendOut"
+      },
+      "ResetPasswordIn": {
+        "properties": {
+          "newPassword": {
+            "type": "string",
+            "maxLength": 72,
+            "minLength": 8,
+            "title": "Newpassword"
+          }
+        },
+        "type": "object",
+        "required": [
+          "newPassword"
+        ],
+        "title": "ResetPasswordIn"
+      },
+      "RevenuePoint": {
+        "properties": {
+          "period": {
+            "type": "string",
+            "title": "Period"
+          },
+          "periodStart": {
+            "type": "string",
+            "format": "date",
+            "title": "Periodstart"
+          },
+          "periodEnd": {
+            "type": "string",
+            "format": "date",
+            "title": "Periodend"
+          },
+          "revenue": {
+            "type": "number",
+            "title": "Revenue"
+          },
+          "salesRevenue": {
+            "type": "number",
+            "title": "Salesrevenue"
+          },
+          "preorderRevenue": {
+            "type": "number",
+            "title": "Preorderrevenue"
+          },
+          "orderCount": {
+            "type": "integer",
+            "title": "Ordercount"
+          },
+          "salesCount": {
+            "type": "integer",
+            "title": "Salescount"
+          },
+          "preorderCount": {
+            "type": "integer",
+            "title": "Preordercount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "period",
+          "periodStart",
+          "periodEnd",
+          "revenue",
+          "salesRevenue",
+          "preorderRevenue",
+          "orderCount",
+          "salesCount",
+          "preorderCount"
+        ],
+        "title": "RevenuePoint"
+      },
+      "RevenueReportOut": {
+        "properties": {
+          "granularity": {
+            "type": "string",
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "year"
+            ],
+            "title": "Granularity"
+          },
+          "dateFrom": {
+            "type": "string",
+            "format": "date",
+            "title": "Datefrom"
+          },
+          "dateTo": {
+            "type": "string",
+            "format": "date",
+            "title": "Dateto"
+          },
+          "branchId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branchid"
+          },
+          "timezone": {
+            "type": "string",
+            "title": "Timezone"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/RevenueTotals"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/RevenuePoint"
+            },
+            "type": "array",
+            "title": "Points"
+          }
+        },
+        "type": "object",
+        "required": [
+          "granularity",
+          "dateFrom",
+          "dateTo",
+          "branchId",
+          "timezone",
+          "totals",
+          "points"
+        ],
+        "title": "RevenueReportOut"
+      },
+      "RevenueSummaryOut": {
+        "properties": {
+          "dateFrom": {
+            "type": "string",
+            "format": "date",
+            "title": "Datefrom"
+          },
+          "dateTo": {
+            "type": "string",
+            "format": "date",
+            "title": "Dateto"
+          },
+          "branchId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branchid"
+          },
+          "previousPeriod": {
+            "$ref": "#/components/schemas/PeriodRef"
+          },
+          "revenue": {
+            "$ref": "#/components/schemas/SummaryMetric"
+          },
+          "orderCount": {
+            "$ref": "#/components/schemas/CountMetric"
+          },
+          "averageOrderValue": {
+            "$ref": "#/components/schemas/SummaryMetric"
+          },
+          "salesRevenue": {
+            "type": "number",
+            "title": "Salesrevenue"
+          },
+          "preorderRevenue": {
+            "type": "number",
+            "title": "Preorderrevenue"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dateFrom",
+          "dateTo",
+          "branchId",
+          "previousPeriod",
+          "revenue",
+          "orderCount",
+          "averageOrderValue",
+          "salesRevenue",
+          "preorderRevenue"
+        ],
+        "title": "RevenueSummaryOut"
+      },
+      "RevenueTotals": {
+        "properties": {
+          "revenue": {
+            "type": "number",
+            "title": "Revenue"
+          },
+          "salesRevenue": {
+            "type": "number",
+            "title": "Salesrevenue"
+          },
+          "preorderRevenue": {
+            "type": "number",
+            "title": "Preorderrevenue"
+          },
+          "orderCount": {
+            "type": "integer",
+            "title": "Ordercount"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revenue",
+          "salesRevenue",
+          "preorderRevenue",
+          "orderCount"
+        ],
+        "title": "RevenueTotals"
+      },
+      "SuccessResponse_AuthUserOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/AuthUserOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[AuthUserOut]"
+      },
+      "SuccessResponse_BranchCreatedOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/BranchCreatedOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[BranchCreatedOut]"
+      },
+      "SuccessResponse_BranchOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/BranchOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[BranchOut]"
+      },
+      "SuccessResponse_CustomerOrderDetailOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/CustomerOrderDetailOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[CustomerOrderDetailOut]"
+      },
+      "SuccessResponse_CustomerOrderHistoryOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/CustomerOrderHistoryOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[CustomerOrderHistoryOut]"
+      },
+      "SuccessResponse_CustomerOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/CustomerOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[CustomerOut]"
+      },
+      "SuccessResponse_CustomerPageOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/CustomerPageOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[CustomerPageOut]"
+      },
+      "SuccessResponse_InventoryListOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/InventoryListOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[InventoryListOut]"
+      },
+      "SuccessResponse_LoginOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/LoginOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[LoginOut]"
+      },
+      "SuccessResponse_PreorderNotificationsOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/PreorderNotificationsOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[PreorderNotificationsOut]"
+      },
+      "SuccessResponse_ProductOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/ProductOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[ProductOut]"
+      },
+      "SuccessResponse_PublicProductDetailOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/PublicProductDetailOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[PublicProductDetailOut]"
+      },
+      "SuccessResponse_PublicProductPageOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/PublicProductPageOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[PublicProductPageOut]"
+      },
+      "SuccessResponse_ResendOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/ResendOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[ResendOut]"
+      },
+      "SuccessResponse_RevenueReportOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/RevenueReportOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[RevenueReportOut]"
+      },
+      "SuccessResponse_RevenueSummaryOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/RevenueSummaryOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[RevenueSummaryOut]"
+      },
+      "SuccessResponse_TopProductsOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/TopProductsOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[TopProductsOut]"
+      },
+      "SuccessResponse_UserOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/UserOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[UserOut]"
+      },
+      "SuccessResponse_UserPageOut_": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "$ref": "#/components/schemas/UserPageOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[UserPageOut]"
+      },
+      "SuccessResponse_list_BranchOut__": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/BranchOut"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[list[BranchOut]]"
+      },
+      "SuccessResponse_list_CustomerSummaryOut__": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/CustomerSummaryOut"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[list[CustomerSummaryOut]]"
+      },
+      "SuccessResponse_list_PublicBranchOut__": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PublicBranchOut"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[list[PublicBranchOut]]"
+      },
+      "SuccessResponse_list_PublicCategoryNode__": {
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "title": "Success",
+            "default": true
+          },
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/PublicCategoryNode"
+            },
+            "type": "array",
+            "title": "Data"
+          }
+        },
+        "type": "object",
+        "required": [
+          "data"
+        ],
+        "title": "SuccessResponse[list[PublicCategoryNode]]"
+      },
+      "SummaryMetric": {
+        "properties": {
+          "value": {
+            "type": "number",
+            "title": "Value"
+          },
+          "previous": {
+            "type": "number",
+            "title": "Previous"
+          },
+          "changePercent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Changepercent"
+          }
+        },
+        "type": "object",
+        "required": [
+          "value",
+          "previous",
+          "changePercent"
+        ],
+        "title": "SummaryMetric"
+      },
+      "TopProductOut": {
+        "properties": {
+          "rank": {
+            "type": "integer",
+            "title": "Rank"
+          },
+          "sku": {
+            "type": "string",
+            "title": "Sku"
+          },
+          "productName": {
+            "type": "string",
+            "title": "Productname"
+          },
+          "quantity": {
+            "type": "integer",
+            "title": "Quantity"
+          },
+          "revenue": {
+            "type": "number",
+            "title": "Revenue"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rank",
+          "sku",
+          "productName",
+          "quantity",
+          "revenue"
+        ],
+        "title": "TopProductOut"
+      },
+      "TopProductsOut": {
+        "properties": {
+          "dateFrom": {
+            "type": "string",
+            "format": "date",
+            "title": "Datefrom"
+          },
+          "dateTo": {
+            "type": "string",
+            "format": "date",
+            "title": "Dateto"
+          },
+          "branchId": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Branchid"
+          },
+          "sortBy": {
+            "type": "string",
+            "enum": [
+              "revenue",
+              "quantity"
+            ],
+            "title": "Sortby"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TopProductOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "dateFrom",
+          "dateTo",
+          "branchId",
+          "sortBy",
+          "limit",
+          "items"
+        ],
+        "title": "TopProductsOut"
+      },
+      "UserBranchesIn": {
+        "properties": {
+          "branchIds": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Branchids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "branchIds"
+        ],
+        "title": "UserBranchesIn",
+        "description": "PUT /users/{id}/branches: the complete new set of assigned branches (duplicates are merged)."
+      },
+      "UserCreateIn": {
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "maxLength": 150,
+            "minLength": 1,
+            "title": "Fullname"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "username": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 3,
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 72,
+            "minLength": 8,
+            "title": "Password"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "MANAGER",
+              "EMPLOYEE"
+            ],
+            "title": "Role"
+          },
+          "branchIds": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Branchids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fullName",
+          "username",
+          "password",
+          "role",
+          "branchIds"
+        ],
+        "title": "UserCreateIn"
+      },
+      "UserOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "storeId": {
+            "type": "integer",
+            "title": "Storeid"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "fullName": {
+            "type": "string",
+            "title": "Fullname"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "role": {
+            "type": "string",
+            "title": "Role"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Createdat"
+          },
+          "branches": {
+            "items": {
+              "$ref": "#/components/schemas/AssignedBranchOut"
+            },
+            "type": "array",
+            "title": "Branches"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "storeId",
+          "username",
+          "fullName",
+          "email",
+          "phone",
+          "role",
+          "status",
+          "createdAt",
+          "branches"
+        ],
+        "title": "UserOut"
+      },
+      "UserPageOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/UserOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "pageSize": {
+            "type": "integer",
+            "title": "Pagesize"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "totalPages": {
+            "type": "integer",
+            "title": "Totalpages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "page",
+          "pageSize",
+          "total",
+          "totalPages"
+        ],
+        "title": "UserPageOut"
+      },
+      "UserStatusIn": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "LOCKED"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "UserStatusIn"
+      },
+      "UserUpdateIn": {
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "maxLength": 150,
+            "minLength": 1,
+            "title": "Fullname"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 255
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "MANAGER",
+                  "EMPLOYEE"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fullName"
+        ],
+        "title": "UserUpdateIn",
+        "description": "PUT /users/{id}: replaces fullName, email, phone. `role` omitted = unchanged (only OWNER may change it)."
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      }
+    }
+  }
+}

@@ -4,12 +4,16 @@ Python 3.12+ · FastAPI · SQLAlchemy 2 (async) · MySQL (aiomysql)
 
 ## Chạy
 
+Hướng dẫn đầy đủ từng bước (môi trường, `.env`, tài khoản demo, sự cố thường gặp): [README.md ở thư mục gốc](../README.md).
+
 ```powershell
 cd backend
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-copy .env.example .env        # sửa DB_USER / DB_PASSWORD / DB_NAME
+copy .env.example .env        # sửa DB_USER / DB_PASSWORD / DB_NAME / JWT_SECRET
+python -m scripts.init_db     # tạo database + 20 bảng
+python -m scripts.seed_auth; python -m scripts.seed_catalog; python -m scripts.seed_sales
 uvicorn app.main:app --reload # hoặc: python -m app.main
 ```
 

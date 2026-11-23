@@ -2,6 +2,8 @@
 
 Tài liệu này chốt chữ ký các hàm mà module khác gọi trực tiếp trong code, không qua HTTP. Mỗi lần đổi chữ ký hoặc ý nghĩa của các hàm này phải cập nhật tài liệu và báo người đang gọi.
 
+Danh sách đầy đủ các **HTTP endpoint**, sinh tự động từ code: [api-endpoints.md](api-endpoints.md) và [openapi.json](openapi.json). Lệnh `python -m scripts.check_api_docs` kiểm tra mọi endpoint, hàm và cấu hình được nhắc trong tài liệu này có thật trong code.
+
 ## NotificationService.notifyPreorder (FR-09.1 đến FR-09.4)
 
 - **Bên cung cấp:** Tuấn, `backend/app/modules/notifications/service.py`
