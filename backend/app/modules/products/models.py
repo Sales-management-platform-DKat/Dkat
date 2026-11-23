@@ -1,4 +1,4 @@
-"""Tables `categories`, `products`, `product_variants` (see DKat_CSDL)."""
+"""Tables `categories`, `products`, `product_variants`, `attributes`, `variant_attribute_values` (see DKat_CSDL)."""
 from datetime import datetime
 from decimal import Decimal
 
@@ -48,3 +48,22 @@ class ProductVariant(Base):
     cost_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2))
     status: Mapped[str] = mapped_column(Enum(*STATUSES, name="variant_status"), nullable=False, default="ACTIVE")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, server_default=func.now())
+
+
+class Attribute(Base):
+    __tablename__ = "attributes"
+
+    attribute_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    store_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    data_type: Mapped[str] = mapped_column(Enum("TEXT", "NUMBER", "BOOLEAN", name="attribute_data_type"), nullable=False, default="TEXT")
+    status: Mapped[str] = mapped_column(Enum(*STATUSES, name="attribute_status"), nullable=False, default="ACTIVE")
+
+
+class VariantAttributeValue(Base):
+    __tablename__ = "variant_attribute_values"
+
+    variant_attribute_value_id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    variant_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("product_variants.variant_id"), nullable=False)
+    attribute_id: Mapped[int] = mapped_column(BigInteger, ForeignKey("attributes.attribute_id"), nullable=False)
+    value: Mapped[str] = mapped_column(String(255), nullable=False)

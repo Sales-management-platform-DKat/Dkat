@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     JWT_EXPIRE_HOURS: int = 8
     BCRYPT_ROUNDS: int = 12  # cost factor, >= 10
 
+    # ---- Public API (no login) ----
+    PUBLIC_RATE_LIMIT_PER_MINUTE: int = 60  # per client IP, shared by all /public endpoints
+
     @property
     def is_production(self) -> bool:
         return self.APP_ENV.lower() == "production"

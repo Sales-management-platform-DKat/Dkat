@@ -1,0 +1,492 @@
+{
+  "info": {
+    "name": "DKat - Public catalog (FR-07)",
+    "description": "Không cần đăng nhập. Cần seed: python -m scripts.seed_auth && python -m scripts.seed_catalog. Giới hạn 60 request/phút/IP: chạy collection nhiều lần liên tiếp có thể nhận 429.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Cây danh mục (không đăng nhập)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/categories",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "categories"
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Không có trường nội bộ (giá vốn, tồn, SKU, mã, chi nhánh, trạng thái...)\", () => pm.expect(pm.response.text()).to.not.match(/cost|123456|quantity|reserved|allocated|sku|SP-MAU|productCode|barcode|storeId|branch|created|status|password/i));",
+              "const tree = pm.response.json().data; const byName = {}; const walk = (ns) => ns.forEach(n => { byName[n.name] = n.id; walk(n.children); }); walk(tree);",
+              "pm.test(\"Có Thời trang > Áo, Quần\", () => pm.expect(tree.find(n => n.name === \"Thời trang\").children.map(c => c.name)).to.eql([\"Áo\", \"Quần\"]));",
+              "pm.test(\"Ẩn Ngừng kinh doanh và nhánh con\", () => { pm.expect(byName).to.not.have.property(\"Ngừng kinh doanh\"); pm.expect(byName).to.not.have.property(\"Hàng thanh lý\"); });",
+              "pm.collectionVariables.set(\"catFashion\", byName[\"Thời trang\"]); pm.collectionVariables.set(\"catShirt\", byName[\"Áo\"]);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. Tất cả sản phẩm (không đăng nhập)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/products?size=50",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "products"
+          ],
+          "query": [
+            {
+              "key": "size",
+              "value": "50"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "pm.test(\"Không có trường nội bộ (giá vốn, tồn, SKU, mã, chi nhánh, trạng thái...)\", () => pm.expect(pm.response.text()).to.not.match(/cost|123456|quantity|reserved|allocated|sku|SP-MAU|productCode|barcode|storeId|branch|created|status|password/i));",
+              "const items = pm.response.json().data.items;",
+              "pm.test(\"Đúng các trường công khai\", () => items.forEach(p => pm.expect(p).to.have.keys(\"id\", \"name\", \"imageUrl\", \"category\", \"priceMin\", \"priceMax\", \"inStock\")));",
+              "const shirt = items.find(p => p.name === \"Áo sơ mi mẫu\");",
+              "pm.test(\"Khoảng giá 250000 - 280000\", () => { pm.expect(shirt.priceMin).to.eql(250000); pm.expect(shirt.priceMax).to.eql(280000); });",
+              "pm.test(\"Quần kaki mẫu hết hàng khả dụng\", () => pm.expect(items.find(p => p.name === \"Quần kaki mẫu\").inStock).to.eql(false));",
+              "pm.test(\"Không có sản phẩm INACTIVE / danh mục ẩn\", () => { const n = items.map(p => p.name); pm.expect(n).to.not.include(\"Áo ngừng bán mẫu\"); pm.expect(n).to.not.include(\"Áo thanh lý mẫu\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. keyword=sơ mi",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/products?keyword=sơ mi",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "products"
+          ],
+          "query": [
+            {
+              "key": "keyword",
+              "value": "sơ mi"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const names = pm.response.json().data.items.map(p => p.name);",
+              "pm.test(\"Sản phẩm: Áo sơ mi mẫu\", () => pm.expect(names.slice().sort()).to.eql([\"Áo sơ mi mẫu\"]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. categoryId=Thời trang (gồm danh mục con)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/products?categoryId={{catFashion}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "products"
+          ],
+          "query": [
+            {
+              "key": "categoryId",
+              "value": "{{catFashion}}"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const names = pm.response.json().data.items.map(p => p.name);",
+              "pm.test(\"Sản phẩm: Áo sơ mi mẫu, Quần kaki mẫu\", () => pm.expect(names.slice().sort()).to.eql([\"Quần kaki mẫu\", \"Áo sơ mi mẫu\"]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. categoryId=Áo",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/products?categoryId={{catShirt}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "products"
+          ],
+          "query": [
+            {
+              "key": "categoryId",
+              "value": "{{catShirt}}"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const names = pm.response.json().data.items.map(p => p.name);",
+              "pm.test(\"Sản phẩm: Áo sơ mi mẫu\", () => pm.expect(names.slice().sort()).to.eql([\"Áo sơ mi mẫu\"]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. attr=Màu:Xanh & attr=Size:M",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/products?attr=Màu:Xanh&attr=Size:M",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "products"
+          ],
+          "query": [
+            {
+              "key": "attr",
+              "value": "Màu:Xanh"
+            },
+            {
+              "key": "attr",
+              "value": "Size:M"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const names = pm.response.json().data.items.map(p => p.name);",
+              "pm.test(\"Sản phẩm: Áo sơ mi mẫu\", () => pm.expect(names.slice().sort()).to.eql([\"Áo sơ mi mẫu\"]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "7. attr=Màu:Xanh & attr=Size:L (không cùng biến thể)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/products?attr=Màu:Xanh&attr=Size:L",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "products"
+          ],
+          "query": [
+            {
+              "key": "attr",
+              "value": "Màu:Xanh"
+            },
+            {
+              "key": "attr",
+              "value": "Size:L"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const names = pm.response.json().data.items.map(p => p.name);",
+              "pm.test(\"Sản phẩm: \", () => pm.expect(names.slice().sort()).to.eql([]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "8. inStock=true",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/products?inStock=true",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "products"
+          ],
+          "query": [
+            {
+              "key": "inStock",
+              "value": "true"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const names = pm.response.json().data.items.map(p => p.name);",
+              "pm.test(\"Sản phẩm: Áo sơ mi mẫu, Áo thun mẫu\", () => pm.expect(names.slice().sort()).to.eql([\"Áo sơ mi mẫu\", \"Áo thun mẫu\"]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "9. inStock=false",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/products?inStock=false",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "products"
+          ],
+          "query": [
+            {
+              "key": "inStock",
+              "value": "false"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const names = pm.response.json().data.items.map(p => p.name);",
+              "pm.test(\"Sản phẩm: Quần kaki mẫu\", () => pm.expect(names.slice().sort()).to.eql([\"Quần kaki mẫu\"]));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Phân trang size=2",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/products?size=2&page=1",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "products"
+          ],
+          "query": [
+            {
+              "key": "size",
+              "value": "2"
+            },
+            {
+              "key": "page",
+              "value": "1"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+              "const d = pm.response.json().data;",
+              "pm.test(\"2 dòng, totalPages = ceil(total/2)\", () => { pm.expect(d.items.length).to.eql(2); pm.expect(d.totalPages).to.eql(Math.ceil(d.total / 2)); });",
+              "pm.test(\"Có header giới hạn tốc độ\", () => { pm.expect(pm.response.headers.get(\"X-RateLimit-Limit\")).to.eql(\"60\"); pm.expect(Number(pm.response.headers.get(\"X-RateLimit-Remaining\"))).to.be.below(60); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. attr sai định dạng -> 422",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/products?attr=Màu",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "products"
+          ],
+          "query": [
+            {
+              "key": "attr",
+              "value": "Màu"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"error.code = VALIDATION_ERROR\", () => pm.expect(pm.response.json().error.code).to.eql(\"VALIDATION_ERROR\"));"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. size > 50 -> 422",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/v1/public/products?size=51",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "v1",
+            "public",
+            "products"
+          ],
+          "query": [
+            {
+              "key": "size",
+              "value": "51"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Status 422\", () => pm.response.to.have.status(422));",
+              "pm.test(\"error.code = VALIDATION_ERROR\", () => pm.expect(pm.response.json().error.code).to.eql(\"VALIDATION_ERROR\"));"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "catFashion",
+      "value": ""
+    },
+    {
+      "key": "catShirt",
+      "value": ""
+    }
+  ]
+}

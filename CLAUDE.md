@@ -20,7 +20,9 @@ pip install -r requirements.txt
 copy .env.example .env               # set DB_* and JWT_SECRET
 uvicorn app.main:app --reload        # http://127.0.0.1:8000, Swagger at /docs (disabled in production)
 python -m scripts.seed_auth          # idempotent seed: store, branches CN01-CN03, users, sample product/variants, pre-order
+python -m scripts.seed_catalog       # idempotent catalog fixtures for /public (run after seed_auth)
 python -m scripts.check_rbac         # in-process RBAC regression check (3 roles x 5 routes); exit code 1 on failure
+python -m scripts.check_public_catalog   # in-process /public checks: filters, no internal fields, rate limit, EXPLAIN index use
 npx newman@6.2.1 run postman/DKat_Branches.postman_collection.json   # needs the server running (also DKat_Users, DKat_Auth)
 ```
 
@@ -40,6 +42,7 @@ npx newman@6.2.1 run postman/DKat_Branches.postman_collection.json   # needs the
   - For list endpoints, filter with `get_accessible_branch_ids(user)` (an empty list means return nothing, not "no filter"). For branch ids taken from loaded records, call `ensure_branch_access(db, user, branch_id)`.
   - Put role checks in the route's `dependencies=[...]` so they run before branch checks and before body validation; that way a wrong role gets 403, not 422.
 - Account management (`/users`): OWNER manages every account of the store. A MANAGER manages only EMPLOYEE accounts whose ACTIVE branches all lie within the manager's branches (`users.service._in_manager_scope`; the paged list repeats this rule in SQL in `users.repository.list_users_page`, so keep the two in sync). Accounts are never deleted, only LOCKED. `UserOut` deliberately has no password field.
+- Public catalog (`app/modules/catalog`, `/api/v1/public/*`): no auth, rate limited per IP by `core/rate_limit.py` (in-memory, per worker). Response schemas are an allowlist (FR-07.5): never add cost price, stock quantities, SKU/codes, store/branch ids or statuses. "Available stock" = `inventory.quantity` minus `allocated_quantity` of WAITING_STOCK/READY/NOTIFIED pre-orders at that branch (same formula as the inventory module on `tuiladien/*`).
 - Roles: `OWNER`, `MANAGER`, `EMPLOYEE`. Branches are never deleted: they are set INACTIVE, which is refused while pre-orders are `WAITING_STOCK`/`READY`/`NOTIFIED`. Creating or reactivating a branch inserts `inventory` rows with quantity 0 for the store's ACTIVE variants. The effective permission table is in `docs/rbac-matrix.md`.
 
 ### Gotchas

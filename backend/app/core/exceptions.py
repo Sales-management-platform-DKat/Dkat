@@ -16,12 +16,15 @@ logger = get_logger("app.errors")
 class AppError(Exception):
     """Expected business error. Raise it anywhere (service/repository/router)."""
 
-    def __init__(self, status_code: int, code: str, message: str, details: Any = None) -> None:
+    def __init__(
+        self, status_code: int, code: str, message: str, details: Any = None, headers: dict[str, str] | None = None
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
         self.code = code
         self.message = message
         self.details = details
+        self.headers = headers  # e.g. Retry-After on 429
 
     @classmethod
     def bad_request(cls, message: str = "Bad request", details: Any = None) -> "AppError":
@@ -64,7 +67,10 @@ _HTTP_CODES = {
 
 
 async def app_error_handler(request: Request, exc: AppError):
-    return error_response(exc.status_code, exc.code, exc.message, exc.details)
+    response = error_response(exc.status_code, exc.code, exc.message, exc.details)
+    if exc.headers:
+        response.headers.update(exc.headers)
+    return response
 
 
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):

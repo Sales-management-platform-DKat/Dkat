@@ -139,3 +139,17 @@ ids = get_accessible_branch_ids(user)   # lọc danh sách theo chi nhánh user 
 - Response không bao giờ có `password_hash`. Khóa tài khoản có hiệu lực ngay: login → 403 `ACCOUNT_LOCKED`, token cũ cũng bị chặn.
 - Phân công: MANAGER chỉ dùng chi nhánh mình quản lý; phân công vào chi nhánh INACTIVE ngoài phạm vi của MANAGER được giữ nguyên. Thay đổi có hiệu lực ngay ở request kế tiếp (token cũ mất quyền chi nhánh bị gỡ) và khi đăng nhập lại.
 - Postman: `postman/DKat_Users.postman_collection.json` (55 request), `postman/DKat_UserBranches.postman_collection.json` (42 request). Mỗi lần chạy tạo tài khoản test và khóa lại ở cuối.
+
+## Tra cứu sản phẩm công khai (FR-07, không cần đăng nhập)
+
+| Endpoint | Ghi chú |
+|---|---|
+| `GET /api/v1/public/products?keyword&categoryId&attr&inStock&page&size&storeId` | `{items, page, size, total, totalPages}`; `size` ≤ 50 |
+| `GET /api/v1/public/categories?storeId` | cây danh mục ACTIVE `[{id, name, children}]` |
+
+- Mỗi sản phẩm chỉ có: `id, name, imageUrl, category{id,name}, priceMin, priceMax, inStock`. Không bao giờ trả giá vốn, số lượng tồn, SKU/mã sản phẩm, id chi nhánh/cửa hàng, trạng thái (FR-07.5).
+- Chỉ sản phẩm ACTIVE có ít nhất một biến thể ACTIVE, thuộc danh mục hiển thị (danh mục và mọi danh mục cha đều ACTIVE). Khoảng giá chỉ tính biến thể ACTIVE.
+- `inStock`: có chi nhánh ACTIVE còn tồn khả dụng > 0 (`quantity` trừ `allocated_quantity` của đơn đặt trước WAITING_STOCK/READY/NOTIFIED).
+- `categoryId` gồm cả danh mục con. `attr=Tên:Giá trị` lặp lại được (tối đa 5), cùng một biến thể phải khớp tất cả. `storeId` tuỳ chọn: bỏ trống = mọi cửa hàng.
+- Giới hạn `PUBLIC_RATE_LIMIT_PER_MINUTE` (mặc định 60) request/phút/IP, dùng chung cho mọi route `/public` → 429 `RATE_LIMIT_EXCEEDED` + `Retry-After`. Bộ đếm nằm trong bộ nhớ từng worker; không tin `X-Forwarded-For`.
+- Dữ liệu mẫu: `python -m scripts.seed_catalog` (sau `seed_auth`). Kiểm tra (gồm EXPLAIN index): `python -m scripts.check_public_catalog`. Postman: `postman/DKat_Public_Catalog.postman_collection.json`.
