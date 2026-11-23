@@ -176,3 +176,13 @@ Cần bảng `customers` và cột `preorders.customer_id`: chạy `database/04_
 - NFR-08: mọi route `/customers` cần đăng nhập (401). Log truy cập: `logs/customer_access.log` (`CUSTOMER_ACCESS_LOG_FILE`), mỗi dòng JSON `{time, event: CUSTOMER_VIEW, userId, role, storeId, customerId, ip}`, xoay vòng 5 MB × 10 file, không chứa tên/SĐT khách. Log request che giá trị query `phone`, `email`, `keyword` thành `***`.
 - Lịch sử mua: MANAGER/EMPLOYEE chỉ thấy đơn ở chi nhánh được phân công (chi tiết đơn chi nhánh khác → 403); thống kê dùng cùng phạm vi và khoảng ngày (`to` tính hết ngày). Đơn khách vãng lai (`customer_id` NULL) không gắn hồ sơ nên chỉ tra ở danh sách đơn. Kiểm tra: `python -m scripts.check_customer_orders` (tự tạo và xoá dữ liệu).
 - Postman: `postman/DKat_Customers.postman_collection.json` (43 request).
+
+## Báo cáo doanh thu (FR-06)
+
+`GET /api/v1/reports/revenue?granularity=day|week|month|year&from&to&branchId`
+
+- Doanh thu = đơn bán `PAID` (theo `paid_at`) + đơn đặt trước `FULFILLED` chưa hoàn tiền (theo `fulfilled_at`). Đơn CANCELLED/hoàn tiền/PENDING/chưa nhận hàng không tính.
+- Kỳ tính theo giờ Việt Nam (UTC+7; `paid_at`/`fulfilled_at` lưu UTC); tuần bắt đầu thứ Hai (nhãn ISO `2026-W48`); `from`/`to` là ngày VN, tính cả hai đầu; mỗi kỳ đều có điểm, kỳ trống = 0. Mặc định: 30 ngày / 12 tuần / 12 tháng / 5 năm đến hôm nay; tối đa 400 kỳ.
+- Response: `{granularity, dateFrom, dateTo, branchId, timezone, totals{revenue, salesRevenue, preorderRevenue, orderCount}, points[{period, periodStart, periodEnd, revenue, salesRevenue, preorderRevenue, orderCount, salesCount, preorderCount}]}`.
+- Quyền: OWNER toàn chuỗi (không `branchId`) hoặc từng chi nhánh; MANAGER bắt buộc `branchId` thuộc phân công (thiếu → 400, sai → 403); EMPLOYEE → 403.
+- Dữ liệu mẫu: `python -m scripts.seed_sales`. Đối chiếu với truy vấn tay: `python -m scripts.check_revenue`, kết quả trong [docs/revenue-reconciliation.md](../docs/revenue-reconciliation.md).
