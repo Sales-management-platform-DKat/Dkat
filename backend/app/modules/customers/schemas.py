@@ -1,6 +1,7 @@
 """Request/response schemas for /customers (JSON uses camelCase)."""
 import re
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field, field_validator
 
@@ -105,3 +106,67 @@ class CustomerPageOut(CamelModel):
     size: int
     total: int
     total_pages: int
+
+
+# ---- purchase history (GET /customers/{id}/orders) --------------------------------------------
+
+OrderType = Literal["SALE", "PREORDER"]
+
+
+class OrderBranchRef(CamelModel):
+    id: int
+    name: str
+
+
+class CustomerOrderOut(CamelModel):
+    key: str  # "SALE-12" / "PREORDER-3": use it in GET /customers/{id}/orders/{key}
+    type: OrderType
+    id: int
+    code: str
+    created_at: datetime
+    branch: OrderBranchRef
+    total_amount: float
+    status: str  # SALE: PENDING/PAID/CANCELLED; PREORDER: WAITING_STOCK/READY/NOTIFIED/FULFILLED/CANCELLED/EXPIRED
+    payment_status: str | None  # PREORDER only: UNPAID/PAID/REFUNDED
+    payment_methods: list[str]  # methods of SUCCESS payments (CASH, BANK_TRANSFER, CARD, OTHER)
+
+
+class CustomerOrderStats(CamelModel):
+    """Only completed purchases count: sales orders PAID + pre-orders FULFILLED."""
+
+    purchase_count: int
+    total_spent: float
+
+
+class CustomerOrderHistoryOut(CamelModel):
+    customer_id: int
+    stats: CustomerOrderStats  # same branch scope and date range as `items`
+    items: list[CustomerOrderOut]
+    page: int
+    size: int
+    total: int
+    total_pages: int
+
+
+class OrderLineOut(CamelModel):
+    """Snapshot stored on the order: later product renames/price changes do not alter history."""
+
+    product_name: str
+    sku: str
+    unit_price: float
+    quantity: int
+    line_total: float
+
+
+class OrderPaymentOut(CamelModel):
+    method: str
+    amount: float
+    status: str
+    confirmed_at: datetime | None
+
+
+class CustomerOrderDetailOut(CustomerOrderOut):
+    subtotal: float | None  # SALE only
+    discount_amount: float | None  # SALE only
+    lines: list[OrderLineOut]
+    payments: list[OrderPaymentOut]

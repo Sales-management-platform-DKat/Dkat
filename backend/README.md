@@ -159,7 +159,7 @@ ids = get_accessible_branch_ids(user)   # lọc danh sách theo chi nhánh user 
 
 ## Khách hàng
 
-Cần bảng `customers`: chạy `database/04_sales_order_customers.sql` (cùng file với nhánh preorders/sales; sửa dòng `USE dkat;` nếu DB có tên khác). Khách vãng lai không cần hồ sơ.
+Cần bảng `customers` và cột `preorders.customer_id`: chạy `database/04_sales_order_customers.sql` rồi `database/06_public_preorders.sql` (cùng file với nhánh preorders/sales; sửa dòng `USE dkat;` nếu DB có tên khác). Khách vãng lai không cần hồ sơ.
 
 | Endpoint | Quyền | Ghi chú |
 |---|---|---|
@@ -168,8 +168,11 @@ Cần bảng `customers`: chạy `database/04_sales_order_customers.sql` (cùng 
 | `GET /api/v1/customers/{id}` | mọi vai trò | **duy nhất** trả hồ sơ đầy đủ (SĐT, email, địa chỉ, ghi chú); mỗi lần xem được ghi log truy cập |
 | `POST /api/v1/customers` `{fullName, phone?, email?, address?, note?}` | mọi vai trò (POS) | SĐT 10 số bắt đầu bằng 0 (chấp nhận `+84`, dấu cách, dấu chấm và lưu dạng `0xxxxxxxxx`); trùng SĐT → 409 `DUPLICATE_CUSTOMER_PHONE`, `details.customerId` là id khách cũ |
 | `PUT /api/v1/customers/{id}` | OWNER, MANAGER | thay toàn bộ thông tin; đổi sang SĐT đã có → 409 |
+| `GET /api/v1/customers/{id}/orders?from&to&page&size` | mọi vai trò | lịch sử mua: đơn bán POS + đơn đặt trước gắn khách, mới nhất trước; mỗi đơn `{key, type, code, createdAt, branch, totalAmount, status, paymentStatus, paymentMethods}`; kèm `stats {purchaseCount, totalSpent}` chỉ tính đơn bán PAID + đặt trước FULFILLED |
+| `GET /api/v1/customers/{id}/orders/{key}` | mọi vai trò | `key` = `SALE-<id>` / `PREORDER-<id>`; dòng hàng lấy từ snapshot trên đơn, các lần thanh toán |
 
 - Khách thuộc cửa hàng (không theo chi nhánh); SĐT duy nhất trong cửa hàng (`uq_customers_store_phone`). Nhiều khách không có SĐT vẫn được.
 - Cho module khác (đặt trước, bán hàng): `await customers.service.upsert_customer_by_phone(db, store_id=..., full_name=..., phone=..., email=..., address=...)` trả `customer_id`; chạy trong transaction của bên gọi, không ghi đè hồ sơ đã có.
 - NFR-08: mọi route `/customers` cần đăng nhập (401). Log truy cập: `logs/customer_access.log` (`CUSTOMER_ACCESS_LOG_FILE`), mỗi dòng JSON `{time, event: CUSTOMER_VIEW, userId, role, storeId, customerId, ip}`, xoay vòng 5 MB × 10 file, không chứa tên/SĐT khách. Log request che giá trị query `phone`, `email`, `keyword` thành `***`.
+- Lịch sử mua: MANAGER/EMPLOYEE chỉ thấy đơn ở chi nhánh được phân công (chi tiết đơn chi nhánh khác → 403); thống kê dùng cùng phạm vi và khoảng ngày (`to` tính hết ngày). Đơn khách vãng lai (`customer_id` NULL) không gắn hồ sơ nên chỉ tra ở danh sách đơn. Kiểm tra: `python -m scripts.check_customer_orders` (tự tạo và xoá dữ liệu).
 - Postman: `postman/DKat_Customers.postman_collection.json` (43 request).

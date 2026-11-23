@@ -3,18 +3,30 @@
 GET  /customers/quick-search?phone   all staff; max 5 results, phone masked (NFR-08)
 GET  /customers?keyword&page&size    all staff; keyword = name or part of the phone; phone masked
 GET  /customers/{id}                 all staff; the ONLY read with full contact data; audited
+GET  /customers/{id}/orders?from&to&page&size   purchase history + stats, branch-scoped
+GET  /customers/{id}/orders/{SALE-1|PREORDER-1} one order: snapshot lines + payments, branch-scoped
 POST /customers                      all staff (POS creates profiles); 409 DUPLICATE_CUSTOMER_PHONE + customerId
 PUT  /customers/{id}                 OWNER / MANAGER
 Customers belong to the store (not to a branch).
 """
+from datetime import date
+
 from fastapi import APIRouter, Depends, Path, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.permissions import ROLE_MANAGER, ROLE_OWNER, CurrentUser, require_auth, require_role
 from app.core.rate_limit import client_ip
 from app.db.session import get_db
-from app.modules.customers import service
-from app.modules.customers.schemas import MAX_PAGE_SIZE, CustomerIn, CustomerOut, CustomerPageOut, CustomerSummaryOut
+from app.modules.customers import history_service, service
+from app.modules.customers.schemas import (
+    MAX_PAGE_SIZE,
+    CustomerIn,
+    CustomerOrderDetailOut,
+    CustomerOrderHistoryOut,
+    CustomerOut,
+    CustomerPageOut,
+    CustomerSummaryOut,
+)
 from app.utils.response import SuccessResponse, ok
 
 router = APIRouter(prefix="/customers", tags=["customers"])
@@ -52,6 +64,42 @@ async def get_customer(
 ):
     """Hồ sơ đầy đủ (SĐT, email, địa chỉ, ghi chú). Mỗi lần xem được ghi vào log truy cập."""
     return ok(await service.get_customer(db, user, customer_id, ip=client_ip(request)))
+
+
+@router.get(
+    "/{customer_id}/orders", response_model=SuccessResponse[CustomerOrderHistoryOut], response_model_by_alias=True
+)
+async def order_history(
+    customer_id: int = Path(gt=0),
+    date_from: date | None = Query(default=None, alias="from", description="YYYY-MM-DD, tính từ đầu ngày"),
+    date_to: date | None = Query(default=None, alias="to", description="YYYY-MM-DD, tính hết ngày"),
+    page: int = Query(default=1, ge=1),
+    size: int = Query(default=20, ge=1, le=MAX_PAGE_SIZE),
+    user: CurrentUser = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """Lịch sử mua: đơn bán POS + đơn đặt trước của khách, mới nhất trước, kèm thống kê
+    (số lần mua, tổng chi tiêu: chỉ đơn PAID / FULFILLED). MANAGER/EMPLOYEE chỉ thấy chi nhánh được phân công."""
+    return ok(
+        await history_service.order_history(
+            db, user, customer_id, date_from=date_from, date_to=date_to, page=page, size=size
+        )
+    )
+
+
+@router.get(
+    "/{customer_id}/orders/{order_key}",
+    response_model=SuccessResponse[CustomerOrderDetailOut],
+    response_model_by_alias=True,
+)
+async def order_detail(
+    customer_id: int = Path(gt=0),
+    order_key: str = Path(max_length=30, description="SALE-<id> hoặc PREORDER-<id> (trường `key` trong lịch sử)"),
+    user: CurrentUser = Depends(require_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """Chi tiết 1 đơn: dòng hàng (snapshot trên đơn) và các lần thanh toán. Đơn ở chi nhánh khác -> 403."""
+    return ok(await history_service.order_detail(db, user, customer_id, order_key))
 
 
 @router.post("", status_code=201, response_model=SuccessResponse[CustomerOut], response_model_by_alias=True)
