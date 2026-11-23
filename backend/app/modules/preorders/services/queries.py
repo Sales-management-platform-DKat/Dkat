@@ -16,7 +16,8 @@ HEADER_SELECT = """
            p.customer_name AS customerName, p.customer_phone AS customerPhone,
            p.customer_email AS customerEmail, p.customer_address AS customerAddress,
            p.total_amount AS totalAmount, p.status, p.payment_status AS paymentStatus,
-           p.note, p.created_at AS createdAt, p.ready_at AS readyAt, p.fulfilled_at AS fulfilledAt
+           p.note, p.created_at AS createdAt, p.ready_at AS readyAt,
+           p.expires_at AS expiresAt, p.fulfilled_at AS fulfilledAt
     FROM preorders AS p
     JOIN branches AS b ON b.branch_id=p.branch_id AND b.store_id=:store
 """

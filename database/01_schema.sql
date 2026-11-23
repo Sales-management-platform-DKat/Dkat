@@ -217,6 +217,7 @@ CREATE TABLE preorders (
     status ENUM('WAITING_STOCK', 'READY', 'NOTIFIED', 'FULFILLED', 'CANCELLED', 'EXPIRED') NOT NULL,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     ready_at DATETIME,
+    expires_at DATETIME,
     fulfilled_at DATETIME,
     KEY ix_preorders_branch_fifo (branch_id, status, created_at, preorder_id),
     CHECK (total_amount >= 0),
