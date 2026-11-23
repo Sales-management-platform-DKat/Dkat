@@ -1,4 +1,4 @@
-"""Revenue report for charts (FR-06.1 - FR-06.4, FR-06.6).
+"""Revenue report for charts (FR-06.1 - FR-06.4, FR-06.6) and dashboard cards / top products (FR-06.5).
 
 - Periods are Vietnam-time calendar periods (UTC+7); weeks start on Monday (ISO weeks).
 - `from` / `to` are Vietnam dates, both included. Every period between them is returned, with 0 when
@@ -13,7 +13,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import AppError
 from app.core.permissions import CurrentUser
 from app.modules.reports import repository
-from app.modules.reports.schemas import RevenuePoint, RevenueReportOut, RevenueTotals
+from app.modules.reports.schemas import (
+    CountMetric,
+    PeriodRef,
+    RevenuePoint,
+    RevenueReportOut,
+    RevenueSummaryOut,
+    RevenueTotals,
+    SummaryMetric,
+    TopProductOut,
+    TopProductsOut,
+)
 
 VN_TZ = timezone(timedelta(hours=repository.VN_OFFSET_HOURS))
 MAX_POINTS = 400  # e.g. 13 months of days; protects the server and the chart
@@ -71,6 +81,111 @@ def vn_day_start_utc(d: date) -> datetime:
     return datetime.combine(d, time.min) - timedelta(hours=repository.VN_OFFSET_HOURS)
 
 
+def _check_scope_and_dates(
+    actor: CurrentUser, branch_id: int | None, date_from: date | None, date_to: date | None, default_from_fn
+) -> tuple[date, date]:
+    """Rules shared by every report. The router already rejected EMPLOYEE (403) and a branchId outside
+    the user's branches (403); here a MANAGER must still name a branch, and the dates must be valid."""
+    if branch_id is None and not actor.is_owner:
+        raise AppError.bad_request("Quản lý phải chọn chi nhánh (branchId) thuộc phân công")
+    date_to = date_to or today_vn()
+    date_from = date_from or default_from_fn(date_to)
+    if date_from > date_to:
+        raise AppError.validation(
+            "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc",
+            [{"field": "from", "message": "from must be <= to", "type": "date_range"}],
+        )
+    return date_from, date_to
+
+
+def _utc_window(date_from: date, date_to: date) -> dict:
+    return {"start_utc": vn_day_start_utc(date_from), "end_utc": vn_day_start_utc(date_to + timedelta(days=1))}
+
+
+def _default_30_days(to: date) -> date:
+    return to - timedelta(days=29)
+
+
+def _metric(value: float, previous: float) -> SummaryMetric:
+    change = None if previous == 0 else round((value - previous) / previous * 100, 1)
+    return SummaryMetric(value=round(value, 2), previous=round(previous, 2), change_percent=change)
+
+
+async def _totals(db: AsyncSession, store_id: int, date_from: date, date_to: date, branch_id: int | None) -> dict:
+    days = await repository.daily_revenue(db, store_id, branch_id=branch_id, **_utc_window(date_from, date_to))
+    sales = sum(d["sales"] for d in days.values())
+    preorders = sum(d["preorders"] for d in days.values())
+    count = sum(d["sales_count"] + d["preorder_count"] for d in days.values())
+    return {"sales": sales, "preorders": preorders, "revenue": sales + preorders, "count": count}
+
+
+async def summary(
+    db: AsyncSession, actor: CurrentUser, *, date_from: date | None, date_to: date | None, branch_id: int | None
+) -> RevenueSummaryOut:
+    """Dashboard cards: revenue, order count, average order value, % change vs the previous period
+    (same number of days, ending the day before `from`). Default period: the last 30 days."""
+    date_from, date_to = _check_scope_and_dates(actor, branch_id, date_from, date_to, _default_30_days)
+    length = (date_to - date_from).days + 1
+    prev_to = date_from - timedelta(days=1)
+    prev_from = prev_to - timedelta(days=length - 1)
+
+    cur = await _totals(db, actor.store_id, date_from, date_to, branch_id)
+    prev = await _totals(db, actor.store_id, prev_from, prev_to, branch_id)
+    cur_aov = cur["revenue"] / cur["count"] if cur["count"] else 0.0
+    prev_aov = prev["revenue"] / prev["count"] if prev["count"] else 0.0
+    return RevenueSummaryOut(
+        date_from=date_from,
+        date_to=date_to,
+        branch_id=branch_id,
+        previous_period=PeriodRef(date_from=prev_from, date_to=prev_to),
+        revenue=_metric(cur["revenue"], prev["revenue"]),
+        order_count=CountMetric(
+            value=cur["count"], previous=prev["count"], change_percent=_metric(cur["count"], prev["count"]).change_percent
+        ),
+        average_order_value=_metric(cur_aov, prev_aov),
+        sales_revenue=round(cur["sales"], 2),
+        preorder_revenue=round(cur["preorders"], 2),
+    )
+
+
+async def top_products(
+    db: AsyncSession,
+    actor: CurrentUser,
+    *,
+    date_from: date | None,
+    date_to: date | None,
+    branch_id: int | None,
+    limit: int,
+    sort_by: str,
+) -> TopProductsOut:
+    """Best sellers by SKU over the orders that count as revenue. Default period: the last 30 days."""
+    date_from, date_to = _check_scope_and_dates(actor, branch_id, date_from, date_to, _default_30_days)
+    rows = await repository.product_lines(db, actor.store_id, branch_id=branch_id, **_utc_window(date_from, date_to))
+
+    by_sku: dict[str, dict] = {}
+    for r in rows:  # one row per (sku, name snapshot): merge names, keep the newest one
+        item = by_sku.setdefault(r["sku"], {"sku": r["sku"], "name": r["name"], "quantity": 0, "revenue": 0.0, "last_at": r["last_at"]})
+        item["quantity"] += int(r["quantity"])
+        item["revenue"] += float(r["revenue"])
+        if r["last_at"] > item["last_at"]:
+            item["name"], item["last_at"] = r["name"], r["last_at"]
+
+    primary = "revenue" if sort_by == "revenue" else "quantity"
+    secondary = "quantity" if sort_by == "revenue" else "revenue"
+    ranked = sorted(by_sku.values(), key=lambda i: (-i[primary], -i[secondary], i["sku"]))[:limit]
+    return TopProductsOut(
+        date_from=date_from,
+        date_to=date_to,
+        branch_id=branch_id,
+        sort_by=sort_by,
+        limit=limit,
+        items=[
+            TopProductOut(rank=n, sku=i["sku"], product_name=i["name"], quantity=i["quantity"], revenue=round(i["revenue"], 2))
+            for n, i in enumerate(ranked, start=1)
+        ],
+    )
+
+
 async def revenue_report(
     db: AsyncSession,
     actor: CurrentUser,
@@ -80,15 +195,9 @@ async def revenue_report(
     date_to: date | None,
     branch_id: int | None,
 ) -> RevenueReportOut:
-    if branch_id is None and not actor.is_owner:
-        raise AppError.bad_request("Quản lý phải chọn chi nhánh (branchId) thuộc phân công")
-    date_to = date_to or today_vn()
-    date_from = date_from or default_from(date_to, granularity)
-    if date_from > date_to:
-        raise AppError.validation(
-            "Ngày bắt đầu phải trước hoặc bằng ngày kết thúc",
-            [{"field": "from", "message": "from must be <= to", "type": "date_range"}],
-        )
+    date_from, date_to = _check_scope_and_dates(
+        actor, branch_id, date_from, date_to, lambda to: default_from(to, granularity)
+    )
 
     starts = []
     start = period_start(date_from, granularity)

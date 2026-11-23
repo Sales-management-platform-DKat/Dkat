@@ -21,6 +21,10 @@ Each row tests one rule (VN = Vietnam time, UTC+7):
   X03    CN01   888000   pre-order FULFILLED, payment REFUNDED  2026-11-12 03:00   never counted
   X04    CN01   555000   pre-order READY (paid, not picked up)              never counted
   X05    CN02   444000   pre-order CANCELLED                                never counted
+
+Every order also has snapshot lines (ITEMS) for GET /reports/top-products; the line totals add up to
+the order amount. SP-MAU-01-M was sold in 2025 under an older name: the newest snapshot name wins.
+Lines are added to seed orders that have none, so re-running on an older seed backfills them.
 """
 import asyncio
 
@@ -49,6 +53,26 @@ PREORDERS = [
     ("X04", "CN01", 555000, "READY", "PAID", None),
     ("X05", "CN02", 444000, "CANCELLED", "UNPAID", None),
 ]
+S, M = "Áo thun mẫu - Size S", "Áo thun mẫu - Size M"
+XANH, DO, QUAN = "Áo sơ mi mẫu - Xanh M", "Áo sơ mi mẫu - Đỏ L", "Quần kaki mẫu - Đen M"
+# order code -> [(sku, product name snapshot, unit price, quantity)]
+ITEMS = {
+    "R01": [("SP-MAU-01-S", S, 50000, 2)],
+    "R02": [("SP-MAU-01-M", "Áo thun mẫu - M (tên cũ)", 200000, 1)],
+    "R03": [("SP-MAU-01-S", S, 150000, 1)],
+    "R04": [("SP-MAU-02-XANH-M", XANH, 250000, 1)],
+    "R05": [("SP-MAU-01-S", S, 150000, 2)],
+    "R06": [("SP-MAU-01-M", M, 120000, 1)],
+    "R07": [("SP-MAU-03-M", QUAN, 180000, 1)],
+    "R08": [("SP-MAU-02-XANH-M", XANH, 250000, 1), ("SP-MAU-01-S", S, 150000, 1), ("SP-MAU-01-M", M, 100000, 1)],
+    "X01": [("SP-MAU-02-XANH-M", XANH, 259000, 3)],
+    "X02": [("SP-MAU-01-S", S, 666000, 1)],
+    "P01": [("SP-MAU-02-DO-L", DO, 280000, 1), ("SP-MAU-01-S", S, 120000, 1)],
+    "P02": [("SP-MAU-03-M", QUAN, 350000, 1)],
+    "X03": [("SP-MAU-03-M", QUAN, 444000, 2)],
+    "X04": [("SP-MAU-01-S", S, 555000, 1)],
+    "X05": [("SP-MAU-02-DO-L", DO, 444000, 1)],
+}
 
 
 async def main() -> None:
@@ -89,6 +113,30 @@ async def main() -> None:
                 {"c": f"SEED-RV-{code}", "b": branches[branch], "t": amount, "ps": pay_status, "st": status, "at": fulfilled_at},
             )
             created += result.rowcount
+
+        # Snapshot lines (also backfills seed orders created before ITEMS existed)
+        variants = dict((await db.execute(text("SELECT sku, variant_id FROM product_variants WHERE sku LIKE 'SP-MAU-%'"))).all())
+        lines = 0
+        for code, items in ITEMS.items():
+            for table, id_col, item_table in (
+                ("sales_orders", "sales_order_id", "sales_order_items"),
+                ("preorders", "preorder_id", "preorder_items"),
+            ):
+                code_col = "order_code" if table == "sales_orders" else "preorder_code"
+                order_id = (await db.execute(text(f"SELECT {id_col} FROM {table} WHERE {code_col} = :c"), {"c": f"SEED-RV-{code}"})).scalar()
+                if order_id is None:
+                    continue
+                if (await db.execute(text(f"SELECT 1 FROM {item_table} WHERE {id_col} = :o LIMIT 1"), {"o": order_id})).first():
+                    continue
+                for sku, name, price, qty in items:
+                    extra_cols, extra_vals = ("", "") if item_table == "sales_order_items" else (", allocated_quantity", ", 0")
+                    await db.execute(
+                        text(f"""INSERT INTO {item_table} ({id_col}, variant_id, product_name_snapshot, sku_snapshot, unit_price,
+                                 quantity, line_total{extra_cols}) VALUES (:o, :v, :n, :sku, :p, :q, :lt{extra_vals})"""),
+                        {"o": order_id, "v": variants[sku], "n": name, "sku": sku, "p": price, "q": qty, "lt": price * qty},
+                    )
+                    lines += 1
+        print(f"{lines} snapshot lines added")
     await close_engine()
     print(f"Done. {created} revenue seed orders created (existing ones skipped).")
 

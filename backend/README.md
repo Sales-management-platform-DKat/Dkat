@@ -186,3 +186,16 @@ Cần bảng `customers` và cột `preorders.customer_id`: chạy `database/04_
 - Response: `{granularity, dateFrom, dateTo, branchId, timezone, totals{revenue, salesRevenue, preorderRevenue, orderCount}, points[{period, periodStart, periodEnd, revenue, salesRevenue, preorderRevenue, orderCount, salesCount, preorderCount}]}`.
 - Quyền: OWNER toàn chuỗi (không `branchId`) hoặc từng chi nhánh; MANAGER bắt buộc `branchId` thuộc phân công (thiếu → 400, sai → 403); EMPLOYEE → 403.
 - Dữ liệu mẫu: `python -m scripts.seed_sales`. Đối chiếu với truy vấn tay: `python -m scripts.check_revenue`, kết quả trong [docs/revenue-reconciliation.md](../docs/revenue-reconciliation.md).
+
+### Dashboard: thẻ số và top sản phẩm (FR-06.5)
+
+Cùng quy tắc doanh thu và phân quyền với `/reports/revenue`. `from`/`to` là ngày giờ VN, mặc định 30 ngày đến hôm nay.
+
+| Endpoint | Response |
+|---|---|
+| `GET /api/v1/reports/summary?from&to&branchId` | `{dateFrom, dateTo, branchId, previousPeriod{dateFrom, dateTo}, revenue, orderCount, averageOrderValue, salesRevenue, preorderRevenue}`; mỗi chỉ số `{value, previous, changePercent}` |
+| `GET /api/v1/reports/top-products?limit=10&sortBy=revenue\|quantity&from&to&branchId` | `{..., items[{rank, sku, productName, quantity, revenue}]}`; `limit` 1-50 |
+
+- Kỳ trước = cùng số ngày, liền trước `from` (vd. tháng 12 có 31 ngày → 31/10-30/11). `changePercent` làm tròn 1 chữ số; `null` khi kỳ trước = 0.
+- Top sản phẩm gom theo SKU từ dòng hàng snapshot của đơn được tính doanh thu; tên = snapshot của lần bán gần nhất; doanh thu = tổng `line_total` (trước giảm giá cấp đơn). Hoà thì xếp theo tiêu chí còn lại rồi theo SKU.
+- Đối chiếu với truy vấn tay: `python -m scripts.check_dashboard` (cần `seed_sales`).

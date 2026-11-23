@@ -49,3 +49,34 @@ async def daily_revenue(
             day[kind] = float(row["amount"])
             day["sales_count" if kind == "sales" else "preorder_count"] = int(row["n"])
     return result
+
+
+async def product_lines(
+    db: AsyncSession, store_id: int, *, start_utc: datetime, end_utc: datetime, branch_id: int | None
+) -> list:
+    """Snapshot lines of the orders that count as revenue (same rule as daily_revenue), grouped by
+    (SKU, product name snapshot): sku, name, quantity, revenue (sum of line_total), last_at.
+
+    line_total is before any order-level discount, so the sum can exceed the order revenue when the
+    POS gave a discount on the whole order.
+    """
+    branch_sql = " AND o.branch_id = :branch_id" if branch_id is not None else ""
+    sql = f"""
+        SELECT x.sku, x.name, SUM(x.quantity) AS quantity, SUM(x.line_total) AS revenue, MAX(x.at) AS last_at
+        FROM (
+            SELECT i.sku_snapshot AS sku, i.product_name_snapshot AS name, i.quantity, i.line_total, o.paid_at AS at
+            FROM sales_orders o
+            JOIN branches b ON b.branch_id = o.branch_id AND b.store_id = :store_id
+            JOIN sales_order_items i ON i.sales_order_id = o.sales_order_id
+            WHERE o.status = 'PAID' AND o.paid_at >= :start AND o.paid_at < :end{branch_sql}
+            UNION ALL
+            SELECT i.sku_snapshot, i.product_name_snapshot, i.quantity, i.line_total, o.fulfilled_at
+            FROM preorders o
+            JOIN branches b ON b.branch_id = o.branch_id AND b.store_id = :store_id
+            JOIN preorder_items i ON i.preorder_id = o.preorder_id
+            WHERE o.status = 'FULFILLED' AND o.payment_status <> 'REFUNDED'
+              AND o.fulfilled_at >= :start AND o.fulfilled_at < :end{branch_sql}
+        ) x
+        GROUP BY x.sku, x.name"""
+    params = {"store_id": store_id, "start": start_utc, "end": end_utc, "branch_id": branch_id}
+    return list((await db.execute(text(sql), params)).mappings().all())

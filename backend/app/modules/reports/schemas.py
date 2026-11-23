@@ -34,3 +34,54 @@ class RevenueReportOut(CamelModel):
     timezone: str
     totals: RevenueTotals
     points: list[RevenuePoint]  # one per period from `from` to `to`, 0 when nothing was sold
+
+
+# ---- dashboard (FR-06.5) ---------------------------------------------------------------------------
+
+TopProductSort = Literal["revenue", "quantity"]
+
+
+class PeriodRef(CamelModel):
+    date_from: date
+    date_to: date
+
+
+class SummaryMetric(CamelModel):
+    value: float
+    previous: float  # same metric over the previous period (same number of days, just before `from`)
+    change_percent: float | None  # (value - previous) / previous * 100, 1 decimal; null when previous = 0
+
+
+class CountMetric(CamelModel):
+    value: int
+    previous: int
+    change_percent: float | None
+
+
+class RevenueSummaryOut(CamelModel):
+    date_from: date
+    date_to: date
+    branch_id: int | None
+    previous_period: PeriodRef
+    revenue: SummaryMetric
+    order_count: CountMetric
+    average_order_value: SummaryMetric  # revenue / order_count (0 when there is no order)
+    sales_revenue: float  # split of `revenue.value`
+    preorder_revenue: float
+
+
+class TopProductOut(CamelModel):
+    rank: int
+    sku: str
+    product_name: str  # snapshot name of the most recent sale of this SKU in the period
+    quantity: int
+    revenue: float  # sum of line totals (before order-level discounts)
+
+
+class TopProductsOut(CamelModel):
+    date_from: date
+    date_to: date
+    branch_id: int | None
+    sort_by: TopProductSort
+    limit: int
+    items: list[TopProductOut]
