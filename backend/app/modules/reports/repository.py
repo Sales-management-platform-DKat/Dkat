@@ -80,3 +80,9 @@ async def product_lines(
         GROUP BY x.sku, x.name"""
     params = {"store_id": store_id, "start": start_utc, "end": end_utc, "branch_id": branch_id}
     return list((await db.execute(text(sql), params)).mappings().all())
+
+
+async def branch_label(db: AsyncSession, branch_id: int) -> tuple[str, str] | None:
+    """(name, branch_code) of one branch, for the export file."""
+    row = (await db.execute(text("SELECT name, branch_code FROM branches WHERE branch_id = :b"), {"b": branch_id})).first()
+    return (row[0], row[1]) if row else None

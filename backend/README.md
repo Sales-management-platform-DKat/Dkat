@@ -186,6 +186,7 @@ Cần bảng `customers` và cột `preorders.customer_id`: chạy `database/04_
 - Response: `{granularity, dateFrom, dateTo, branchId, timezone, totals{revenue, salesRevenue, preorderRevenue, orderCount}, points[{period, periodStart, periodEnd, revenue, salesRevenue, preorderRevenue, orderCount, salesCount, preorderCount}]}`.
 - Quyền: OWNER toàn chuỗi (không `branchId`) hoặc từng chi nhánh; MANAGER bắt buộc `branchId` thuộc phân công (thiếu → 400, sai → 403); EMPLOYEE → 403.
 - Dữ liệu mẫu: `python -m scripts.seed_sales`. Đối chiếu với truy vấn tay: `python -m scripts.check_revenue`, kết quả trong [docs/revenue-reconciliation.md](../docs/revenue-reconciliation.md).
+- **Xuất CSV:** `GET /api/v1/reports/revenue/export?granularity&from&to&branchId&delimiter` → file `doanh-thu_<granularity>_<from>_<to>_<CN01|toan-chuoi>.csv`, UTF-8 **có BOM** (Excel đọc đúng tiếng Việt), cùng số liệu + phân quyền với `/reports/revenue`, thêm dòng *Tổng cộng*. Số tiền là số nguyên thuần, ngày dạng `yyyy-mm-dd`; `delimiter=semicolon` cho máy có dấu phân cách danh sách `;` (vd. vùng vi-VN). Kiểm tra: `python -m scripts.check_revenue_export [--save file.csv]`.
 
 ### Dashboard: thẻ số và top sản phẩm (FR-06.5)
 
