@@ -65,6 +65,9 @@ class Settings(BaseSettings):
     # email. 0 = trust the acceptance (no fallback on later carrier refusal).
     NOTIFY_SMS_CONFIRM_SECONDS: float = 30.0
     NOTIFY_SMS_POLL_SECONDS: float = 5.0
+    # Message content (FR-09.6)
+    PREORDER_READY_DAYS: int = 7  # same as the pre-order module: hold = ready_at + N days (when expires_at is NULL)
+    STORE_CONTACT_PHONE: str = ""  # hotline used when the branch has no phone
     # Automatic retry of FAILED notifications (FR-09.5, NFR-10)
     NOTIFY_RETRY_ENABLED: bool = True  # background job started with the app
     NOTIFY_RETRY_INTERVAL_SECONDS: float = 300.0  # every 5 minutes

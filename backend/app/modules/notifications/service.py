@@ -13,12 +13,13 @@ caller has committed the pre-order change, otherwise it may read the old data.
 """
 import asyncio
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timedelta, timezone
 
 from app.core.config import settings
 from app.core.mailer import send_email
 from app.core.sms import get_send_status, prepare_content, send_sms
 from app.modules.notifications import repository
-from app.modules.notifications.templates import EVENT_TYPES, render
+from app.modules.notifications.templates import EVENT_TYPES, ready_template_for, render, render_template
 from app.utils.logger import get_logger
 
 logger = get_logger("app.notifications")
@@ -74,10 +75,12 @@ async def _deliver_sms(notification_id: int, phone: str, text: str, request_id: 
         return False, error
 
 
-async def _deliver_email(notification_id: int, email: str, subject: str, body: str) -> tuple[bool, str | None]:
+async def _deliver_email(
+    notification_id: int, email: str, subject: str, body: str, html: str | None = None
+) -> tuple[bool, str | None]:
     """Send an email for an existing PENDING row and record the result on it."""
     try:
-        result = await send_email(email, subject, body)
+        result = await send_email(email, subject, body, html=html)
         await repository.mark(notification_id, sent=result.success, provider_message_id=result.provider_message_id, error=result.error)
         return result.success, result.error
     except Exception as exc:  # noqa: BLE001
@@ -103,10 +106,37 @@ async def _try_sms(preorder_id: int, phone: str, text: str, event_type: str) -> 
     return notification_id, ok, error
 
 
-async def _try_email(preorder_id: int, email: str, subject: str, body: str, event_type: str) -> tuple[int, bool, str | None]:
+async def _try_email(
+    preorder_id: int, email: str, subject: str, body: str, event_type: str, html: str | None = None
+) -> tuple[int, bool, str | None]:
+    # the plain-text version is stored (a resend re-sends it as plain text)
     notification_id = await repository.insert_pending(preorder_id, "EMAIL", email, _email_message(subject, body), event_type)
-    ok, error = await _deliver_email(notification_id, email, subject, body)
+    ok, error = await _deliver_email(notification_id, email, subject, body, html)
     return notification_id, ok, error
+
+
+def hold_until_vn(preorder: dict) -> datetime:
+    """Hold deadline in Vietnam time. expires_at is stored in UTC by the pre-order module
+    (ready_at + PREORDER_READY_DAYS); when it is still NULL the same rule is applied here."""
+    expires = preorder.get("expires_at")
+    if expires is None:
+        base = preorder.get("ready_at") or datetime.now(timezone.utc).replace(tzinfo=None)
+        expires = base + timedelta(days=settings.PREORDER_READY_DAYS)
+    return expires + timedelta(hours=7)
+
+
+async def ready_template_data(preorder: dict) -> dict:
+    """Data for templates.render_template from a loaded pre-order (+ its snapshot lines)."""
+    return {
+        "customer_name": preorder["customer_name"] or "",
+        "preorder_code": preorder["code"],
+        "branch_name": preorder["branch_name"],
+        "branch_address": preorder["branch_address"],
+        "contact_phone": preorder["branch_phone"] or settings.STORE_CONTACT_PHONE or None,
+        "hold_until": hold_until_vn(preorder),
+        "items": await repository.load_items(preorder["preorder_id"]),
+        "total_amount": preorder["total_amount"],
+    }
 
 
 async def notify_preorder(preorder_id: int, event_type: str) -> NotificationOutcome:
@@ -129,7 +159,12 @@ async def notify_preorder(preorder_id: int, event_type: str) -> NotificationOutc
             outcome.error = "NO_CONTACT: đơn không có SĐT và email"
             return _log(outcome)
 
-        message = render(event_type, preorder)
+        html = None
+        if event_type == "PREORDER_READY":  # FR-09.6: mẫu 1 (chưa thanh toán) / mẫu 2 (đã thanh toán)
+            message = render_template(ready_template_for(preorder["payment_status"]), await ready_template_data(preorder))
+            html = message.email_html
+        else:
+            message = render(event_type, preorder)
         errors: list[str] = []
         if phone:
             nid, ok, err = await _try_sms(preorder_id, phone, message.sms, event_type)
@@ -140,7 +175,7 @@ async def notify_preorder(preorder_id: int, event_type: str) -> NotificationOutc
                 return _log(outcome)
             errors.append(f"SMS {err}")
         if email:
-            nid, ok, err = await _try_email(preorder_id, email, message.email_subject, message.email_body, event_type)
+            nid, ok, err = await _try_email(preorder_id, email, message.email_subject, message.email_body, event_type, html)
             outcome.notification_ids.append(nid)
             outcome.final_channel = "EMAIL"
             if ok:

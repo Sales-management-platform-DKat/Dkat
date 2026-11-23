@@ -142,3 +142,34 @@ Job khởi động cùng app và chạy mỗi `NOTIFY_RETRY_INTERVAL_SECONDS` (m
 |---|---|
 | Sai khóa | Dòng #103 `FAILED` (`SMTP_AUTH_FAILED` 535) → sửa mật khẩu → `POST /notifications/103/resend` → 200, `SENT`, `retry_count = 1` |
 | Mất mạng | Dòng #104 `FAILED` (`CONNECTION_FAILED`) → khôi phục → job chạy một lượt → `SENT`, `retry_count = 1` |
+
+## Nội dung thông báo theo trạng thái thanh toán (FR-09.6)
+
+Khi gọi `notifyPreorder(id, "PREORDER_READY")`, service tự chọn mẫu theo `preorders.payment_status`:
+
+| `payment_status` | Mẫu | Nội dung |
+|---|---|---|
+| `PAID` | Mẫu 2 `PREORDER_READY_PAID` | Hàng đã sẵn sàng; liên hệ SĐT cửa hàng để chọn nhận tại cửa hàng hoặc giao tận nơi; giữ đến `<hạn>` |
+| `UNPAID`, `REFUNDED` | Mẫu 1 `PREORDER_READY_UNPAID` | Hàng đã có tại `<chi nhánh>`; mời đến mua trước `<hạn giữ hàng>` |
+
+**Hàm:** `render_template(template_type, data) -> RenderedTemplate(sms, email_subject, email_body, email_html)` trong `modules/notifications/templates.py`. Đây là hàm thuần: không đọc DB, không gửi. Các khóa của `data`:
+
+- `customer_name`, `preorder_code`, `branch_name`, `branch_address`, `contact_phone`
+- `hold_until`: giờ Việt Nam
+- `items`: danh sách `[{name, sku, quantity, unit_price, line_total}]`
+- `total_amount`
+
+**Nguồn dữ liệu:**
+- **Hạn giữ hàng** = `preorders.expires_at` (UTC, cần migration `database/07_preorder_fifo_expiry.sql`), đổi sang giờ Việt Nam. Đơn chưa có `expires_at` thì dùng `ready_at + PREORDER_READY_DAYS` (mặc định 7, cùng quy tắc với module preorders).
+- **SĐT liên hệ** = `branches.phone`. Chi nhánh không có SĐT thì dùng `STORE_CONTACT_PHONE`.
+- **Sản phẩm** lấy từ snapshot `preorder_items` (tên, SKU, số lượng, thành tiền).
+
+**SMS:** luôn vừa **1 tin** (160 ký tự sau khi bỏ dấu). Nếu dài, service rút gọn theo thứ tự: viết "Chi nhánh" thành "CN", cắt ngắn tên sản phẩm, cắt ngắn tên chi nhánh, cuối cùng mới bỏ lời chào có tên. Mã đơn và hạn giữ hàng luôn được giữ lại.
+
+**Email:** có bản text (lưu vào `notifications.message`) và bản HTML (bảng sản phẩm, số lượng, thành tiền, tổng tiền). Mọi dữ liệu do người dùng nhập đều được escape. Khi gửi lại một thông báo, chỉ gửi bản text.
+
+Các sự kiện `PREORDER_CREATED`, `PREORDER_CANCELLED`, `PREORDER_EXPIRED` vẫn dùng nội dung cũ.
+
+**Kiểm thử:**
+- `python -m scripts.check_templates`: 2 mẫu × 2 kênh, in ra 4 bản nội dung.
+- Gửi thật: `python -m scripts.notify_preorder --sample --payment UNPAID` (hoặc `--payment PAID`).

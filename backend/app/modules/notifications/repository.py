@@ -22,6 +22,7 @@ async def load_preorder(preorder_id: int) -> dict | None:
                 text(
                     """SELECT p.preorder_id, p.preorder_code AS code, p.customer_name, p.customer_phone AS phone,
                               p.customer_email AS email, p.total_amount, p.status, p.branch_id, b.store_id,
+                              p.payment_status, p.ready_at, p.expires_at,
                               b.name AS branch_name, b.address AS branch_address, b.phone AS branch_phone
                        FROM preorders p JOIN branches b ON b.branch_id = p.branch_id
                        WHERE p.preorder_id = :id"""
@@ -128,3 +129,18 @@ async def auto_retry_candidates(max_retries: int, permanent_codes: tuple[str, ..
 async def set_error(notification_id: int, error: str) -> None:
     async with standalone_transaction() as db:
         await db.execute(update(Notification).where(Notification.notification_id == notification_id).values(error_message=error))
+
+
+async def load_items(preorder_id: int) -> list[dict]:
+    """Snapshot lines of the pre-order (name / SKU / price at order time)."""
+    async with standalone_transaction() as db:
+        rows = (
+            await db.execute(
+                text(
+                    """SELECT product_name_snapshot AS name, sku_snapshot AS sku, quantity, unit_price, line_total
+                       FROM preorder_items WHERE preorder_id = :p ORDER BY preorder_item_id"""
+                ),
+                {"p": preorder_id},
+            )
+        ).mappings().all()
+    return [dict(r) for r in rows]

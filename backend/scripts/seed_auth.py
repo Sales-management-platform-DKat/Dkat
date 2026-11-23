@@ -27,6 +27,7 @@ BRANCHES = [
     ("CN02", "Chi nhánh Cầu Giấy", "88 Xuân Thủy, Cầu Giấy, Hà Nội"),
     ("CN03", "Chi nhánh Hải Châu", "45 Bạch Đằng, Hải Châu, Đà Nẵng"),
 ]
+BRANCH_PHONES = {"CN01": "028 3822 1001", "CN02": "024 3756 1002", "CN03": "0236 382 1003"}
 CATEGORY_NAME = "Danh mục mẫu"
 PRODUCT_CODE = "SP-MAU-01"
 VARIANTS = [("SP-MAU-01-S", "Áo thun mẫu - Size S"), ("SP-MAU-01-M", "Áo thun mẫu - Size M")]
@@ -117,6 +118,11 @@ async def main() -> None:
                     {"s": store_id, "c": code},
                 )
             ).scalar_one()
+            # Contact phone shown in notifications ("liên hệ <SĐT cửa hàng>"); never overwrites a real one
+            await db.execute(
+                text("UPDATE branches SET phone = :p WHERE branch_id = :b AND phone IS NULL"),
+                {"p": BRANCH_PHONES[code], "b": branch_ids[code]},
+            )
 
         if (
             await db.execute(
