@@ -191,3 +191,16 @@ Chạy test tự động trên MySQL riêng từ thư mục backend:
 ```
 
 Script khởi tạo database tạm, kiểm tra migration chạy lại, kiểm thử tạo đơn, snapshot, validation, phạm vi cửa hàng, khách trùng số điện thoại, nhiều request đồng thời, giới hạn IP và lỗi SQL giữa chừng. Không kết nối database trong `.env`.
+
+## Import CSV sản phẩm và biến thể PBI 111
+
+1. Cài lại `pip install -r requirements.txt` để có `python-multipart`, rồi khởi động backend. PBI này không thêm bảng hay migration. Tài khoản database dùng quyền đọc và các quyền tạo danh mục, sản phẩm, thuộc tính, biến thể, giá trị thuộc tính và tồn kho của PBI 38/39/56; quyền khóa stores dùng lại từ các API danh mục.
+2. Đăng nhập OWNER và Authorize trong Swagger. Mở `POST /products/import-csv`, chọn file `data/sample-products.csv` và giữ `dryRun=true` để kiểm tra trước. File mẫu có 20 biến thể thuộc 5 sản phẩm.
+3. Preview trả HTTP 200 với `valid`, `totalRows`, `validRows`, `errors` và `summary` (số danh mục/sản phẩm/biến thể/thuộc tính sẽ tạo khi hợp lệ). Preview không ghi dữ liệu. Sửa lỗi theo `errors[].line` và `field`; dòng tiêu đề là 1. Với ô có xuống dòng, số dòng là dòng vật lý bắt đầu bản ghi trong file.
+4. Đặt `dryRun=false` và gửi lại để import thật. Thành công trả 201 kèm ID sản phẩm/biến thể theo dòng CSV. File sai trả 422, `detail.code=INVALID_PRODUCT_CSV` và `detail.errors`. Nếu bất kỳ dòng nào sai hoặc ghi SQL thất bại, không giữ lại danh mục, sản phẩm, thuộc tính, biến thể hoặc tồn kho được tạo từ file đó.
+
+CSV phân cách bằng dấu phẩy, UTF-8 (chấp nhận BOM), tối đa 500 dòng dữ liệu và 5 MiB. Các cột bắt buộc: `product_name,category,variant_name,sku,price,cost_price,attributes`; được để trống giá vốn và thuộc tính. Giá không âm, tối đa 2 số thập phân, dùng dấu chấm; thuộc tính dùng `Size:M;Màu:Đen`. Dòng trống hoàn toàn được bỏ qua.
+
+Cùng danh mục và tên sản phẩm được gom thành nhiều biến thể. Danh mục/thuộc tính chưa có được tạo mới (danh mục gốc, thuộc tính TEXT). Tên đã có được tìm trong cửa hàng của OWNER; tên trùng gây mơ hồ hoặc đối tượng INACTIVE bị từ chối. Thuộc tính NUMBER/BOOLEAN đã có dùng cùng bộ kiểm tra giá trị của API biến thể. Việc so tên/SKU theo đúng collation của cột database, gồm quy tắc chữ hoa và dấu. SKU đã tồn tại hoặc trùng trong file bị từ chối; import không cập nhật hay ghi đè SKU cũ. Sản phẩm mới nhận mã `CSV-<UUID>`. Mỗi biến thể mới có tồn 0 tại các chi nhánh ACTIVE, không có movement nhập kho.
+
+Kiểm thử: import `samples/pbi111-product-csv.postman_collection.json`, điền `accessToken` của OWNER và đặt thư mục làm việc Postman/Newman là thư mục gốc dự án để đọc `data/*.csv`. Dùng database kiểm thử chưa import các SKU mẫu. Bộ test MySQL riêng chạy bằng `.\scripts\test_pbi111_mysql.ps1` từ backend; có cả import thật 500 dòng, rollback SQL và hai yêu cầu đồng thời cùng SKU.

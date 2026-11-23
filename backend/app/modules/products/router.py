@@ -1,10 +1,13 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 
 from app.core.permissions import Actor, require_auth, require_owner
 from app.modules.products import service, variant_service
 from app.modules.products.catalog_transaction import catalog_transaction
+from app.modules.products.csv_parser import MAX_FILE_BYTES
+from app.modules.products.csv_schemas import CsvImportResult
+from app.modules.products.csv_service import import_products
 from app.modules.products.schemas import (
     Product, ProductCreate, ProductDetail, ProductId, ProductInput, ProductRecord,
     ProductSort, ProductStatus, ProductStatusInput, VariantDetail,
@@ -36,6 +39,23 @@ def get_products(
             db, actor.store_id, limit, offset,
             keyword=keyword, category_id=category_id, status=status, sort=sort,
         )
+
+
+@router.post("/products/import-csv", responses={201: {"model": CsvImportResult}})
+def import_product_csv(
+    actor: Owner, response: Response, file: Annotated[UploadFile, File()],
+    dry_run: bool = Query(default=True, alias="dryRun"),
+) -> CsvImportResult:
+    try:
+        content = file.file.read(MAX_FILE_BYTES + 1)
+    finally:
+        file.file.close()
+    if len(content) > MAX_FILE_BYTES:
+        raise HTTPException(413, {"code": "CSV_FILE_TOO_LARGE", "maxBytes": MAX_FILE_BYTES})
+    with catalog_transaction() as db:
+        result = import_products(db, actor, content, dry_run)
+    response.status_code = 200 if dry_run else 201
+    return result
 
 
 @router.get("/products/{product_id}")
