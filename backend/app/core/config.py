@@ -36,6 +36,17 @@ class Settings(BaseSettings):
     # ---- Public API (no login) ----
     PUBLIC_RATE_LIMIT_PER_MINUTE: int = 60  # per client IP, shared by all /public endpoints
 
+    # ---- Email via SMTP (FR-09.2) ----
+    SMTP_HOST: str = ""  # e.g. smtp.gmail.com; empty = email not configured (send_email returns NOT_CONFIGURED)
+    SMTP_PORT: int = 587
+    SMTP_SECURITY: str = "starttls"  # starttls (port 587) | ssl (port 465) | none (local test server only)
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""  # Gmail: a 16-character App Password, never the account password
+    SMTP_FROM_EMAIL: str = ""  # Gmail requires the same address as SMTP_USERNAME
+    SMTP_FROM_NAME: str = "DKat"
+    SMTP_TIMEOUT_SECONDS: float = 10.0  # whole send (connect + login + send), not per step
+    EMAIL_TEST_TO: str = ""  # default recipient of scripts/send_test_email.py (the team mailbox)
+
     # ---- Audit (NFR-08) ----
     CUSTOMER_ACCESS_LOG_FILE: str = "logs/customer_access.log"  # who viewed which customer profile
 

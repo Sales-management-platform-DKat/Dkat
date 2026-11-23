@@ -199,3 +199,13 @@ Cùng quy tắc doanh thu và phân quyền với `/reports/revenue`. `from`/`to
 - Kỳ trước = cùng số ngày, liền trước `from` (vd. tháng 12 có 31 ngày → 31/10-30/11). `changePercent` làm tròn 1 chữ số; `null` khi kỳ trước = 0.
 - Top sản phẩm gom theo SKU từ dòng hàng snapshot của đơn được tính doanh thu; tên = snapshot của lần bán gần nhất; doanh thu = tổng `line_total` (trước giảm giá cấp đơn). Hoà thì xếp theo tiêu chí còn lại rồi theo SKU.
 - Đối chiếu với truy vấn tay: `python -m scripts.check_dashboard` (cần `seed_sales`).
+
+## Gửi email (FR-09.2)
+
+`app/core/mailer.py`: `result = await send_email(to, subject, body, html=None)` → `EmailResult(success, provider_message_id, error)`; `result.to_dict()` → `{success, providerMessageId, error}`.
+
+- Gửi qua SMTP, cấu hình hoàn toàn bằng `.env` (`SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURITY` = `starttls`/`ssl`/`none`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `SMTP_TIMEOUT_SECONDS`), xem `.env.example`. Gmail: dùng **App Password**, không dùng mật khẩu tài khoản.
+- **Không bao giờ ném lỗi**: mọi sự cố trả `success=false` với `error` = `MÃ: mô tả`: `NOT_CONFIGURED`, `INVALID_INPUT`, `SMTP_AUTH_FAILED`, `RECIPIENT_REFUSED`, `SENDER_REFUSED`, `SMTP_ERROR`, `TIMEOUT`, `TLS_ERROR`, `CONNECTION_FAILED`, `UNKNOWN_ERROR`. Luồng nghiệp vụ gọi hàm này không bị hỏng khi email lỗi.
+- Toàn bộ lần gửi (kết nối + TLS + đăng nhập + gửi) giới hạn 10 giây. `providerMessageId` = header `Message-ID` do server tạo (SMTP không có id của nhà cung cấp) → lưu vào `notifications.provider_message_id`.
+- Chặn chèn header (xuống dòng trong người nhận/tiêu đề). Log không chứa mật khẩu, nội dung thư, và che địa chỉ người nhận (`n***@gmail.com`).
+- Thử gửi thật: điền SMTP + `EMAIL_TEST_TO` trong `.env` rồi `python -m scripts.send_test_email` (hoặc `--to ...`). Thử sai mật khẩu: `python -m scripts.send_test_email --wrong-password` → phải in `success: false`, `SMTP_AUTH_FAILED`.
