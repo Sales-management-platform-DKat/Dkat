@@ -31,6 +31,10 @@ class CancelOrderInput(BaseModel):
     reason: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
 
 
+class RefundOrderInput(CancelOrderInput):
+    """A full refund requires a reason; item/amount overrides are forbidden."""
+
+
 class SalesOrderSummary(BaseModel):
     salesOrderId: int
     orderCode: str

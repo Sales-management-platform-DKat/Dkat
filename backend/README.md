@@ -218,3 +218,15 @@ Chỉ đơn WAITING_STOCK/READY/NOTIFIED còn UNPAID được thanh toán; tổn
 Ngoài cửa hàng trả 404 PREORDER_NOT_FOUND, ngoài chi nhánh có quyền trả 403; danh sách tự giới hạn theo quyền. Ba API này cần token và không dùng limiter của API tạo đơn công khai.
 
 Thử nhanh: import `samples/pbi121-preorder-admin.postman_collection.json`, điền `accessToken` và `preorderId` của đơn UNPAID trên database kiểm thử, rồi chạy thư mục PreorderAdmin. Collection đọc kho trước/sau, thanh toán và thử gọi lặp. Chạy bộ test MySQL riêng bằng `.\scripts\test_pbi121_mysql.ps1` từ backend để kiểm tra thêm phân quyền, FIFO, dữ liệu cũ, thông báo, rollback và thanh toán đồng thời.
+
+## Hoàn đơn bán đã thanh toán PBI 122
+
+1. Dùng schema mới hoặc migration 05 (`sales_orders.cancel_reason`, `cancelled_at`) và schema kho của PBI 74/75. PBI 122 không thêm migration. Tài khoản backend cần SELECT, UPDATE trên sales_orders/payments, INSERT/UPDATE trên inventory và INSERT trên inventory_movements; quyền khóa dòng dùng lại từ API thanh toán.
+2. Đăng nhập OWNER hoặc MANAGER được phân công chi nhánh. Trong Swagger gọi `POST /sales-orders/{order_id}/refund` với `{"reason":"Khách trả toàn bộ hàng"}`. Lý do được cắt khoảng trắng đầu/cuối, bắt buộc có nội dung và tối đa 255 ký tự. API hoàn toàn bộ đơn; gửi thêm amount/items bị từ chối.
+3. HTTP 200 trả đơn CANCELLED, cancelReason/cancelledAt và các payment SUCCESS đã thành REFUNDED. paidAt, dòng hàng, ID thanh toán, phương thức, số tiền và thông tin xác nhận ban đầu được giữ lại. Lịch sử FAILED/PENDING giữ nguyên. Đây là ghi nhận hoàn trong hệ thống; cửa hàng thực hiện hoàn tiền cho khách bên ngoài.
+
+Trong cùng transaction: khóa đơn và inventory theo variant_id tăng dần, cập nhật thanh toán, cộng đúng lượng đã bán về chi nhánh gốc, ghi ADJUSTMENT dương với note `Hoàn đơn <mã>`, referenceType SALES_ORDER, referenceId và createdBy của người hoàn, rồi cập nhật trạng thái/lý do/thời điểm. Không xóa dòng đơn hay thanh toán. Đơn CANCELLED và payment REFUNDED được loại khỏi phép tính doanh thu theo trạng thái PAID/SUCCESS.
+
+PENDING, CANCELLED hoặc hoàn lần hai trả 409 ORDER_NOT_PAID. Lịch sử thanh toán thiếu SUCCESS, đã có REFUNDED hoặc tổng SUCCESS khác totalAmount trả 409 ORDER_PAYMENT_INCONSISTENT để kiểm tra lại dữ liệu. Kho vượt giới hạn INT trả 409 STOCK_LIMIT_EXCEEDED và hoàn tác cả đơn. SQL lỗi trả 503 và rollback thanh toán, kho, movement, trạng thái đơn. Đơn có biến thể ngừng hoạt động vẫn hoàn theo snapshot; inventory cũ bị thiếu được tạo ở mức 0 rồi cộng lượng trả. Lượng giữ chỗ preorder giữ nguyên. EMPLOYEE trả 403; MANAGER ngoài chi nhánh trả 403; ngoài cửa hàng trả 404.
+
+Thử nhanh trên database kiểm thử: import `samples/pbi122-sales-refund.postman_collection.json`, điền accessToken OWNER/MANAGER và orderId của đơn PAID hợp lệ rồi chạy SalesRefund theo thứ tự. Collection kiểm tra kho trước/sau, movement, lịch sử và việc hoàn lần hai bị chặn. Chạy `.\scripts\test_pbi122_mysql.ps1` từ backend để kiểm tra thêm phân quyền, các phương thức thanh toán, dữ liệu cũ, rollback SQL, tràn kho và yêu cầu đồng thời.

@@ -1,0 +1,393 @@
+{
+  "info": {
+    "name": "DKat PBI 122 | Hoàn đơn đã thanh toán và hoàn kho",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Dùng database kiểm thử. Điền accessToken OWNER/MANAGER có quyền chi nhánh và orderId của đơn PAID tạo/thanh toán qua API POS. Chạy thư mục SalesRefund theo thứ tự. Collection ghi nhận hoàn toàn bộ đơn, đổi payment SUCCESS thành REFUNDED và cộng tồn thực; cửa hàng tự thực hiện hoàn tiền bên ngoài. Chỉ chạy một lần cho mỗi đơn. Biến branchId, variantId, số lượng và lịch sử được lấy tự động. Kiểm tra kho trực tiếp ở dòng hàng đầu và movement cho tất cả biến thể."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    },
+    {
+      "key": "reason",
+      "value": "Khách trả toàn bộ hàng"
+    },
+    {
+      "key": "branchId",
+      "value": ""
+    },
+    {
+      "key": "variantId",
+      "value": ""
+    },
+    {
+      "key": "orderCode",
+      "value": ""
+    },
+    {
+      "key": "returnedQty",
+      "value": ""
+    },
+    {
+      "key": "stockBefore",
+      "value": ""
+    },
+    {
+      "key": "reservedBefore",
+      "value": ""
+    },
+    {
+      "key": "availableBefore",
+      "value": ""
+    },
+    {
+      "key": "paidAt",
+      "value": ""
+    },
+    {
+      "key": "oldItems",
+      "value": ""
+    },
+    {
+      "key": "oldPayments",
+      "value": ""
+    },
+    {
+      "key": "movementCount",
+      "value": ""
+    },
+    {
+      "key": "quantities",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "SalesRefund",
+      "item": [
+        {
+          "name": "01. Hoàn đơn yêu cầu đăng nhập",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}/refund",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\": \"{{reason}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02. Đọc đơn PAID trước khi hoàn",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const order = pm.response.json();",
+                  "pm.test('Đơn PAID có thanh toán đầy đủ', () => {",
+                  "  pm.expect(order.status).to.equal('PAID'); pm.expect(order.items.length).to.be.above(0);",
+                  "  pm.expect(order.payments.some(x => x.status === 'REFUNDED')).to.equal(false);",
+                  "  const amount = order.payments.filter(x => x.status === 'SUCCESS').reduce((s,x) => s + Number(x.amount), 0);",
+                  "  pm.expect(amount).to.be.closeTo(Number(order.totalAmount), 0.001);",
+                  "});",
+                  "pm.collectionVariables.set('branchId', order.branchId);",
+                  "pm.collectionVariables.set('variantId', order.items[0].variantId);",
+                  "pm.collectionVariables.set('returnedQty', order.items.filter(x => x.variantId === order.items[0].variantId).reduce((s,x) => s + x.quantity, 0));",
+                  "pm.collectionVariables.set('orderCode', order.orderCode);",
+                  "pm.collectionVariables.set('paidAt', order.paidAt);",
+                  "pm.collectionVariables.set('oldItems', JSON.stringify(order.items));",
+                  "pm.collectionVariables.set('oldPayments', JSON.stringify(order.payments));",
+                  "pm.collectionVariables.set('movementCount', new Set(order.items.map(x => x.variantId)).size);",
+                  "pm.collectionVariables.set('quantities', JSON.stringify(order.items.reduce((map,x) => { map[x.variantId] = (map[x.variantId] || 0) + x.quantity; return map; }, {})));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03. Đọc kho trước khi hoàn",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{branchId}}/{{variantId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const row = pm.response.json();",
+                  "pm.collectionVariables.set('stockBefore', row.quantity);",
+                  "pm.collectionVariables.set('reservedBefore', row.reserved);",
+                  "pm.collectionVariables.set('availableBefore', row.available);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04. Lý do trống bị từ chối",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}/refund",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\": \" \"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05. Hoàn toàn bộ đơn",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}/refund",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\": \"{{reason}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const order = pm.response.json();",
+                  "pm.test('CANCELLED, lưu lý do và thời điểm, giữ paidAt', () => {",
+                  "  pm.expect(order.status).to.equal('CANCELLED'); pm.expect(order.cancelReason).to.equal(pm.variables.get('reason'));",
+                  "  pm.expect(order.cancelledAt).to.match(/Z$/); pm.expect(order.paidAt).to.equal(pm.variables.get('paidAt'));",
+                  "});",
+                  "pm.test('Các SUCCESS cũ thành REFUNDED', () => {",
+                  "  const previous = JSON.parse(pm.variables.get('oldPayments'));",
+                  "  pm.expect(order.payments.filter(x => x.status === 'SUCCESS')).to.have.lengthOf(0);",
+                  "  previous.filter(x => x.status === 'SUCCESS').forEach(old => {",
+                  "    pm.expect(order.payments.find(x => x.paymentId === old.paymentId).status).to.equal('REFUNDED');",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06. Không được hoàn lần hai",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}/refund",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\": \"{{reason}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "pm.test('ORDER_NOT_PAID', () => pm.expect(pm.response.json().detail.code).to.equal('ORDER_NOT_PAID'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07. Kho cộng đúng một lần, giữ nguyên phân bổ",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{branchId}}/{{variantId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Hoàn đúng lượng đã bán', () => {",
+                  "  const row = pm.response.json(), qty = Number(pm.variables.get('returnedQty'));",
+                  "  pm.expect(row.quantity).to.equal(Number(pm.variables.get('stockBefore')) + qty);",
+                  "  pm.expect(row.reserved).to.equal(Number(pm.variables.get('reservedBefore')));",
+                  "  pm.expect(row.available).to.equal(Number(pm.variables.get('availableBefore')) + qty);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08. Biến động ADJUSTMENT có tham chiếu đơn",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/movements?branchId={{branchId}}&type=ADJUSTMENT&size=100"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const rows = pm.response.json().filter(x => x.referenceType === 'SALES_ORDER' && x.referenceId == pm.variables.get('orderId'));",
+                  "pm.test('Mỗi biến thể có đúng một biến động hoàn', () => pm.expect(rows).to.have.lengthOf(Number(pm.variables.get('movementCount'))));",
+                  "pm.test('Đúng lượng, ghi chú và người thực hiện', () => {",
+                  "  const quantities = JSON.parse(pm.variables.get('quantities'));",
+                  "  rows.forEach(row => {",
+                  "    pm.expect(row.quantityChange).to.equal(quantities[row.variantId]);",
+                  "    pm.expect(row.note).to.equal('Hoàn đơn ' + pm.variables.get('orderCode'));",
+                  "    pm.expect(row.createdBy).to.be.a('number');",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09. Giữ lịch sử đơn và thanh toán gốc",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const order = pm.response.json();",
+                  "pm.test('Dòng hàng vẫn nguyên', () => pm.expect(JSON.stringify(order.items)).to.equal(pm.variables.get('oldItems')));",
+                  "pm.test('Giữ ID, phương thức, số tiền và người/thời điểm xác nhận ban đầu', () => {",
+                  "  const previous = JSON.parse(pm.variables.get('oldPayments'));",
+                  "  pm.expect(order.payments).to.have.lengthOf(previous.length);",
+                  "  previous.forEach(old => {",
+                  "    const current = order.payments.find(x => x.paymentId === old.paymentId);",
+                  "    ['paymentMethod','amount','confirmedBy','confirmedAt'].forEach(key => pm.expect(current[key]).to.equal(old[key]));",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10. Đơn hoàn không còn thuộc doanh thu PAID",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/sales-orders?status=PAID&keyword={{orderCode}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Đơn không còn trong danh sách PAID', () => pm.expect(pm.response.json()).to.have.lengthOf(0));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
