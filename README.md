@@ -159,6 +159,7 @@ npm run dev                        # mở địa chỉ Vite in ra, mặc định
 | [docs/erd.md](docs/erd.md) · [erd.png](docs/erd.png) · [erd.pdf](docs/erd.pdf) | Sơ đồ ERD 20 bảng, 34 khóa ngoại |
 | [docs/rbac-matrix.md](docs/rbac-matrix.md) | Ma trận phân quyền đã kiểm thử |
 | [docs/revenue-reconciliation.md](docs/revenue-reconciliation.md) | Đối chiếu báo cáo doanh thu với truy vấn tay |
+| [docs/qa/](docs/qa/README.md) | Bug log, Test case và bảng theo dõi velocity (Excel, cả nhóm cùng sửa) |
 | [backend/README.md](backend/README.md) | Chi tiết từng module backend: quy tắc nghiệp vụ, mã lỗi |
 | `database/` | `00_schema_full.sql` (schema đầy đủ); `04`, `06`, `07`, `09` là migration cho database cũ, chạy lại nhiều lần vẫn an toàn |
 
