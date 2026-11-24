@@ -13,6 +13,7 @@ from app.main import app
 from app.modules.auth.models import Shop, StoreSubscription
 from app.modules.auth.service import utcnow
 import app.main as main_module
+import app.modules.customers.router as customer_router
 
 
 TEST_ADMIN_TOKEN = "test-admin-token-0123456789-abcdefgh"
@@ -36,6 +37,7 @@ class AuthFlowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         main_module.engine = test_engine
+        customer_router.engine = test_engine
         app.dependency_overrides[get_db] = override_get_db
         config.ADMIN_TOKEN = TEST_ADMIN_TOKEN
         config.AUTH_SECRET_KEY = "test-auth-secret-key-with-at-least-32-characters"
@@ -54,18 +56,35 @@ class AuthFlowTests(unittest.TestCase):
         self.client.cookies.clear()
         Base.metadata.drop_all(bind=test_engine)
         Base.metadata.create_all(bind=test_engine)
+        with test_engine.begin() as connection:
+            connection.exec_driver_sql("CREATE TABLE IF NOT EXISTS branches (branch_id INTEGER PRIMARY KEY, store_id INTEGER NOT NULL, name VARCHAR(100) NOT NULL)")
+            connection.exec_driver_sql("CREATE TABLE IF NOT EXISTS user_branches (user_id INTEGER NOT NULL, branch_id INTEGER NOT NULL)")
+            connection.exec_driver_sql("""
+                CREATE TABLE IF NOT EXISTS sales_orders (
+                    sales_order_id INTEGER PRIMARY KEY, order_code VARCHAR(50) NOT NULL,
+                    branch_id INTEGER NOT NULL, customer_id INTEGER, created_at DATETIME NOT NULL,
+                    status VARCHAR(30) NOT NULL, total_amount NUMERIC NOT NULL
+                )
+            """)
+            connection.exec_driver_sql("""
+                CREATE TABLE IF NOT EXISTS preorders (
+                    preorder_id INTEGER PRIMARY KEY, preorder_code VARCHAR(50) NOT NULL,
+                    branch_id INTEGER NOT NULL, customer_id INTEGER, created_at DATETIME NOT NULL,
+                    status VARCHAR(30) NOT NULL, total_amount NUMERIC NOT NULL
+                )
+            """)
 
     def provision(self, username="owner1"):
         return self.client.post(
             "/api/v1/admin/accounts",
             headers={"X-Admin-Token": TEST_ADMIN_TOKEN},
             json={
-                "shop_name": "Cửa hàng thử nghiệm",
+                "shop_name": "Cá»­a hÃ ng thá»­ nghiá»‡m",
                 "plan": "basic",
                 "subscription_months": 12,
                 "owner_username": username,
                 "owner_email": f"{username}@example.test",
-                "owner_full_name": "Chủ cửa hàng",
+                "owner_full_name": "Chá»§ cá»­a hÃ ng",
                 "owner_password": "owner-password-123",
             },
         )
@@ -85,12 +104,12 @@ class AuthFlowTests(unittest.TestCase):
         unauthorized = self.client.post(
             "/api/v1/admin/accounts",
             json={
-                "shop_name": "Cửa hàng thử nghiệm",
+                "shop_name": "Cá»­a hÃ ng thá»­ nghiá»‡m",
                 "plan": "basic",
                 "subscription_months": 12,
                 "owner_username": "owner1",
                 "owner_email": "owner1@example.test",
-                "owner_full_name": "Chủ cửa hàng",
+                "owner_full_name": "Chá»§ cá»­a hÃ ng",
                 "owner_password": "owner-password-123",
             },
         )
@@ -116,6 +135,49 @@ class AuthFlowTests(unittest.TestCase):
             204,
         )
         self.assertEqual(self.client.get("/api/v1/auth/me", headers=owner_headers).status_code, 401)
+
+    def test_customer_list_profile_update_and_purchase_history_routes(self):
+        self.assertEqual(self.provision().status_code, 201)
+        login = self.login("owner1", "owner-password-123")
+        self.assertEqual(login.status_code, 200)
+        headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+        created = self.client.post("/api/v1/customers", headers=headers, json={
+            "fullName": "Nguyá»…n An", "phone": "0901234567", "email": "an@example.test",
+            "address": "Quáº­n 1", "note": "KhÃ¡ch thÃ¢n thiáº¿t",
+        })
+        self.assertEqual(created.status_code, 201, created.text)
+        customer_id = created.json()["customerId"]
+        self.assertEqual(created.json()["note"], "KhÃ¡ch thÃ¢n thiáº¿t")
+        listing = self.client.get("/api/v1/customers?q=Nguyá»…n", headers=headers)
+        self.assertEqual(listing.status_code, 200, listing.text)
+        self.assertEqual(listing.json()[0]["customerId"], customer_id)
+        detail = self.client.get(f"/api/v1/customers/{customer_id}", headers=headers)
+        self.assertEqual(detail.status_code, 200, detail.text)
+        history = self.client.get(f"/api/v1/customers/{customer_id}/history", headers=headers)
+        self.assertEqual(history.status_code, 200, history.text)
+        self.assertEqual(history.json(), [])
+        updated = self.client.put(f"/api/v1/customers/{customer_id}", headers=headers, json={
+            "fullName": "Nguyá»…n An má»›i", "phone": "0901234567", "email": None,
+            "address": None, "note": None,
+        })
+        self.assertEqual(updated.status_code, 200, updated.text)
+        self.assertEqual(updated.json()["fullName"], "Nguyá»…n An má»›i")
+
+    def test_revenue_reports_allow_owner_and_block_employee(self):
+        self.assertEqual(self.provision().status_code, 201)
+        owner_login = self.login("owner1", "owner-password-123")
+        owner_headers = {"Authorization": f"Bearer {owner_login.json()['access_token']}"}
+        owner_result = self.client.get("/api/v1/reports/summary", headers=owner_headers)
+        self.assertEqual(owner_result.status_code, 200, owner_result.text)
+        employee = self.client.post("/api/v1/users", headers=owner_headers, json={
+            "username": "staff1", "full_name": "NhÃ¢n viÃªn", "password": "staff-password-123",
+            "role": "staff",
+        })
+        self.assertEqual(employee.status_code, 201, employee.text)
+        employee_login = self.login("staff1:staff", "staff-password-123")
+        employee_headers = {"Authorization": f"Bearer {employee_login.json()['access_token']}"}
+        denied = self.client.get("/api/v1/reports/summary", headers=employee_headers)
+        self.assertEqual(denied.status_code, 403)
 
     def test_each_role_uses_its_suffix_and_own_password(self):
         self.assertEqual(self.provision().status_code, 201)
@@ -155,7 +217,7 @@ class AuthFlowTests(unittest.TestCase):
             headers=staff_headers,
             json={
                 "username": "another",
-                "full_name": "Không được cấp quyền",
+                "full_name": "KhÃ´ng Ä‘Æ°á»£c cáº¥p quyá»n",
                 "role": "staff",
                 "password": "another-password-123",
             },

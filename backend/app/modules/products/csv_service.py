@@ -14,7 +14,7 @@ from app.modules.products.category_schemas import CategoryInput
 from app.modules.products.csv_parser import ParsedRow, parse_csv
 from app.modules.products.csv_schemas import CsvImportResult, ImportedCsvRow, ImportCounts
 from app.modules.products.schemas import ProductCreate
-from app.modules.products.variant_schemas import AttributeInput, AttributeValueInput, VariantCreate
+from app.modules.products.variant_schemas import AttributeInput, AttributeValueInput, VariantInput
 
 
 @dataclass
@@ -149,7 +149,7 @@ def import_products(db: Connection, actor: Actor, content: bytes, dry_run: bool)
                     attribute.id = variant_service.create_attribute(db, actor.store_id,
                         AttributeInput(name=attribute.name, dataType="TEXT")).attributeId
                 values.append(AttributeValueInput(attributeId=attribute.id, value=value))
-            variant = variant_service.save_variant(db, actor.store_id, VariantCreate(
+            variant = variant_service.save_variant(db, actor.store_id, VariantInput(
                 sku=data.sku, variantName=data.variant_name, price=data.price, costPrice=data.cost_price, attributes=values,
             ), product_id=product.id)
         except (CatalogConflict, CatalogInvalid, CatalogNotFound) as error:
