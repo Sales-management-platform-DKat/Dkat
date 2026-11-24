@@ -1,4 +1,4 @@
-Test case tích hợp **POS & Auth** cho vòng kiểm thử Ngày 16. Chuẩn bị chung (seed `demo_reset`, tài khoản, cửa sổ trình duyệt): [docs/qa/test-cases/pos-auth.md](https://github.com/Sales-management-platform-DKat/Dkat/blob/develop/docs/qa/test-cases/pos-auth.md#chuẩn-bị).
+Test case tích hợp **POS & Auth** cho vòng kiểm thử Ngày 16. Chuẩn bị chung (seed `demo_reset`, tài khoản, cấu hình server): [docs/qa/test-cases/pos-auth.md](https://github.com/Sales-management-platform-DKat/Dkat/blob/develop/docs/qa/test-cases/pos-auth.md#chuẩn-bị).
 
 | | |
 |---|---|
@@ -10,7 +10,7 @@ Test case tích hợp **POS & Auth** cho vòng kiểm thử Ngày 16. Chuẩn b�
 | **Chạy thử chuẩn bị 25/11** | Đạt (API bước 1-4); bước 5 giao diện chưa chạy thử |
 
 ### Khi chạy
-- [ ] Đã chạy `python -m scripts.demo_reset` (hoặc chạy nối tiếp các TC trước theo thứ tự)
+- [ ] Đã làm phần Chuẩn bị chung và các test case trước theo thứ tự
 - [ ] Ghi Kết quả thực tế, Pass/Fail, Người test, Ngày test vào sheet **POS & Auth** của `docs/qa/DKat_Test_Cases.xlsx`
 - [ ] Fail: tạo bug trong `docs/qa/DKat_Bug_Log.xlsx`, ghi mã bug vào comment của issue này
 - [ ] Đóng issue khi Pass

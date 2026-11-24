@@ -22,7 +22,16 @@ Ba file Excel dùng chung cho cả nhóm. Ai có quyền push vào repo đều s
 - Sheet **POS & Auth** trong [DKat_Test_Cases.xlsx](DKat_Test_Cases.xlsx): điền Kết quả thực tế, Pass/Fail, Người test, Ngày test khi chạy.
 - Bản đọc trên GitHub: [test-cases/pos-auth.md](test-cases/pos-auth.md). Mỗi test case có một GitHub Issue (nhãn `test-case`, `pos-auth`), tạo bằng `test-cases/create_issues.ps1` (hoặc `.sh`).
 - Chạy tự động cùng dữ liệu: `python -m scripts.check_pos_auth` (sau `demo_reset`, server đang chạy), in PASS/FAIL 12 test case.
-- Sửa test case: sửa [test-cases/pos_auth_cases.py](test-cases/pos_auth_cases.py) rồi chạy `python docs/qa/test-cases/build_pos_auth.py` để sinh lại sheet, file md và nội dung issue.
+- Sửa test case: sửa [test-cases/pos_auth_cases.py](test-cases/pos_auth_cases.py) rồi chạy `python docs/qa/test-cases/build_test_cases.py` để sinh lại sheet, file md và nội dung issue.
+
+## Bộ test Đặt trước & Thông báo (vòng kiểm thử Ngày 16)
+
+12 test case tích hợp cho luồng phức tạp nhất: đặt trước thiếu tên / SĐT / địa chỉ bị từ chối, đặt trước thành công không trừ kho, nhập kho phân bổ FIFO đúng thứ tự (kể cả phân bổ một phần), đơn đủ hàng -> READY -> SMS, SMS lỗi -> email, thử lại tự động và thủ công, xác nhận nhận hàng mới trừ kho, hủy và hết hạn giải phóng hàng. Kết quả mong đợi ghi bằng số đo được: Tồn thực / Đã giữ / Khả dụng, số lượng đã phân bổ cho từng đơn, trạng thái đơn và từng lần gửi.
+
+- Sheet **Đặt trước & Thông báo** trong [DKat_Test_Cases.xlsx](DKat_Test_Cases.xlsx); bản đọc trên GitHub: [test-cases/preorder-notify.md](test-cases/preorder-notify.md); issue nhãn `preorder-notify`.
+- Server chạy theo 2 cấu hình (ghi trong phần Chuẩn bị): A = SMS sandbox, tắt email; B = sai khóa eSMS, email thật. Không có SMS thật nào gửi tới số trong test case.
+- Chạy tự động: `python -m scripts.demo_reset` rồi `python -m scripts.check_preorder_notify` (không cần bật server, gửi 2 email thật tới EMAIL_TEST_TO và hộp thư nhóm).
+- Dữ liệu nguồn: [test-cases/preorder_notify_cases.py](test-cases/preorder_notify_cases.py).
 
 ## Bug log
 

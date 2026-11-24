@@ -1,11 +1,15 @@
 """Single source of the POS & Auth integration test cases (round of Day 16).
 
-Used by build_pos_auth.py to produce: the "POS & Auth" sheet of docs/qa/DKat_Test_Cases.xlsx,
+Used by build_test_cases.py to produce: the "POS & Auth" sheet of docs/qa/DKat_Test_Cases.xlsx,
 docs/qa/test-cases/pos-auth.md and one GitHub issue body per test case.
 Every expected value was checked on fresh seed data on 25/11/2026 (API: backend/scripts/check_pos_auth.py
 12/12, UI: Edge).
 """
 
+SHEET = "POS & Auth"
+SLUG = "pos-auth"
+SUITE_LABEL = "pos-auth"
+TITLE = "Test case tích hợp POS & Auth (vòng kiểm thử Ngày 16)"
 PASSWORD = "DKat@Demo2026"
 URL = "http://127.0.0.1:5173"
 
@@ -131,3 +135,9 @@ CASES = [
      "Bước 5: POS hiện tồn của DKat Cầu Giấy (ví dụ Áo thun Trắng / L Khả dụng: 10).",
      ["pos", "rbac"]),
 ]
+
+TRIAL = {c[0]: "Đạt (API + giao diện)" for c in CASES}  # how each case was tried on 25/11/2026 on fresh seed data
+TRIAL.update({
+    "TC-PA-07": "Đạt (API)",
+    "TC-PA-12": "Đạt (API bước 1-4); bước 5 giao diện chưa chạy thử",
+})

@@ -1,7 +1,7 @@
 # Test case tích hợp POS & Auth (vòng kiểm thử Ngày 16)
 
 Bản Excel: sheet **POS & Auth** trong [DKat_Test_Cases.xlsx](../DKat_Test_Cases.xlsx). Mỗi test case có một GitHub Issue (nhãn `test-case`, `pos-auth`).
-Nguồn duy nhất: [pos_auth_cases.py](pos_auth_cases.py), sinh lại bằng `python docs/qa/test-cases/build_pos_auth.py`.
+Nguồn duy nhất: [pos_auth_cases.py](pos_auth_cases.py), sinh lại bằng `python docs/qa/test-cases/build_test_cases.py`.
 
 ## Chuẩn bị
 
@@ -16,7 +16,7 @@ Nguồn duy nhất: [pos_auth_cases.py](pos_auth_cases.py), sinh lại bằng `p
 
 Dữ liệu seed (`python -m scripts.demo_reset`): CN01 DKat Quận 1 (id 1), CN02 DKat Cầu Giấy (id 2), CN03 DKat Hải Châu (id 3).
 
-Tồn kho CN01: Áo thun cotton DKat Trắng / M (AT-COT-M, 199.000 đ) tồn 11; Mũ lưỡi trai DKat Đen (MU-LT-DEN, 149.000 đ) tồn 10; Quần jean slim Xanh / 29 (QJ-SLIM-29, 449.000 đ) tồn 11; Xanh / 30 (QJ-SLIM-30) tồn 10; Xanh / 31 (QJ-SLIM-31) tồn 10; Áo khoác gió DKat Đen / M (AK-GIO-DEN-M, 599.000 đ) tồn 0.
+Tồn / đơn có sẵn ở CN01: Áo thun cotton DKat Trắng / M (AT-COT-M, 199.000 đ) tồn 11; Mũ lưỡi trai DKat Đen (MU-LT-DEN, 149.000 đ) tồn 10; Quần jean slim Xanh / 29 (QJ-SLIM-29, 449.000 đ) tồn 11; Xanh / 30 (QJ-SLIM-30) tồn 10; Xanh / 31 (QJ-SLIM-31) tồn 10; Áo khoác gió DKat Đen / M (AK-GIO-DEN-M, 599.000 đ) tồn 0.
 
 ## Danh sách
 
