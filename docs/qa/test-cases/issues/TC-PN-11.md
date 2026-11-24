@@ -8,6 +8,7 @@ Test case tích hợp **Đặt trước & Thông báo** cho vòng kiểm thử N
 | **Kiểm tra nhanh qua API** | POST /api/v1/preorders/{id C}/cancel {"reason":"Khách không lấy nữa"}; GET /api/v1/preorders/{id D} |
 | **Kết quả mong đợi** | C: Đã hủy. Chiếc của C chuyển ngay cho D: D Sẵn sàng, phân bổ 1/1. Lịch sử của D: SMS · Lỗi · AUTH_FAILED (cấu hình B; D không có email nên D vẫn Sẵn sàng). Job thử lại chạy mỗi 30 giây nên dòng SMS có thể đã hiện 'gửi lại 1..3', sau lần thứ 3 ghi RETRY_EXHAUSTED và dừng. Tồn AK-GIO-DEN-M (Tồn thực / Đã giữ / Khả dụng) = 2 / 2 / 0 (Lan 1 + D 1). |
 | **Chạy thử chuẩn bị 25/11** | Đạt (script check_preorder_notify) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: C -> CANCELLED; D READY 1/1 gửi [('SMS', 'FAILED', 'AUTH_FAILED', 0)]; tồn (2, 2, 0) |
 
 ### Khi chạy
 - [ ] Đã làm phần Chuẩn bị chung và các test case trước theo thứ tự

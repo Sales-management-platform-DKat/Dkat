@@ -8,6 +8,7 @@ Test case tích hợp **Đặt trước & Thông báo** cho vòng kiểm thử N
 | **Kiểm tra nhanh qua API** | GET /api/v1/preorders/{id} cho Lan, B, C, D -> items[0].allocatedQuantity |
 | **Kết quả mong đợi** | Chị Lan (đặt trước nhất): Sẵn sàng, phân bổ 1/1. B: vẫn Chờ hàng, phân bổ 1/2 (nhận phần còn lại). C, D: Chờ hàng, 0/1. Tồn AK-GIO-DEN-M (Tồn thực / Đã giữ / Khả dụng) = 2 / 2 / 0. Lịch sử thông báo của Lan: Email · Lỗi · NOT_CONFIGURED (cấu hình A tắt email) nên Lan vẫn Sẵn sàng, chưa phải Đã thông báo. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (script check_preorder_notify) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: {'lan': 'READY 1/1', 'b': 'WAITING_STOCK 1/2', 'c': 'WAITING_STOCK 0/1', 'd': 'WAITING_STOCK 0/1'}; tồn (2, 2, 0); thông báo Lan [('EMAIL', 'FAILED', 'NOT_CONFIGURED', 0)] |
 
 ### Khi chạy
 - [ ] Đã làm phần Chuẩn bị chung và các test case trước theo thứ tự

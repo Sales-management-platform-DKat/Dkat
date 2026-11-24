@@ -8,6 +8,7 @@ Test case tích hợp **POS & Auth** cho vòng kiểm thử Ngày 16. Chuẩn b�
 | **Kiểm tra nhanh qua API** | POST /api/v1/sales-orders/{id}/confirm-payment {"paymentMethod":"CASH","amount":"547000"} |
 | **Kết quả mong đợi** | Đơn chuyển Đã thanh toán; chi tiết ghi Thanh toán: CASH · SUCCESS · 547.000 đ. Tồn CN01: AT-COT-M 11 -> 9, MU-LT-DEN 10 -> 9. API: 200, status PAID. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API + giao diện) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: 200 PAID; tồn CN01 AT-COT-M 11 -> 9, MU-LT-DEN 10 -> 9 |
 
 ### Khi chạy
 - [ ] Đã làm phần Chuẩn bị chung và các test case trước theo thứ tự

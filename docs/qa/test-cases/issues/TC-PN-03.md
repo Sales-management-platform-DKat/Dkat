@@ -8,6 +8,7 @@ Test case tích hợp **Đặt trước & Thông báo** cho vòng kiểm thử N
 | **Kiểm tra nhanh qua API** | POST /api/v1/preorders thiếu customer.address; rồi đủ thông tin nhưng items[0].variantId = 9 (Đen / L) |
 | **Kết quả mong đợi** | Lần 1: dưới ô Địa chỉ hiện 'Vui lòng nhập địa chỉ.'; API 422, details[0].field = customer.address. Lần 2: thẻ Đen / L ghi Còn hàng, KHÔNG có nút Đặt trước; API 409 VARIANT_IN_STOCK ('Hàng còn đủ; vui lòng mua trực tiếp tại cửa hàng'). Tổng số đơn đặt trước vẫn 1 (chỉ đơn của chị Lan). |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API); thông báo trên form: đúng theo code LiveCatalog.jsx |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: thiếu địa chỉ -> 422 customer.address; Đen / L còn 6 -> 409 VARIANT_IN_STOCK; số đơn vẫn 1 |
 
 ### Khi chạy
 - [ ] Đã làm phần Chuẩn bị chung và các test case trước theo thứ tự

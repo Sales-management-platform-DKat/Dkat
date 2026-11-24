@@ -8,6 +8,7 @@ Test case tích hợp **POS & Auth** cho vòng kiểm thử Ngày 16. Chuẩn b�
 | **Kiểm tra nhanh qua API** | Như các bước |
 | **Kết quả mong đợi** | Bước 1, 2, 3: 403 'Bạn không có quyền truy cập chi nhánh này.' Bước 4: 201 (manager01 được bán ở CN02). Bước 5: POS hiện tồn của DKat Cầu Giấy (ví dụ Áo thun Trắng / L Khả dụng: 10). |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API bước 1-4); bước 5 giao diện chưa chạy thử |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: staff01 tạo đơn CN02 -> 403; staff01 xem đơn CN02 -> 403; manager01 tạo đơn CN03 -> 403; manager01 tạo đơn CN02 -> 201 |
 
 ### Khi chạy
 - [ ] Đã làm phần Chuẩn bị chung và các test case trước theo thứ tự

@@ -1,0 +1,46 @@
+INFO:     Started server process [9500]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:58703 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/public/branches?storeId=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "POST /api/v1/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/auth/me HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/categories?status=ACTIVE HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "POST /api/v1/products HTTP/1.1" 201 Created
+INFO:     127.0.0.1:58704 - "POST /api/v1/products/5/variants HTTP/1.1" 201 Created
+INFO:     127.0.0.1:58704 - "POST /api/v1/inventory/import HTTP/1.1" 201 Created
+INFO:     127.0.0.1:58704 - "GET /api/v1/inventory/1/10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "POST /api/v1/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/products?page=1&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/products?page=1&size=100 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/inventory/1/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/customers/quick-search?q=0901000001&keyword=0901000001 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "POST /api/v1/sales-orders HTTP/1.1" 201 Created
+INFO:     127.0.0.1:58704 - "POST /api/v1/sales-orders/75/confirm-payment HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/inventory/1/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/public/products?storeId=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "POST /api/v1/preorders HTTP/1.1" 201 Created
+INFO:     127.0.0.1:58704 - "GET /api/v1/preorders?branchId=1&page=1&size=50 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "POST /api/v1/inventory/import HTTP/1.1" 201 Created
+INFO:     127.0.0.1:58704 - "GET /api/v1/preorders/1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/preorders/2 HTTP/1.1" 200 OK
+SMS_FAILED to=0386***697 error=TEMPLATE_MISMATCH
+INFO:     127.0.0.1:58704 - "POST /api/v1/inventory/import HTTP/1.1" 201 Created
+INFO:     127.0.0.1:58704 - "GET /api/v1/preorders/2 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/preorders/2/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/preorders/1/notifications HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/inventory/1/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "POST /api/v1/preorders/2/confirm-payment HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "POST /api/v1/preorders/2/fulfill HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/inventory/1/8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/reports/summary?from=2026-11-25&to=2026-11-25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/reports/summary?from=2026-10-27&to=2026-11-25 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/reports/top-products?from=2026-10-27&to=2026-11-25&limit=5&sortBy=revenue HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/v1/reports/revenue?from=2026-10-27&to=2026-11-25&granularity=day HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53424 - "POST /api/v1/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53424 - "GET /api/v1/sales-orders?branchId=1&page=1&size=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53424 - "GET /api/v1/sales-orders/75 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53424 - "GET /api/v1/preorders?branchId=1 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53424 - "GET /api/v1/preorders/1/notifications HTTP/1.1" 200 OK

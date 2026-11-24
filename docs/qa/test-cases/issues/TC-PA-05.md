@@ -8,6 +8,7 @@ Test case tích hợp **POS & Auth** cho vòng kiểm thử Ngày 16. Chuẩn b�
 | **Kiểm tra nhanh qua API** | POST /api/v1/sales-orders {"branchId":1,"customerId":1,"items":[{"variantId":2,"quantity":2},{"variantId":7,"quantity":1}]} |
 | **Kết quả mong đợi** | Hộp thanh toán hiện Khách cần thanh toán 547.000 đ (2 x 199.000 + 149.000). Sau Để xử lý sau: thông báo 'Đơn bán đã được tạo ở trạng thái chờ thanh toán.' Đơn bán: dòng mã DK-..., khách Nguyễn Minh Anh, 547.000 đ, Chờ thanh toán. Tồn AT-COT-M vẫn 11 (đơn chờ thanh toán chưa trừ kho). API: 201, status PENDING, totalAmount 547000.00. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API + giao diện) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: 201 DK-261125-8B4E7B11083A40FC909B0A081C7AB30C PENDING tổng 547000.00, khách Nguyễn Minh Anh; tồn AT-COT-M CN01 vẫn 11 |
 
 ### Khi chạy
 - [ ] Đã làm phần Chuẩn bị chung và các test case trước theo thứ tự

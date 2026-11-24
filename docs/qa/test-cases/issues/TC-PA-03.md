@@ -8,6 +8,7 @@ Test case tích hợp **POS & Auth** cho vòng kiểm thử Ngày 16. Chuẩn b�
 | **Kiểm tra nhanh qua API** | GET /api/v1/reports/summary?branchId=1 (token staff01) |
 | **Kết quả mong đợi** | Mở thẳng Bán hàng POS. Menu 7 mục: Sản phẩm, Kho hàng, Bán hàng POS, Đơn bán, Đặt trước, Khách hàng, Thông báo (KHÔNG có Tổng quan, Báo cáo). Ô chi nhánh chỉ có DKat Quận 1. Mở #/admin/reports: thông báo vai trò này không có màn hình được yêu cầu. API báo cáo -> 403. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API + giao diện) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: 200, role=staff; báo cáo -> 403; tồn kho CN02 -> 403 |
 
 ### Khi chạy
 - [ ] Đã làm phần Chuẩn bị chung và các test case trước theo thứ tự

@@ -8,6 +8,7 @@ Test case tích hợp **Đặt trước & Thông báo** cho vòng kiểm thử N
 | **Kiểm tra nhanh qua API** | GET /api/v1/preorders/{id Lan} |
 | **Kết quả mong đợi** | Lệnh in 'Expired preorders: 1'. Lan: Hết hạn, phân bổ 0/1. D không đổi (Sẵn sàng 1/1). Tồn AK-GIO-DEN-M (Tồn thực / Đã giữ / Khả dụng) = 2 / 1 / 1 (chiếc của Lan được giải phóng, không còn ai chờ nên thành khả dụng để bán). |
 | **Chạy thử chuẩn bị 25/11** | Đạt (gọi job hết hạn trực tiếp, như bước 2) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: job hết hạn: 1 đơn; Lan EXPIRED 0/1; D READY 1/1; tồn (2, 1, 1) |
 
 ### Khi chạy
 - [ ] Đã làm phần Chuẩn bị chung và các test case trước theo thứ tự

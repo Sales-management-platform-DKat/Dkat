@@ -1,0 +1,22 @@
+PASS  0. Server và dữ liệu demo sẵn sàng  (0.0s)
+      health={'status': 'ok', 'database': 'up'}, branches=['DKat Quận 1', 'DKat Cầu Giấy', 'DKat Hải Châu']
+PASS  1. Đăng nhập OWNER (owner01)  (0.5s)
+      role=owner, shop=DKat Fashion
+PASS  2. OWNER tạo sản phẩm mới + biến thể + nhập kho  (0.4s)
+      AO-0003 Áo polo DKat - Navy / M, tồn CN01 = 12
+PASS  3. POS: staff01 bán Áo thun M x2 + Mũ x1 cho khách quen, thu tiền mặt  (0.5s)
+      DK-261125-CF042FBA8CB24CB4B31A344B19AFC232 khách Nguyễn Minh Anh tổng 547000.00 -> PAID; tồn Áo thun M 11 -> 9
+PASS  4. Website: khách đặt trước Áo khoác gió Đen/M (đang hết hàng)  (0.0s)
+      tình trạng CN01 trên web: OUT_OF_STOCK; POST /preorders -> 201 PD-261125-4968C2A787084242BCF1A46260B76861 WAITING_STOCK
+PASS  5. Nhập kho 1 chiếc -> FIFO: chị Lan (đặt hôm qua) được giữ hàng trước, khách demo vẫn chờ  (4.8s)
+      nhập kho 4.7s; chị Lan NOTIFIED, khách demo WAITING_STOCK
+PASS  6. Nhập thêm 1 chiếc -> đơn của khách demo READY và gửi SMS/email thật  (5.8s)
+      nhập kho 5.7s; đơn NOTIFIED, hạn giữ 2026-12-01T21:07:10Z; thông báo: SMS 0386***697 FAILED (TEMPLATE_MISMATCH); EMAIL n***@gmail.com SENT
+PASS  7. Lịch sử thông báo của chị Lan (email về hộp thư nhóm)  (0.0s)
+      EMAIL n***@gmail.com SENT
+PASS  8. Khách đến lấy hàng: staff01 thu tiền và xác nhận nhận hàng  (0.2s)
+      thanh toán PAID, đơn FULFILLED; tồn áo khoác CN01 2 -> 1 (còn giữ cho chị Lan 1)
+PASS  9. Dashboard: doanh thu hôm nay gồm đơn POS + đơn đặt trước, top sản phẩm, biểu đồ 30 ngày  (0.1s)
+      doanh thu hôm nay 1146000.0 (mong đợi 1146000.00); 30 ngày 49135000.0; top: ['Áo thun cotton DKat', 'Áo thun cotton DKat', 'Quần jean slim']; 30 điểm trên biểu đồ
+
+10/10 bước đạt, tổng thời gian máy chạy 12s

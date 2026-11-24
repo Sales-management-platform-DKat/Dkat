@@ -47,6 +47,7 @@ Tồn / đơn có sẵn ở CN01: Áo thun cotton DKat Trắng / M (AT-COT-M, 19
 | **Kiểm tra nhanh qua API** | POST /api/v1/auth/login {"username":"owner01","password":"DKat@Demo2026"} |
 | **Kết quả mong đợi** | Vào trang Tổng quan (#/admin/dashboard). Menu đủ 12 mục: Tổng quan, Sản phẩm, Kho hàng, Bán hàng POS, Đơn bán, Đặt trước, Khách hàng, Nhân viên, Báo cáo, Chi nhánh, Thông báo, Cài đặt. Ô chi nhánh có 3 lựa chọn: DKat Quận 1, DKat Cầu Giấy, DKat Hải Châu. API: 200, user.role = owner. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API + giao diện) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: 200, role=owner, cửa hàng=DKat Fashion, chi nhánh=['DKat Quận 1', 'DKat Cầu Giấy', 'DKat Hải Châu'] |
 
 ## TC-PA-02
 
@@ -60,6 +61,7 @@ Tồn / đơn có sẵn ở CN01: Áo thun cotton DKat Trắng / M (AT-COT-M, 19
 | **Kiểm tra nhanh qua API** | GET /api/v1/inventory?branchId=2 (token manager01) và ?branchId=3 |
 | **Kết quả mong đợi** | Vào Tổng quan. Menu 10 mục (KHÔNG có Chi nhánh, Cài đặt). Ô chi nhánh chỉ có DKat Quận 1, DKat Cầu Giấy. API: login 200 role = manager; tồn kho CN02 -> 200; CN03 -> 403. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API + giao diện) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: 200, role=manager; tồn kho CN02 -> 200, CN03 -> 403 |
 
 ## TC-PA-03
 
@@ -73,6 +75,7 @@ Tồn / đơn có sẵn ở CN01: Áo thun cotton DKat Trắng / M (AT-COT-M, 19
 | **Kiểm tra nhanh qua API** | GET /api/v1/reports/summary?branchId=1 (token staff01) |
 | **Kết quả mong đợi** | Mở thẳng Bán hàng POS. Menu 7 mục: Sản phẩm, Kho hàng, Bán hàng POS, Đơn bán, Đặt trước, Khách hàng, Thông báo (KHÔNG có Tổng quan, Báo cáo). Ô chi nhánh chỉ có DKat Quận 1. Mở #/admin/reports: thông báo vai trò này không có màn hình được yêu cầu. API báo cáo -> 403. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API + giao diện) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: 200, role=staff; báo cáo -> 403; tồn kho CN02 -> 403 |
 
 ## TC-PA-04
 
@@ -86,6 +89,7 @@ Tồn / đơn có sẵn ở CN01: Áo thun cotton DKat Trắng / M (AT-COT-M, 19
 | **Kiểm tra nhanh qua API** | POST /api/v1/auth/login với 2 bộ dữ liệu trên; GET /api/v1/auth/me không gửi token |
 | **Kết quả mong đợi** | Cả 2 lần ở lại trang đăng nhập, hộp báo 'Không thể hoàn tất - Tên đăng nhập hoặc mật khẩu không chính xác, hoặc tài khoản đã hết hạn.' API: 401, không có access_token; /auth/me không token -> 401. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API + giao diện) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: staff01 (thiếu :staff) -> 401; owner01 sai mật khẩu -> 401; /auth/me không token -> 401 |
 
 ## TC-PA-05
 
@@ -99,6 +103,7 @@ Tồn / đơn có sẵn ở CN01: Áo thun cotton DKat Trắng / M (AT-COT-M, 19
 | **Kiểm tra nhanh qua API** | POST /api/v1/sales-orders {"branchId":1,"customerId":1,"items":[{"variantId":2,"quantity":2},{"variantId":7,"quantity":1}]} |
 | **Kết quả mong đợi** | Hộp thanh toán hiện Khách cần thanh toán 547.000 đ (2 x 199.000 + 149.000). Sau Để xử lý sau: thông báo 'Đơn bán đã được tạo ở trạng thái chờ thanh toán.' Đơn bán: dòng mã DK-..., khách Nguyễn Minh Anh, 547.000 đ, Chờ thanh toán. Tồn AT-COT-M vẫn 11 (đơn chờ thanh toán chưa trừ kho). API: 201, status PENDING, totalAmount 547000.00. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API + giao diện) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: 201 DK-261125-8B4E7B11083A40FC909B0A081C7AB30C PENDING tổng 547000.00, khách Nguyễn Minh Anh; tồn AT-COT-M CN01 vẫn 11 |
 
 ## TC-PA-06
 
@@ -112,6 +117,7 @@ Tồn / đơn có sẵn ở CN01: Áo thun cotton DKat Trắng / M (AT-COT-M, 19
 | **Kiểm tra nhanh qua API** | POST /api/v1/sales-orders/{id}/confirm-payment {"paymentMethod":"CASH","amount":"547000"} |
 | **Kết quả mong đợi** | Đơn chuyển Đã thanh toán; chi tiết ghi Thanh toán: CASH · SUCCESS · 547.000 đ. Tồn CN01: AT-COT-M 11 -> 9, MU-LT-DEN 10 -> 9. API: 200, status PAID. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API + giao diện) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: 200 PAID; tồn CN01 AT-COT-M 11 -> 9, MU-LT-DEN 10 -> 9 |
 
 ## TC-PA-07
 
@@ -125,6 +131,7 @@ Tồn / đơn có sẵn ở CN01: Áo thun cotton DKat Trắng / M (AT-COT-M, 19
 | **Kiểm tra nhanh qua API** | Như các bước |
 | **Kết quả mong đợi** | Bước 2: 422, detail.code = PAYMENT_AMOUNT_MISMATCH, expectedAmount = 449000.00. Bước 3: đơn vẫn PENDING. Tồn QJ-SLIM-31 vẫn 10. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: tổng 449000.00, trả 400000 -> 422 {"detail":{"code":"PAYMENT_AMOUNT_MISMATCH","expectedAmount":"449000.00"}}; đơn vẫn PENDING; tồn QJ-SLIM-31 10 |
 
 ## TC-PA-08
 
@@ -138,6 +145,7 @@ Tồn / đơn có sẵn ở CN01: Áo thun cotton DKat Trắng / M (AT-COT-M, 19
 | **Kiểm tra nhanh qua API** | POST /api/v1/sales-orders {"branchId":1,"items":[{"variantId":5,"quantity":11}]} và {"variantId":8,"quantity":1} |
 | **Kết quả mong đợi** | Giỏ dừng ở 10, hiện 'Số lượng vượt quá tồn khả dụng.' Ô Áo khoác Đen / M mờ (Khả dụng: 0), không bấm được. API: 409, detail.code = OUT_OF_STOCK, items[].available = 10 (QJ-SLIM-30) và 0 (AK-GIO-DEN-M); không tạo đơn, tồn không đổi. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API + giao diện) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: QJ-SLIM-30 x11 -> 409 {"detail":{"code":"OUT_OF_STOCK","items":[{"variantId":5,"available":10}]}}; AK-GIO-DEN-M x1 -> 409 {"detail":{"code":"OUT_OF_STOCK","items":[{"variantId":8,"available":0}]}}; tồn QJ-SLIM-30 10 |
 
 ## TC-PA-09
 
@@ -151,6 +159,7 @@ Tồn / đơn có sẵn ở CN01: Áo thun cotton DKat Trắng / M (AT-COT-M, 19
 | **Kiểm tra nhanh qua API** | POST /api/v1/sales-orders/{id}/cancel {"reason":"Khách đổi ý"}, rồi thử POST .../confirm-payment |
 | **Kết quả mong đợi** | Hộp chi tiết chuyển 'DKat Quận 1 · Đã hủy', không còn nút thu tiền; dòng trong Đơn bán: Đã hủy. Tồn QJ-SLIM-29 vẫn 11. API: hủy 200 status CANCELLED, cancelReason 'Khách đổi ý'; thu tiền đơn đã hủy -> 409. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API + giao diện) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: hủy -> 200 CANCELLED lý do 'Khách đổi ý'; thu tiền sau khi hủy -> 409; tồn QJ-SLIM-29 11 |
 
 ## TC-PA-10
 
@@ -164,6 +173,7 @@ Tồn / đơn có sẵn ở CN01: Áo thun cotton DKat Trắng / M (AT-COT-M, 19
 | **Kiểm tra nhanh qua API** | POST /api/v1/sales-orders/{id}/refund {"reason":"Khách trả hàng"}; gọi lại lần 2 |
 | **Kết quả mong đợi** | Dòng chuyển Đã hủy; chi tiết ghi khoản thanh toán CASH · REFUNDED · 547.000 đ. Tồn CN01 hoàn lại: AT-COT-M 9 -> 11, MU-LT-DEN 9 -> 10. API: 200, status CANCELLED, payments[].status = REFUNDED; hoàn lần 2 -> 409. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API + giao diện) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: 200 đơn CANCELLED, thanh toán ['REFUNDED']; hoàn lần 2 -> 409; tồn AT-COT-M 9 -> 11, MU-LT-DEN 9 -> 10 |
 
 ## TC-PA-11
 
@@ -177,6 +187,7 @@ Tồn / đơn có sẵn ở CN01: Áo thun cotton DKat Trắng / M (AT-COT-M, 19
 | **Kiểm tra nhanh qua API** | POST /api/v1/sales-orders/{id}/refund {"reason":"Thử"} bằng token staff01 |
 | **Kết quả mong đợi** | Hộp chi tiết KHÔNG có nút Hoàn tiền (chỉ có ×). API: 403 'Bạn không có quyền thực hiện thao tác này.', đơn vẫn PAID. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API + giao diện) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: staff01 hoàn -> 403 {"detail":"Bạn không có quyền thực hiện thao tác này."}; đơn vẫn PAID |
 
 ## TC-PA-12
 
@@ -190,3 +201,4 @@ Tồn / đơn có sẵn ở CN01: Áo thun cotton DKat Trắng / M (AT-COT-M, 19
 | **Kiểm tra nhanh qua API** | Như các bước |
 | **Kết quả mong đợi** | Bước 1, 2, 3: 403 'Bạn không có quyền truy cập chi nhánh này.' Bước 4: 201 (manager01 được bán ở CN02). Bước 5: POS hiện tồn của DKat Cầu Giấy (ví dụ Áo thun Trắng / L Khả dụng: 10). |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API bước 1-4); bước 5 giao diện chưa chạy thử |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: staff01 tạo đơn CN02 -> 403; staff01 xem đơn CN02 -> 403; manager01 tạo đơn CN03 -> 403; manager01 tạo đơn CN02 -> 201 |

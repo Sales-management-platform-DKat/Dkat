@@ -8,6 +8,7 @@ Test case tích hợp **POS & Auth** cho vòng kiểm thử Ngày 16. Chuẩn b�
 | **Kiểm tra nhanh qua API** | POST /api/v1/sales-orders/{id}/cancel {"reason":"Khách đổi ý"}, rồi thử POST .../confirm-payment |
 | **Kết quả mong đợi** | Hộp chi tiết chuyển 'DKat Quận 1 · Đã hủy', không còn nút thu tiền; dòng trong Đơn bán: Đã hủy. Tồn QJ-SLIM-29 vẫn 11. API: hủy 200 status CANCELLED, cancelReason 'Khách đổi ý'; thu tiền đơn đã hủy -> 409. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API + giao diện) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: hủy -> 200 CANCELLED lý do 'Khách đổi ý'; thu tiền sau khi hủy -> 409; tồn QJ-SLIM-29 11 |
 
 ### Khi chạy
 - [ ] Đã làm phần Chuẩn bị chung và các test case trước theo thứ tự

@@ -8,6 +8,7 @@ Test case tích hợp **Đặt trước & Thông báo** cho vòng kiểm thử N
 | **Kiểm tra nhanh qua API** | GET /api/v1/preorders?branchId=1; GET /api/v1/inventory?branchId=1 |
 | **Kết quả mong đợi** | Mỗi lần hiện 'Đặt trước thành công' + mã đơn, trạng thái Chờ hàng về; B tạm tính 1.198.000 đ. Trang Đặt trước: Lan, B, C, D đều Chờ hàng. Tồn AK-GIO-DEN-M (Tồn thực / Đã giữ / Khả dụng) = 0 / 0 / 0 (đặt trước KHÔNG trừ, không giữ kho). |
 | **Chạy thử chuẩn bị 25/11** | Đạt (script check_preorder_notify) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: B WAITING_STOCK 1198000.00, C WAITING_STOCK, D WAITING_STOCK; tồn AK-GIO-DEN-M CN01 (thực/giữ/khả dụng) = (0, 0, 0) |
 
 ### Khi chạy
 - [ ] Đã làm phần Chuẩn bị chung và các test case trước theo thứ tự

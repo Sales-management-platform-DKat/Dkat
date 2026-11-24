@@ -8,6 +8,7 @@ Test case tích hợp **Đặt trước & Thông báo** cho vòng kiểm thử N
 | **Kiểm tra nhanh qua API** | POST /api/v1/notifications/{id SMS của C}/resend; POST /api/v1/notifications/{id Email của C}/resend |
 | **Kết quả mong đợi** | Sau Gửi lại: dòng SMS vẫn Lỗi (AUTH_FAILED vì khóa sai), hiện 'gửi lại 1'. Dòng Email đã gửi không có nút Gửi lại; API gửi lại SMS -> 200, result FAILED, retryCount 1; gửi lại email đã SENT -> 409 NOTIFICATION_NOT_FAILED. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (script check_preorder_notify) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: gửi lại SMS -> 200 FAILED retryCount 1 (AUTH_FAILED); gửi lại email đã SENT -> 409 NOTIFICATION_NOT_FAILED |
 
 ### Khi chạy
 - [ ] Đã làm phần Chuẩn bị chung và các test case trước theo thứ tự

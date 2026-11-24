@@ -1,0 +1,51 @@
+PASS  Doanh thu theo ngày, toàn cửa hàng, 2026-10-27..2026-11-25
+      báo cáo 49,187,000 đ / 75 đơn; SQL 49,187,000 đ / 75 đơn; ngày lệch []; ngày thừa []
+PASS  Tách doanh thu bán tại quầy / đặt trước, toàn cửa hàng
+      quầy 47,989,000 / đặt trước 1,198,000 / 75 đơn
+PASS  Doanh thu theo week, toàn cửa hàng: tổng các kỳ = tổng theo ngày
+      49,187,000 đ
+PASS  Doanh thu theo month, toàn cửa hàng: tổng các kỳ = tổng theo ngày
+      49,187,000 đ
+PASS  Thẻ Tổng quan (summary), toàn cửa hàng
+      doanh thu 49,187,000, số đơn 75, TB 655,826.67 (SQL TB 655,826.67)
+PASS  Doanh thu theo ngày, chi nhánh 1, 2026-10-27..2026-11-25
+      báo cáo 39,089,000 đ / 54 đơn; SQL 39,089,000 đ / 54 đơn; ngày lệch []; ngày thừa []
+PASS  Tách doanh thu bán tại quầy / đặt trước, chi nhánh 1
+      quầy 37,891,000 / đặt trước 1,198,000 / 54 đơn
+PASS  Doanh thu theo week, chi nhánh 1: tổng các kỳ = tổng theo ngày
+      39,089,000 đ
+PASS  Doanh thu theo month, chi nhánh 1: tổng các kỳ = tổng theo ngày
+      39,089,000 đ
+PASS  Thẻ Tổng quan (summary), chi nhánh 1
+      doanh thu 39,089,000, số đơn 54, TB 723,870.37 (SQL TB 723,870.37)
+PASS  Doanh thu theo ngày, chi nhánh 2, 2026-10-27..2026-11-25
+      báo cáo 10,098,000 đ / 21 đơn; SQL 10,098,000 đ / 21 đơn; ngày lệch []; ngày thừa []
+PASS  Tách doanh thu bán tại quầy / đặt trước, chi nhánh 2
+      quầy 10,098,000 / đặt trước 0 / 21 đơn
+PASS  Doanh thu theo week, chi nhánh 2: tổng các kỳ = tổng theo ngày
+      10,098,000 đ
+PASS  Doanh thu theo month, chi nhánh 2: tổng các kỳ = tổng theo ngày
+      10,098,000 đ
+PASS  Thẻ Tổng quan (summary), chi nhánh 2
+      doanh thu 10,098,000, số đơn 21, TB 480,857.14 (SQL TB 480,857.14)
+PASS  Doanh thu theo ngày, chi nhánh 3, 2026-10-27..2026-11-25
+      báo cáo 0 đ / 0 đơn; SQL 0 đ / 0 đơn; ngày lệch []; ngày thừa []
+PASS  Tách doanh thu bán tại quầy / đặt trước, chi nhánh 3
+      quầy 0 / đặt trước 0 / 0 đơn
+PASS  Doanh thu theo week, chi nhánh 3: tổng các kỳ = tổng theo ngày
+      0 đ
+PASS  Doanh thu theo month, chi nhánh 3: tổng các kỳ = tổng theo ngày
+      0 đ
+PASS  Thẻ Tổng quan (summary), chi nhánh 3
+      doanh thu 0, số đơn 0, TB 0.00 (SQL TB 0.00)
+PASS  Tồn kho = tồn đầu (0) + tổng biến động, mọi dòng tồn
+      27 dòng tồn, tổng tồn 159, tổng biến động 159; lệch: []
+      biến động theo loại: IMPORT/-: 372 (19 dòng); SALE/SALES_ORDER: -211 (143 dòng); PREORDER_FULFILLMENT/PREORDER: -2 (1 dòng)
+PASS  Biến động bán = số lượng các đơn đã thanh toán; hoàn kho = số lượng các đơn đã hoàn
+      SALE -211 vs đơn đã thanh toán 211; hoàn kho 0 vs đơn đã hoàn 0
+PASS  Biến động giao đặt trước = số lượng các đơn đặt trước đã giao
+      PREORDER_FULFILLMENT -2 vs đã giao 2
+PASS  Đã giữ = tổng phân bổ của đơn đặt trước đang mở; Khả dụng = Tồn thực - Đã giữ; không giữ quá tồn
+      27 dòng, tổng đang giữ 1; lệch []; đơn đã đóng còn phân bổ: 0
+
+24/24 phép đối chiếu khớp

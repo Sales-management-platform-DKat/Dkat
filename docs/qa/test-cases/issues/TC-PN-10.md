@@ -8,6 +8,7 @@ Test case tích hợp **Đặt trước & Thông báo** cho vòng kiểm thử N
 | **Kiểm tra nhanh qua API** | POST /api/v1/preorders/{id B}/confirm-payment {"paymentMethod":"CASH","amount":"1198000"}; POST .../fulfill {} |
 | **Kết quả mong đợi** | Tồn AK-GIO-DEN-M (Tồn thực / Đã giữ / Khả dụng): trước 4 / 4 / 0; sau Ghi nhận tiền vẫn 4 / 4 / 0 (thu tiền chưa trừ kho), thanh toán Đã thanh toán; sau Xác nhận giao: B Đã nhận hàng và tồn = 2 / 2 / 0 (trừ 2 chiếc khi giao). |
 | **Chạy thử chuẩn bị 25/11** | Đạt (script check_preorder_notify) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: trước (4, 4, 0); sau thu tiền PAID (4, 4, 0); sau giao FULFILLED (2, 2, 0) |
 
 ### Khi chạy
 - [ ] Đã làm phần Chuẩn bị chung và các test case trước theo thứ tự

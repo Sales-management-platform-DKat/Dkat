@@ -141,3 +141,21 @@ TRIAL.update({
     "TC-PA-07": "Đạt (API)",
     "TC-PA-12": "Đạt (API bước 1-4); bước 5 giao diện chưa chạy thử",
 })
+
+# Round 2 (25/11/2026), measured on fresh demo_reset data; log docs/qa/test-runs/2026-11-25-round2/logs/r2_42_pos_auth.log
+RESULTS_DATE = "25/11/2026"
+RESULTS_TESTER = "Tuấn"
+RESULTS = {
+    'TC-PA-01': ('Pass', "200, role=owner, cửa hàng=DKat Fashion, chi nhánh=['DKat Quận 1', 'DKat Cầu Giấy', 'DKat Hải Châu']"),
+    'TC-PA-02': ('Pass', '200, role=manager; tồn kho CN02 -> 200, CN03 -> 403'),
+    'TC-PA-03': ('Pass', '200, role=staff; báo cáo -> 403; tồn kho CN02 -> 403'),
+    'TC-PA-04': ('Pass', 'staff01 (thiếu :staff) -> 401; owner01 sai mật khẩu -> 401; /auth/me không token -> 401'),
+    'TC-PA-05': ('Pass', '201 DK-261125-8B4E7B11083A40FC909B0A081C7AB30C PENDING tổng 547000.00, khách Nguyễn Minh Anh; tồn AT-COT-M CN01 vẫn 11'),
+    'TC-PA-06': ('Pass', '200 PAID; tồn CN01 AT-COT-M 11 -> 9, MU-LT-DEN 10 -> 9'),
+    'TC-PA-07': ('Pass', 'tổng 449000.00, trả 400000 -> 422 {"detail":{"code":"PAYMENT_AMOUNT_MISMATCH","expectedAmount":"449000.00"}}; đơn vẫn PENDING; tồn QJ-SLIM-31 10'),
+    'TC-PA-08': ('Pass', 'QJ-SLIM-30 x11 -> 409 {"detail":{"code":"OUT_OF_STOCK","items":[{"variantId":5,"available":10}]}}; AK-GIO-DEN-M x1 -> 409 {"detail":{"code":"OUT_OF_STOCK","items":[{"variantId":8,"available":0}]}}; tồn QJ-SLIM-30 10'),
+    'TC-PA-09': ('Pass', "hủy -> 200 CANCELLED lý do 'Khách đổi ý'; thu tiền sau khi hủy -> 409; tồn QJ-SLIM-29 11"),
+    'TC-PA-10': ('Pass', "200 đơn CANCELLED, thanh toán ['REFUNDED']; hoàn lần 2 -> 409; tồn AT-COT-M 9 -> 11, MU-LT-DEN 9 -> 10"),
+    'TC-PA-11': ('Pass', 'staff01 hoàn -> 403 {"detail":"Bạn không có quyền thực hiện thao tác này."}; đơn vẫn PAID'),
+    'TC-PA-12': ('Pass', 'staff01 tạo đơn CN02 -> 403; staff01 xem đơn CN02 -> 403; manager01 tạo đơn CN03 -> 403; manager01 tạo đơn CN02 -> 201'),
+}

@@ -8,6 +8,7 @@ Ba file Excel dùng chung cho cả nhóm. Ai có quyền push vào repo đều s
 |---|---|---|---|
 | 25/11/2026 | Ghép nối trên develop: Auth/POS, Đặt trước/Thông báo | 59 test case: 48 Pass, 10 Fail. 9 bug mới (BUG-005 đến BUG-013), 4 bug mức Cao | [test-runs/2026-11-25-develop](test-runs/2026-11-25-develop/README.md) |
 | 25/11/2026 | Diễn tập kịch bản demo (API + giao diện thật) sau khi sửa BUG-005, BUG-008 | 70 test case: 59 Pass. Thêm BUG-014 đến BUG-017 (đã sửa 3), đính chính BUG-007 xuống mức Thấp | [docs/demo/kich-ban-demo.md](../demo/kich-ban-demo.md) |
+| 25/11/2026 | Vòng 2: kiểm tra lại bug, đối chiếu số liệu (NFR-04, NFR-11), chức năng bị cấm theo vai trò, luồng đặt trước với SMS/email thật | Không còn bug mức Cao đang mở (12/19 đã đóng); đối chiếu khớp 24/24 ở 4 trạng thái dữ liệu; 31/31 thao tác bị cấm bị chặn đúng; POS & Auth 12/12, Đặt trước & Thông báo 12/12 | [test-runs/2026-11-25-round2](test-runs/2026-11-25-round2/README.md) |
 
 | File | Dùng để | Sheet |
 |---|---|---|

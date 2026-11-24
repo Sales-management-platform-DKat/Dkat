@@ -8,6 +8,7 @@ Test case tích hợp **POS & Auth** cho vòng kiểm thử Ngày 16. Chuẩn b�
 | **Kiểm tra nhanh qua API** | POST /api/v1/sales-orders {"branchId":1,"items":[{"variantId":5,"quantity":11}]} và {"variantId":8,"quantity":1} |
 | **Kết quả mong đợi** | Giỏ dừng ở 10, hiện 'Số lượng vượt quá tồn khả dụng.' Ô Áo khoác Đen / M mờ (Khả dụng: 0), không bấm được. API: 409, detail.code = OUT_OF_STOCK, items[].available = 10 (QJ-SLIM-30) và 0 (AK-GIO-DEN-M); không tạo đơn, tồn không đổi. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API + giao diện) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: QJ-SLIM-30 x11 -> 409 {"detail":{"code":"OUT_OF_STOCK","items":[{"variantId":5,"available":10}]}}; AK-GIO-DEN-M x1 -> 409 {"detail":{"code":"OUT_OF_STOCK","items":[{"variantId":8,"available":0}]}}; tồn QJ-SLIM-30 10 |
 
 ### Khi chạy
 - [ ] Đã làm phần Chuẩn bị chung và các test case trước theo thứ tự

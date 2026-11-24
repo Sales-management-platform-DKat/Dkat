@@ -149,3 +149,21 @@ TRIAL.update({
     "TC-PN-08": "Đạt (gọi job thử lại trực tiếp; trên server job chạy mỗi NOTIFY_RETRY_INTERVAL_SECONDS)",
     "TC-PN-12": "Đạt (gọi job hết hạn trực tiếp, như bước 2)",
 })
+
+# Round 2 (25/11/2026), measured on fresh demo_reset data; log docs/qa/test-runs/2026-11-25-round2/logs/r2_50_preorder_notify.log
+RESULTS_DATE = "25/11/2026"
+RESULTS_TESTER = "Tuấn"
+RESULTS = {
+    'TC-PN-01': ('Pass', "422 INVALID_PREORDER [{'field': 'customer.fullName', 'reason': 'String should have at least 1 character'}]"),
+    'TC-PN-02': ('Pass', "thiếu -> 422 {'field': 'customer.phone', 'reason': 'Field required'}; '12345' -> 422 customer.phone"),
+    'TC-PN-03': ('Pass', 'thiếu địa chỉ -> 422 customer.address; Đen / L còn 6 -> 409 VARIANT_IN_STOCK; số đơn vẫn 1'),
+    'TC-PN-04': ('Pass', 'B WAITING_STOCK 1198000.00, C WAITING_STOCK, D WAITING_STOCK; tồn AK-GIO-DEN-M CN01 (thực/giữ/khả dụng) = (0, 0, 0)'),
+    'TC-PN-05': ('Pass', "{'lan': 'READY 1/1', 'b': 'WAITING_STOCK 1/2', 'c': 'WAITING_STOCK 0/1', 'd': 'WAITING_STOCK 0/1'}; tồn (2, 2, 0); thông báo Lan [('EMAIL', 'FAILED', 'NOT_CONFIGURED', 0)]"),
+    'TC-PN-06': ('Pass', "B NOTIFIED 2/2, gửi [('SMS', 'SENT', '', 0)]; C WAITING_STOCK 0/1; tồn (3, 3, 0)"),
+    'TC-PN-07': ('Pass', "C NOTIFIED 1/1, gửi [('SMS', 'FAILED', 'AUTH_FAILED', 0), ('EMAIL', 'SENT', '', 0)]; tồn (4, 4, 0)"),
+    'TC-PN-08': ('Pass', "lượt thử lại {'checked': 1, 'sent': 1, 'failed': 0, 'skipped': 0}; Lan NOTIFIED 1/1 [('EMAIL', 'SENT', '', 1)]; C [('SMS', 'FAILED', 'AUTH_FAILED', 0), ('EMAIL', 'SENT', '', 0)]"),
+    'TC-PN-09': ('Pass', 'gửi lại SMS -> 200 FAILED retryCount 1 (AUTH_FAILED); gửi lại email đã SENT -> 409 NOTIFICATION_NOT_FAILED'),
+    'TC-PN-10': ('Pass', 'trước (4, 4, 0); sau thu tiền PAID (4, 4, 0); sau giao FULFILLED (2, 2, 0)'),
+    'TC-PN-11': ('Pass', "C -> CANCELLED; D READY 1/1 gửi [('SMS', 'FAILED', 'AUTH_FAILED', 0)]; tồn (2, 2, 0)"),
+    'TC-PN-12': ('Pass', 'job hết hạn: 1 đơn; Lan EXPIRED 0/1; D READY 1/1; tồn (2, 1, 1)'),
+}

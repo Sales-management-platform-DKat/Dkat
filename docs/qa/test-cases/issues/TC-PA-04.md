@@ -8,6 +8,7 @@ Test case tích hợp **POS & Auth** cho vòng kiểm thử Ngày 16. Chuẩn b�
 | **Kiểm tra nhanh qua API** | POST /api/v1/auth/login với 2 bộ dữ liệu trên; GET /api/v1/auth/me không gửi token |
 | **Kết quả mong đợi** | Cả 2 lần ở lại trang đăng nhập, hộp báo 'Không thể hoàn tất - Tên đăng nhập hoặc mật khẩu không chính xác, hoặc tài khoản đã hết hạn.' API: 401, không có access_token; /auth/me không token -> 401. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API + giao diện) |
+| **Kết quả vòng 2 (25/11/2026)** | **Pass**: staff01 (thiếu :staff) -> 401; owner01 sai mật khẩu -> 401; /auth/me không token -> 401 |
 
 ### Khi chạy
 - [ ] Đã làm phần Chuẩn bị chung và các test case trước theo thứ tự

@@ -61,7 +61,10 @@ def build_sheet(wb, suite, index):
     ws.row_dimensions[head].height = 32
     for r, case in enumerate(suite.CASES, start=head + 1):
         tc_id, func, title, cond, data, steps, api, expected, _labels = case
-        values = [tc_id, func, title, cond, data, steps, api, expected, None, "Chưa test", None, None, suite.TRIAL[tc_id], None]
+        result, actual = getattr(suite, "RESULTS", {}).get(tc_id, ("Chưa test", None))
+        tester = getattr(suite, "RESULTS_TESTER", None) if actual else None
+        when = getattr(suite, "RESULTS_DATE", None) if actual else None
+        values = [tc_id, func, title, cond, data, steps, api, expected, actual, result, tester, when, suite.TRIAL[tc_id], None]
         for c, v in enumerate(values, start=1):
             cell = ws.cell(row=r, column=c, value=v)
             cell.border = BORDER
@@ -103,7 +106,8 @@ def fields(suite, case) -> str:
         f"| **Kiểm tra nhanh qua API** | {cell(api)} |",
         f"| **Kết quả mong đợi** | {cell(expected)} |",
         f"| **Chạy thử chuẩn bị 25/11** | {cell(suite.TRIAL[tc_id])} |",
-    ])
+    ] + ([f"| **Kết quả vòng 2 ({suite.RESULTS_DATE})** | **{suite.RESULTS[tc_id][0]}**: {cell(suite.RESULTS[tc_id][1])} |"]
+         if tc_id in getattr(suite, "RESULTS", {}) else []))
 
 
 def build_markdown(suite):
