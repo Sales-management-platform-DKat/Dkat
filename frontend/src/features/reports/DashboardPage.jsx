@@ -48,10 +48,10 @@ export default function DashboardPage({ branchId }) {
   const points = revenue?.points || [];
   const maxRevenue = Math.max(1, ...points.map((point) => Number(point.revenue || 0)));
   const metricCards = data ? [
-    [t('Tổng doanh thu'), formatCurrency(data.revenue?.value || 0), data.revenue?.change_percent, 'revenue'],
-    [t('Tổng số đơn'), data.order_count?.value || 0, data.order_count?.change_percent, 'orders'],
-    [t('Giá trị đơn trung bình'), formatCurrency(data.average_order_value?.value || 0), data.average_order_value?.change_percent, 'average'],
-    [t('Doanh thu bán tại quầy'), formatCurrency(data.sales_revenue || 0), null, 'sales'],
+    [t('Tổng doanh thu'), formatCurrency(data.revenue?.value || 0), data.revenue?.changePercent ?? data.revenue?.change_percent, 'revenue'],
+    [t('Tổng số đơn'), (data.orderCount ?? data.order_count)?.value || 0, (data.orderCount ?? data.order_count)?.changePercent ?? data.order_count?.change_percent, 'orders'],
+    [t('Giá trị đơn trung bình'), formatCurrency((data.averageOrderValue ?? data.average_order_value)?.value || 0), (data.averageOrderValue ?? data.average_order_value)?.changePercent ?? data.average_order_value?.change_percent, 'average'],
+    [t('Doanh thu bán tại quầy'), formatCurrency(data.salesRevenue ?? data.sales_revenue ?? 0), null, 'sales'],
   ] : [];
 
   return <div className="live-dashboard">
@@ -69,7 +69,7 @@ export default function DashboardPage({ branchId }) {
           </div> : <div className="empty"><p>{t('Chưa có doanh thu trong khoảng thời gian này.')}</p></div>}
         </section>
         <section className="panel live-top-products"><div className="section-title"><h3>{t('Sản phẩm bán chạy')}</h3><span className="muted small">{t('Xếp theo doanh thu')}</span></div>
-          {topProducts.length ? <div className="table-wrap"><table><thead><tr><th>#</th><th>{t('Sản phẩm')}</th><th>{t('Số lượng')}</th><th>{t('Doanh thu')}</th></tr></thead><tbody>{topProducts.map((item) => <tr key={`${item.sku}-${item.rank}`}><td>{item.rank}</td><td><strong>{item.product_name}</strong><small className="block muted">{item.sku}</small></td><td>{item.quantity}</td><td>{formatCurrency(item.revenue)}</td></tr>)}</tbody></table></div> : <div className="empty"><p>{t('Chưa có dữ liệu sản phẩm bán ra.')}</p></div>}
+          {topProducts.length ? <div className="table-wrap"><table><thead><tr><th>#</th><th>{t('Sản phẩm')}</th><th>{t('Số lượng')}</th><th>{t('Doanh thu')}</th></tr></thead><tbody>{topProducts.map((item) => <tr key={`${item.sku}-${item.rank}`}><td>{item.rank}</td><td><strong>{item.productName ?? item.product_name}</strong><small className="block muted">{item.sku}</small></td><td>{item.quantity}</td><td>{formatCurrency(item.revenue)}</td></tr>)}</tbody></table></div> : <div className="empty"><p>{t('Chưa có dữ liệu sản phẩm bán ra.')}</p></div>}
         </section>
       </div>
     </>}
