@@ -7,6 +7,7 @@ Ba file Excel dùng chung cho cả nhóm. Ai có quyền push vào repo đều s
 | Ngày | Phạm vi | Kết quả | Chi tiết |
 |---|---|---|---|
 | 25/11/2026 | Ghép nối trên develop: Auth/POS, Đặt trước/Thông báo | 59 test case: 48 Pass, 10 Fail. 9 bug mới (BUG-005 đến BUG-013), 4 bug mức Cao | [test-runs/2026-11-25-develop](test-runs/2026-11-25-develop/README.md) |
+| 25/11/2026 | Diễn tập kịch bản demo (API + giao diện thật) sau khi sửa BUG-005, BUG-008 | 70 test case: 59 Pass. Thêm BUG-014 đến BUG-017 (đã sửa 3), đính chính BUG-007 xuống mức Thấp | [docs/demo/kich-ban-demo.md](../demo/kich-ban-demo.md) |
 
 | File | Dùng để | Sheet |
 |---|---|---|
