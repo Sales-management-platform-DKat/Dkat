@@ -15,6 +15,15 @@ Ba file Excel dùng chung cho cả nhóm. Ai có quyền push vào repo đều s
 | [DKat_Test_Cases.xlsx](DKat_Test_Cases.xlsx) | Viết và ghi kết quả test case | `Test case` (nhập liệu), `Thống kê` (tự tính), `Hướng dẫn` |
 | [DKat_Sprint_Tracking.xlsx](DKat_Sprint_Tracking.xlsx) | Bảng theo dõi velocity theo sprint | `Velocity`, `Sprint 1 - task` |
 
+## Bộ test POS & Auth (vòng kiểm thử Ngày 16)
+
+12 test case tích hợp: đăng nhập 3 vai trò, đăng nhập sai, tạo đơn, thanh toán trừ kho, sai số tiền, không đủ tồn, hủy đơn PENDING, hoàn đơn đã thanh toán, phân quyền theo chi nhánh. Mỗi test case ghi dữ liệu cụ thể lấy từ seed `python -m scripts.demo_reset`.
+
+- Sheet **POS & Auth** trong [DKat_Test_Cases.xlsx](DKat_Test_Cases.xlsx): điền Kết quả thực tế, Pass/Fail, Người test, Ngày test khi chạy.
+- Bản đọc trên GitHub: [test-cases/pos-auth.md](test-cases/pos-auth.md). Mỗi test case có một GitHub Issue (nhãn `test-case`, `pos-auth`), tạo bằng `test-cases/create_issues.ps1` (hoặc `.sh`).
+- Chạy tự động cùng dữ liệu: `python -m scripts.check_pos_auth` (sau `demo_reset`, server đang chạy), in PASS/FAIL 12 test case.
+- Sửa test case: sửa [test-cases/pos_auth_cases.py](test-cases/pos_auth_cases.py) rồi chạy `python docs/qa/test-cases/build_pos_auth.py` để sinh lại sheet, file md và nội dung issue.
+
 ## Bug log
 
 Cột bắt buộc (tiêu đề xanh lá): **Mã bug, Mô tả, Bước tái hiện, Mức độ, Người phụ trách, Trạng thái**. Cột phụ: Module, Người phát hiện, Ngày phát hiện, Ghi chú / nhánh sửa, Hạn sửa (Cao: 24 giờ).
