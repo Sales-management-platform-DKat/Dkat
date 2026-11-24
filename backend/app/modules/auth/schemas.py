@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, StringConstraints, field_validator
 from typing_extensions import Annotated
 
 
@@ -45,8 +45,17 @@ class UserCreate(BaseModel):
     username: Username
     email: EmailAddress | None = None
     full_name: str = Field(min_length=1, max_length=120, strip_whitespace=True)
+    phone: str | None = Field(default=None, max_length=20)
     password: str = Field(min_length=12, max_length=128)
     role: Literal["manager", "staff"]
+    branch_ids: list[int] = Field(default_factory=list, max_length=50)
+
+    @field_validator("branch_ids")
+    @classmethod
+    def validate_branch_ids(cls, value: list[int]) -> list[int]:
+        if any(branch_id <= 0 for branch_id in value):
+            raise ValueError("Branch ids must be positive")
+        return sorted(set(value))
 
 
 class UserInfo(BaseModel):

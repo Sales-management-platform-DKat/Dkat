@@ -1,3 +1,6 @@
+from io import BytesIO
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from app.modules.auth.models import User
@@ -56,7 +59,9 @@ class CatalogAuthTests(test_auth_flow.AuthFlowTests):
         self.assertEqual(created.status_code, 201, created.text)
         profile = self.client.get("/api/v1/auth/me", headers=headers).json()
         self.assertEqual(created.json()["createdBy"], profile["id"])
-        self.assertEqual(len(self.client.get("/api/v1/products", headers=headers).json()), 1)
+        owner_product_list = self.client.get("/api/v1/products", headers=headers)
+        self.assertEqual(owner_product_list.status_code, 200, owner_product_list.text)
+        self.assertEqual(len(owner_product_list.json()), 1)
         for role in ("manager", "staff"):
             response = self.client.post("/api/v1/users", headers=headers, json={
                 "username": role + "1", "full_name": role,
@@ -65,7 +70,8 @@ class CatalogAuthTests(test_auth_flow.AuthFlowTests):
             self.assertEqual(response.status_code, 201, response.text)
             login = self.login(role + "1:" + role, role + "-password-123")
             role_headers = {"Authorization": "Bearer " + login.json()["access_token"]}
-            self.assertEqual(self.client.get("/api/v1/products", headers=role_headers).status_code, 200)
+            product_list = self.client.get("/api/v1/products", headers=role_headers)
+            self.assertEqual(product_list.status_code, 200, product_list.text)
             self.assertEqual(self.client.post("/api/v1/products", headers=role_headers, json=payload).status_code, 403)
             self.assertEqual(self.client.post("/api/v1/categories", headers=role_headers, json={"name": "Denied"}).status_code, 403)
         self.assertEqual(self.provision("owner2").status_code, 201)
@@ -81,3 +87,62 @@ class CatalogAuthTests(test_auth_flow.AuthFlowTests):
             user.status = "LOCKED"
             db.commit()
         self.assertEqual(self.client.get("/api/v1/categories", headers=headers).status_code, 401)
+
+    def test_product_cost_price_is_only_visible_to_owner(self):
+        from app.modules.products.schemas import ProductDetail, VariantDetail
+
+        self.assertEqual(self.provision().status_code, 201)
+        owner_login = self.login("owner1", "owner-password-123")
+        owner_headers = {"Authorization": f"Bearer {owner_login.json()['access_token']}"}
+        employee = self.client.post("/api/v1/users", headers=owner_headers, json={
+            "username": "staff-cost", "full_name": "Staff", "password": "staff-password-123", "role": "staff",
+        })
+        self.assertEqual(employee.status_code, 201, employee.text)
+        employee_login = self.login("staff-cost:staff", "staff-password-123")
+        employee_headers = {"Authorization": f"Bearer {employee_login.json()['access_token']}"}
+        product = ProductDetail(
+            categoryId=1, name="Product", productCode="P1", status="ACTIVE", createdBy=1,
+            productId=1, description=None, imageUrl=None,
+            variants=[VariantDetail(variant_id=1, sku="P1-1", variant_name="Default", price=100, cost_price=40, barcode=None, status="ACTIVE")],
+        )
+        with patch("app.modules.products.router.service.get_product_detail", return_value=product):
+            owner_result = self.client.get("/api/v1/products/1", headers=owner_headers)
+            employee_result = self.client.get("/api/v1/products/1", headers=employee_headers)
+        self.assertEqual(owner_result.status_code, 200, owner_result.text)
+        self.assertEqual(owner_result.json()["variants"][0]["cost_price"], "40")
+        self.assertEqual(employee_result.status_code, 200, employee_result.text)
+        self.assertIsNone(employee_result.json()["variants"][0]["cost_price"])
+
+    def test_product_image_upload_validates_type_and_is_owner_only(self):
+        from PIL import Image
+
+        self.assertEqual(self.provision().status_code, 201)
+        owner_headers = {"Authorization": "Bearer " + self.login("owner1", "owner-password-123").json()["access_token"]}
+        staff = self.client.post("/api/v1/users", headers=owner_headers, json={
+            "username": "image-staff", "full_name": "Staff", "password": "staff-password-123", "role": "staff",
+        })
+        self.assertEqual(staff.status_code, 201, staff.text)
+        staff_headers = {"Authorization": "Bearer " + self.login("image-staff:staff", "staff-password-123").json()["access_token"]}
+        image_bytes = BytesIO()
+        Image.new("RGBA", (3, 2), (30, 80, 150, 255)).save(image_bytes, format="PNG")
+        payload = image_bytes.getvalue()
+
+        with TemporaryDirectory() as image_dir, patch("app.modules.products.image_storage.IMAGE_DIR", Path(image_dir)):
+            denied = self.client.post("/api/v1/products/images", headers=staff_headers,
+                                      files={"file": ("image.png", payload, "image/png")})
+            self.assertEqual(denied.status_code, 403)
+            bad_type = self.client.post("/api/v1/products/images", headers=owner_headers,
+                                        files={"file": ("not-image.png", b"<script>alert(1)</script>", "image/png")})
+            self.assertEqual(bad_type.status_code, 415, bad_type.text)
+            uploaded = self.client.post("/api/v1/products/images", headers=owner_headers,
+                                        files={"file": ("my-product.png", payload, "image/png")})
+            self.assertEqual(uploaded.status_code, 201, uploaded.text)
+            image_url = uploaded.json()["imageUrl"]
+            self.assertRegex(image_url, r"^/products/images/[0-9a-f]{32}\.png$")
+            fetched = self.client.get("/api/v1" + image_url)
+            self.assertEqual(fetched.status_code, 200)
+            self.assertEqual(fetched.headers["content-type"], "image/png")
+            self.assertEqual(Image.open(BytesIO(fetched.content)).size, (3, 2))
+            removed = self.client.delete("/api/v1" + image_url, headers=owner_headers)
+            self.assertEqual(removed.status_code, 204)
+            self.assertEqual(self.client.get("/api/v1" + image_url).status_code, 404)

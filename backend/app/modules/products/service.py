@@ -31,10 +31,10 @@ def list_products(
     order = PRODUCT_ORDER[sort]
     rows = connection.execute(
         text(f"""
-            SELECT p.product_id, p.category_id, p.product_code, p.name,
+            SELECT p.product_id, p.category_id, p.product_code, p.name, p.image_url,
                    v.variant_id, v.sku, v.variant_name, v.price
             FROM (
-                SELECT p.product_id, p.category_id, p.product_code, p.name, p.created_at
+                SELECT p.product_id, p.category_id, p.product_code, p.name, p.image_url, p.created_at
                 FROM products AS p
                 WHERE p.store_id = :store_id AND p.status = :status
                   AND (:category_id IS NULL OR p.category_id = :category_id)
@@ -68,6 +68,7 @@ def list_products(
                 category_id=row["category_id"],
                 product_code=row["product_code"],
                 name=row["name"],
+                image_url=row["image_url"],
                 variants=[],
             )
             products[product.product_id] = product

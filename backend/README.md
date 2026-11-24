@@ -269,3 +269,8 @@ Trong Swagger, gọi `POST /inventory/import-csv?branchId=<id>&dryRun=true` và 
 - File có lỗi khi nhập thật trả HTTP 422 với `detail.code=INVALID_STOCK_CSV` và `detail.errors` theo số dòng. Toàn bộ lô được hoàn tác nếu ghi dữ liệu thất bại.
 
 File `data/sample-import.csv` dùng 20 SKU từ `data/sample-products.csv`. Trên database kiểm thử, nhập danh mục mẫu một lần qua `/products/import-csv` trước khi dùng file nhập kho, hoặc thay cột `sku` bằng SKU đã có trong cửa hàng. Kiểm tra với `dryRun=true` rồi đổi sang `false` khi `valid=true`.
+# Product image uploads
+
+Owner accounts can upload JPEG, PNG, and WebP product images from the product editor. Uploads are validated and normalized by the API, limited to 5 MiB and 40 megapixels, and stored outside the database. Product rows keep the relative API path in the existing `products.image_url` column; no schema migration is needed.
+
+Set `DKAT_PRODUCT_IMAGE_DIR` to a persistent directory on the VPS (for example, `/var/lib/dkat/product-images`) and make sure the backend service user can write to it. Back up this directory along with the database. If unset, files go to `backend/uploads/products`, which is excluded from Git.

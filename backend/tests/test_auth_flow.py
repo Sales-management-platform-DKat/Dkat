@@ -57,7 +57,7 @@ class AuthFlowTests(unittest.TestCase):
         Base.metadata.drop_all(bind=test_engine)
         Base.metadata.create_all(bind=test_engine)
         with test_engine.begin() as connection:
-            connection.exec_driver_sql("CREATE TABLE IF NOT EXISTS branches (branch_id INTEGER PRIMARY KEY, store_id INTEGER NOT NULL, name VARCHAR(100) NOT NULL)")
+            connection.exec_driver_sql("CREATE TABLE IF NOT EXISTS branches (branch_id INTEGER PRIMARY KEY, store_id INTEGER NOT NULL, branch_code VARCHAR(30) NOT NULL DEFAULT '', name VARCHAR(150) NOT NULL, address VARCHAR(255) NOT NULL DEFAULT '', phone VARCHAR(20), status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE')")
             connection.exec_driver_sql("CREATE TABLE IF NOT EXISTS user_branches (user_id INTEGER NOT NULL, branch_id INTEGER NOT NULL)")
             connection.exec_driver_sql("""
                 CREATE TABLE IF NOT EXISTS sales_orders (
@@ -172,6 +172,9 @@ class AuthFlowTests(unittest.TestCase):
         listing = self.client.get("/api/v1/customers?q=Nguyá»…n", headers=headers)
         self.assertEqual(listing.status_code, 200, listing.text)
         self.assertEqual(listing.json()[0]["customerId"], customer_id)
+        email_match = self.client.get("/api/v1/customers/quick-search?q=an%40example.test", headers=headers)
+        self.assertEqual(email_match.status_code, 200, email_match.text)
+        self.assertEqual(email_match.json()[0]["customerId"], customer_id)
         detail = self.client.get(f"/api/v1/customers/{customer_id}", headers=headers)
         self.assertEqual(detail.status_code, 200, detail.text)
         history = self.client.get(f"/api/v1/customers/{customer_id}/history", headers=headers)
@@ -244,6 +247,73 @@ class AuthFlowTests(unittest.TestCase):
             },
         )
         self.assertEqual(forbidden.status_code, 403)
+
+    def test_owner_manages_employee_profile_status_password_and_branch_scope(self):
+        self.assertEqual(self.provision().status_code, 201)
+        owner_login = self.login("owner1", "owner-password-123")
+        owner_headers = {"Authorization": f"Bearer {owner_login.json()['access_token']}"}
+        store_id = owner_login.json()["user"]["shop_id"]
+        with test_engine.begin() as connection:
+            connection.exec_driver_sql(
+                "INSERT INTO branches (branch_id, store_id, branch_code, name, address, status) "
+                "VALUES (101, ?, 'B101', 'Chi nhánh 1', 'Địa chỉ 1', 'ACTIVE')",
+                (store_id,),
+            )
+            connection.exec_driver_sql(
+                "INSERT INTO branches (branch_id, store_id, branch_code, name, address, status) "
+                "VALUES (202, 999999, 'B202', 'Chi nhánh ngoài', 'Địa chỉ 2', 'ACTIVE')"
+            )
+
+        created = self.client.post("/api/v1/users", headers=owner_headers, json={
+            "username": "staff-managed", "full_name": "Nhân viên cửa hàng",
+            "password": "staff-password-123", "role": "staff", "phone": "0901234567",
+            "branch_ids": [101],
+        })
+        self.assertEqual(created.status_code, 201, created.text)
+        employee_id = created.json()["id"]
+
+        listing = self.client.get("/api/v1/users?q=nhân viên&branchId=101", headers=owner_headers)
+        self.assertEqual(listing.status_code, 200, listing.text)
+        employee = listing.json()["items"][0]
+        self.assertEqual(employee["id"], employee_id)
+        self.assertEqual(employee["branches"][0]["id"], 101)
+        self.assertEqual(employee["phone"], "0901234567")
+
+        out_of_store = self.client.put(
+            f"/api/v1/users/{employee_id}/branches", headers=owner_headers,
+            json={"branch_ids": [202]},
+        )
+        self.assertEqual(out_of_store.status_code, 422, out_of_store.text)
+
+        updated = self.client.put(f"/api/v1/users/{employee_id}", headers=owner_headers, json={
+            "full_name": "Nhân viên mới", "email": "staff@example.test", "phone": None,
+        })
+        self.assertEqual(updated.status_code, 200, updated.text)
+        self.assertEqual(updated.json()["full_name"], "Nhân viên mới")
+
+        reset = self.client.post(
+            f"/api/v1/users/{employee_id}/reset-password", headers=owner_headers,
+            json={"new_password": "new-staff-password-456"},
+        )
+        self.assertEqual(reset.status_code, 204, reset.text)
+        self.assertEqual(self.login("staff-managed:staff", "staff-password-123").status_code, 401)
+        self.assertEqual(self.login("staff-managed:staff", "new-staff-password-456").status_code, 200)
+
+        locked = self.client.patch(f"/api/v1/users/{employee_id}/status", headers=owner_headers, json={"status": "LOCKED"})
+        self.assertEqual(locked.status_code, 200, locked.text)
+        self.assertEqual(self.login("staff-managed:staff", "new-staff-password-456").status_code, 401)
+
+    def test_non_owner_cannot_list_or_manage_store_users(self):
+        self.assertEqual(self.provision().status_code, 201)
+        owner_login = self.login("owner1", "owner-password-123")
+        owner_headers = {"Authorization": f"Bearer {owner_login.json()['access_token']}"}
+        created = self.client.post("/api/v1/users", headers=owner_headers, json={
+            "username": "staff1", "full_name": "Staff", "password": "staff-password-123", "role": "staff",
+        })
+        self.assertEqual(created.status_code, 201, created.text)
+        employee_login = self.login("staff1:staff", "staff-password-123")
+        employee_headers = {"Authorization": f"Bearer {employee_login.json()['access_token']}"}
+        self.assertEqual(self.client.get("/api/v1/users", headers=employee_headers).status_code, 403)
 
     def test_expired_subscription_blocks_login_and_duplicate_owner(self):
         provisioned = self.provision()

@@ -1,6 +1,8 @@
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
+from fastapi.responses import FileResponse
+from sqlalchemy import text
 
 from app.core.permissions import Actor, require_auth, require_owner
 from app.modules.products import service, variant_service
@@ -8,6 +10,7 @@ from app.modules.products.catalog_transaction import catalog_transaction
 from app.modules.products.csv_parser import MAX_FILE_BYTES
 from app.modules.products.csv_schemas import CsvImportResult
 from app.modules.products.csv_service import import_products
+from app.modules.products.image_storage import MAX_PRODUCT_IMAGE_BYTES, product_image_path, save_product_image
 from app.modules.products.schemas import (
     Product, ProductCreate, ProductDetail, ProductId, ProductInput, ProductRecord,
     ProductSort, ProductStatus, ProductStatusInput, VariantDetail,
@@ -58,10 +61,55 @@ def import_product_csv(
     return result
 
 
+@router.post("/products/images", status_code=201)
+def upload_product_image(actor: Owner, file: Annotated[UploadFile, File()]) -> dict:
+    try:
+        content = file.file.read(MAX_PRODUCT_IMAGE_BYTES + 1)
+        filename, content_type = save_product_image(content, file.content_type)
+    finally:
+        file.file.close()
+    return {
+        "imageUrl": f"/products/images/{filename}",
+        "contentType": content_type,
+        "size": len(content),
+    }
+
+
+@router.get("/products/images/{filename}", include_in_schema=False)
+def get_product_image(filename: str) -> FileResponse:
+    path = product_image_path(filename)
+    extension = path.suffix.lower()
+    media_type = {".jpg": "image/jpeg", ".png": "image/png", ".webp": "image/webp"}[extension]
+    return FileResponse(
+        path,
+        media_type=media_type,
+        headers={"Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+@router.delete("/products/images/{filename}", status_code=204, include_in_schema=False)
+def delete_unused_product_image(filename: str, actor: Owner) -> Response:
+    path = product_image_path(filename)
+    image_url = f"/products/images/{filename}"
+    with catalog_transaction() as db:
+        referenced = db.execute(
+            text("SELECT 1 FROM products WHERE image_url=:image_url LIMIT 1"),
+            {"image_url": image_url},
+        ).first()
+        if referenced:
+            raise HTTPException(409, "Ảnh đang được dùng bởi sản phẩm.")
+        path.unlink(missing_ok=True)
+    return Response(status_code=204)
+
+
 @router.get("/products/{product_id}")
 def get_product(product_id: ProductId, actor: Reader) -> ProductDetail:
     with catalog_transaction() as db:
-        return service.get_product_detail(db, actor.store_id, product_id)
+        product = service.get_product_detail(db, actor.store_id, product_id)
+    if actor.role != "OWNER":
+        for variant in product.variants:
+            variant.cost_price = None
+    return product
 
 
 @router.post("/products", status_code=201)

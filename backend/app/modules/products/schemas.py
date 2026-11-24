@@ -16,6 +16,7 @@ class Product(BaseModel):
     category_id: int
     product_code: str
     name: str
+    image_url: str | None = None
     variants: list[ProductVariant]
 
 

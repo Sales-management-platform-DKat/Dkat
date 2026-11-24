@@ -81,7 +81,7 @@ def quick_search_customers(request: Request, actor: Reader, q: str = Query(defau
     with engine.connect() as db:
         rows = db.execute(text("""
             SELECT customer_id AS customerId, full_name AS fullName, phone, email, address, note
-            FROM customers WHERE store_id=:store AND (phone LIKE :term OR full_name LIKE :term)
+            FROM customers WHERE store_id=:store AND (phone LIKE :term OR full_name LIKE :term OR email LIKE :term)
             ORDER BY full_name LIMIT :limit
         """), {"store": actor.store_id, "term": f"%{term}%", "limit": limit}).mappings()
         result = [dict(row) for row in rows]
