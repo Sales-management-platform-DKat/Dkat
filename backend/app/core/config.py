@@ -68,7 +68,15 @@ if _configured_fields:
         port=int(_database_fields["DB_PORT"]),
         database=_database_fields["DB_NAME"],
     )
-    DATABASE_CONNECT_ARGS = {
+    # DB_SSL_MODE=verify (default): TLS with certificate + host name check (TiDB Cloud / production).
+    # DB_SSL_MODE=disabled: plain connection for a local MySQL with its self-signed certificate (BUG-008).
+    # Production refuses "disabled".
+    DB_SSL_MODE = os.getenv("DB_SSL_MODE", "verify").strip().lower()
+    if DB_SSL_MODE not in {"verify", "disabled"}:
+        raise RuntimeError("DB_SSL_MODE must be 'verify' or 'disabled'")
+    if DB_SSL_MODE == "disabled" and IS_PRODUCTION:
+        raise RuntimeError("Production requires DB_SSL_MODE=verify.")
+    DATABASE_CONNECT_ARGS = {"connect_timeout": 10} if DB_SSL_MODE == "disabled" else {
         "ssl_ca": os.getenv("DB_SSL_CA", certifi.where()),
         "ssl_verify_cert": True,
         "ssl_verify_identity": True,
