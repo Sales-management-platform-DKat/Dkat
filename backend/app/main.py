@@ -31,11 +31,17 @@ from app.workers.preorder_expiry import run_preorder_expiry
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    # PBI 140: expire READY / NOTIFIED pre-orders past their hold deadline and hand the stock to the
+    # next customers (FIFO). Lost in merge 9cc2512, restored for BUG-006.
+    stop = asyncio.Event()
+    expiry_task = asyncio.create_task(run_preorder_expiry(stop))
     # FR-09.5: re-send FAILED notifications every NOTIFY_RETRY_INTERVAL_SECONDS
     retry_task = asyncio.create_task(run_retry_loop()) if settings.NOTIFY_RETRY_ENABLED else None
     try:
         yield
     finally:
+        stop.set()
+        await expiry_task
         if retry_task is not None:
             retry_task.cancel()
             try:
