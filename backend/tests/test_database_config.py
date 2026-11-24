@@ -18,6 +18,8 @@ def load_config(*, environment: str, database_url: str = "", **database_fields: 
         env.pop("DKAT_DATABASE_URL", None)
     for key in DB_ENV_KEYS:
         env[key] = database_fields.get(key, "")
+    # explicit, so a developer's backend/.env (e.g. DB_SSL_MODE=disabled for a local MySQL) cannot change the result
+    env["DB_SSL_MODE"] = database_fields.get("DB_SSL_MODE", "verify")
     return subprocess.run(
         [
             sys.executable,
@@ -82,7 +84,9 @@ class DatabaseConfigTests(unittest.TestCase):
         if mode is not None:
             env["DB_SSL_MODE"] = mode
         return subprocess.run(
-            [sys.executable, "-c", "from app.core.config import DATABASE_CONNECT_ARGS as a; print(sorted(a))"],
+            # backend/.env is ignored here: the test checks the code's own default, not a developer's settings
+            [sys.executable, "-c", "import dotenv; dotenv.load_dotenv = lambda *a, **k: False; "
+                                   "from app.core.config import DATABASE_CONNECT_ARGS as a; print(sorted(a))"],
             cwd=BACKEND_DIR, env=env, capture_output=True, text=True, check=False,
         )
 
