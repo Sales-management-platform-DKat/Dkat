@@ -1,0 +1,328 @@
+{
+  "info": {
+    "name": "DKat PBI 139 | Xác nhận nhận hàng đặt trước",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Chạy theo thứ tự trên database kiểm thử. Điền accessToken và preorderId của đơn READY/NOTIFIED, UNPAID, chưa hết hạn và đã được phân bổ đủ một SKU. Có thể tạo đơn khi hết hàng rồi nhập kho để chuyển READY. Mặc định chọn DELIVERY và dùng địa chỉ khách đã lưu trên đơn. Có thể đặt fulfillmentMethod thành PICKUP. Lần chạy sẽ ghi nhận thanh toán và trừ tồn kho của đơn kiểm thử."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "preorderId",
+      "value": ""
+    },
+    {
+      "key": "fulfillmentMethod",
+      "value": "DELIVERY"
+    },
+    {
+      "key": "paymentMethod",
+      "value": "CASH"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Đọc đơn đủ điều kiện",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/preorders/{{preorderId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const order = pm.response.json();",
+              "const eligible = ['READY', 'NOTIFIED'].includes(order.status) && order.paymentStatus === 'UNPAID'",
+              "  && (!order.expiresAt || Date.parse(order.expiresAt) > Date.now())",
+              "  && order.items?.length === 1 && order.items[0].quantity === order.items[0].allocatedQuantity",
+              "  && (pm.variables.get('fulfillmentMethod') !== 'DELIVERY' || Boolean(order.customer.address?.trim()));",
+              "pm.test('Đơn hợp lệ, đủ phân bổ, có một SKU', () => pm.expect(Boolean(eligible)).to.be.true);",
+              "if (pm.response.code !== 200 || !eligible) {",
+              "  pm.execution.setNextRequest(null);",
+              "} else {",
+              "  pm.collectionVariables.set('branchId', order.branchId);",
+              "  pm.collectionVariables.set('variantId', order.items[0].variantId);",
+              "  pm.collectionVariables.set('orderQuantity', order.items[0].quantity);",
+              "  pm.collectionVariables.set('orderTotal', order.totalAmount);",
+              "  pm.collectionVariables.set('customerAddress', order.customer.address?.trim() || '');",
+              "}"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Đọc tồn trước khi chọn cách nhận",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/inventory/{{branchId}}/{{variantId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const stock = pm.response.json();",
+              "pm.collectionVariables.set('quantityBefore', stock.quantity);",
+              "pm.collectionVariables.set('reservedBefore', stock.reserved);",
+              "pm.collectionVariables.set('availableBefore', stock.available);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Lưu cách nhận hàng",
+      "request": {
+        "method": "PUT",
+        "url": "{{baseUrl}}/preorders/{{preorderId}}/fulfillment",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"method\": \"{{fulfillmentMethod}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const order = pm.response.json();",
+              "const method = pm.variables.get('fulfillmentMethod');",
+              "pm.test('Lưu cách nhận đang chờ giao', () => {",
+              "  pm.expect(order.fulfillment.method).to.equal(method);",
+              "  pm.expect(order.fulfillment.status).to.equal('PENDING');",
+              "  pm.expect(order.fulfillment.deliveryAddress).to.equal(method === 'DELIVERY' ? pm.collectionVariables.get('customerAddress') : null);",
+              "  pm.expect(order.paymentStatus).to.equal('UNPAID');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Tồn kho giữ nguyên trước khi giao",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/inventory/{{branchId}}/{{variantId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const stock = pm.response.json();",
+              "pm.test('Số tồn và số giữ chỗ giữ nguyên', () => {",
+              "  pm.expect(stock.quantity).to.equal(Number(pm.collectionVariables.get('quantityBefore')));",
+              "  pm.expect(stock.reserved).to.equal(Number(pm.collectionVariables.get('reservedBefore')));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Đơn chưa trả tiền cần phương thức thanh toán",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/preorders/{{preorderId}}/fulfill",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+              "pm.test('Yêu cầu phương thức thanh toán', () => {",
+              "  pm.expect(pm.response.json().detail.code).to.equal('PAYMENT_METHOD_REQUIRED');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06. Xác nhận nhận hàng và thanh toán",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/preorders/{{preorderId}}/fulfill",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"paymentMethod\": \"{{paymentMethod}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const order = pm.response.json();",
+              "pm.test('Đơn hoàn thành và đã thanh toán đúng số tiền', () => {",
+              "  pm.expect(order.status).to.equal('FULFILLED');",
+              "  pm.expect(order.paymentStatus).to.equal('PAID');",
+              "  pm.expect(order.fulfillment.status).to.equal('COMPLETED');",
+              "  pm.expect(order.fulfillment.method).to.equal(pm.variables.get('fulfillmentMethod'));",
+              "  pm.expect(order.fulfilledAt).to.be.a('string');",
+              "  pm.expect(order.fulfillment.completedAt).to.equal(order.fulfilledAt);",
+              "  const successes = order.payments.filter(payment => payment.status === 'SUCCESS');",
+              "  pm.expect(successes).to.have.lengthOf(1);",
+              "  pm.expect(successes[0].paymentMethod).to.equal(pm.variables.get('paymentMethod'));",
+              "  pm.expect(successes[0].amount).to.equal(pm.collectionVariables.get('orderTotal'));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07. Gửi lại xác nhận",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/preorders/{{preorderId}}/fulfill",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"paymentMethod\": \"{{paymentMethod}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+              "pm.test('Từ chối xác nhận lần hai', () => {",
+              "  pm.expect(pm.response.json().detail.code).to.equal('PREORDER_NOT_FULFILLABLE');",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08. Kiểm tra tồn sau khi giao",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/inventory/{{branchId}}/{{variantId}}"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const stock = pm.response.json();",
+              "const ordered = Number(pm.collectionVariables.get('orderQuantity'));",
+              "pm.test('Tồn kho và giữ chỗ giảm đúng số lượng đơn', () => {",
+              "  pm.expect(stock.quantity).to.equal(Number(pm.collectionVariables.get('quantityBefore')) - ordered);",
+              "  pm.expect(stock.reserved).to.equal(Number(pm.collectionVariables.get('reservedBefore')) - ordered);",
+              "  pm.expect(stock.available).to.equal(Number(pm.collectionVariables.get('availableBefore')));",
+              "});"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09. Đối chiếu movement nhận hàng",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/inventory/movements?branchId={{branchId}}&variantId={{variantId}}&type=PREORDER_FULFILLMENT"
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+              "const movements = pm.response.json().filter(row => row.referenceType === 'PREORDER'",
+              "  && String(row.referenceId) === String(pm.variables.get('preorderId')));",
+              "pm.test('Có đúng một movement PREORDER_FULFILLMENT cho đơn', () => {",
+              "  pm.expect(movements).to.have.lengthOf(1);",
+              "  pm.expect(movements[0].movementType).to.equal('PREORDER_FULFILLMENT');",
+              "  pm.expect(movements[0].quantityChange).to.equal(-Number(pm.collectionVariables.get('orderQuantity')));",
+              "});"
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}

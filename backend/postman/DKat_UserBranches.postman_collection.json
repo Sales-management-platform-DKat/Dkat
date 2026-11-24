@@ -1,0 +1,1878 @@
+{
+  "info": {
+    "name": "DKat - User branches & list (FR-02.4)",
+    "description": "Chạy theo thứ tự (Run collection). Cần seed: python -m scripts.seed_auth. Mỗi lần chạy tạo 2 tài khoản asg_<số>/asg2_<số> và khóa chúng ở cuối (không xóa).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "0. Chuẩn bị",
+      "item": [
+        {
+          "name": "0.1 Login OWNER",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"owner01\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const d = pm.response.json().data;",
+                  "pm.collectionVariables.set(\"tokenOwner\", d.token); pm.collectionVariables.set(\"ownerId\", d.user.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "0.2 Login MANAGER (CN01, CN02)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"manager01\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"tokenManager\", pm.response.json().data.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "0.3 Login EMPLOYEE (staff01)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"staff01\",\n  \"password\": \"{{password}}\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"tokenEmployee\", pm.response.json().data.token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "0.4 Lấy id chi nhánh",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "branches"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const byCode = {}; pm.response.json().data.forEach(b => byCode[b.branchCode] = b.id);",
+                  "pm.collectionVariables.set(\"cn01Id\", byCode.CN01); pm.collectionVariables.set(\"cn02Id\", byCode.CN02); pm.collectionVariables.set(\"cn03Id\", byCode.CN03);",
+                  "pm.collectionVariables.set(\"suffix\", String(Date.now()).slice(-9));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "0.5 OWNER tạo nhân viên asg_ ở CN01",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"asg_{{suffix}}\",\n  \"password\": \"Init@1234\",\n  \"fullName\": \"Phân công Postman\",\n  \"role\": \"EMPLOYEE\",\n  \"branchIds\": [\n    \"{{cn01Id}}\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"asgId\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "0.6 OWNER tạo nhân viên asg2_ ở CN01 + CN03",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"asg2_{{suffix}}\",\n  \"password\": \"Init@1234\",\n  \"fullName\": \"Hai chi nhánh Postman\",\n  \"role\": \"EMPLOYEE\",\n  \"branchIds\": [\n    \"{{cn01Id}}\",\n    \"{{cn03Id}}\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set(\"asg2Id\", pm.response.json().data.id);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1. Phân công chi nhánh (PUT /users/{id}/branches)",
+      "item": [
+        {
+          "name": "1.1 asg_ đăng nhập -> thấy CN01",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"asg_{{suffix}}\",\n  \"password\": \"Init@1234\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set(\"tokenAsg\", pm.response.json().data.token);",
+                  "pm.test(\"Chi nhánh = CN01\", () => pm.expect(pm.response.json().data.user.branches.map(b => b.id)).to.eql([Number(pm.collectionVariables.get(\"cn01Id\"))]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.2 Không token -> 401",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{asgId}}/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{asgId}}",
+                "branches"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchIds\": [\n    \"{{cn02Id}}\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));",
+                  "pm.test(\"error.code = UNAUTHORIZED\", () => pm.expect(pm.response.json().error.code).to.eql(\"UNAUTHORIZED\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.3 EMPLOYEE phân công -> 403",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEmployee}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{asgId}}/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{asgId}}",
+                "branches"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchIds\": [\n    \"{{cn02Id}}\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error.code = FORBIDDEN\", () => pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.4 branchIds rỗng -> 422",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{asgId}}/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{asgId}}",
+                "branches"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchIds\": []\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"error.code = VALIDATION_ERROR\", () => pm.expect(pm.response.json().error.code).to.eql(\"VALIDATION_ERROR\"));",
+                  "pm.test(\"Báo lỗi branchIds\", () => pm.expect(pm.response.json().error.details.map(d => d.field)).to.include(\"branchIds\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.5 Chi nhánh không tồn tại -> 422",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{asgId}}/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{asgId}}",
+                "branches"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchIds\": [\n    999999\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"error.code = VALIDATION_ERROR\", () => pm.expect(pm.response.json().error.code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.6 Phân công cho OWNER -> 409",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{ownerId}}/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{ownerId}}",
+                "branches"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchIds\": [\n    \"{{cn01Id}}\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"error.code = OWNER_HAS_ALL_BRANCHES\", () => pm.expect(pm.response.json().error.code).to.eql(\"OWNER_HAS_ALL_BRANCHES\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.7 MANAGER gán vào CN03 (không quản lý) -> 403",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenManager}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{asgId}}/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{asgId}}",
+                "branches"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchIds\": [\n    \"{{cn03Id}}\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error.code = FORBIDDEN\", () => pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.8 MANAGER sửa nhân viên có CN03 (ngoài phạm vi) -> 403",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenManager}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{asg2Id}}/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{asg2Id}}",
+                "branches"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchIds\": [\n    \"{{cn01Id}}\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error.code = FORBIDDEN\", () => pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.9 OWNER sửa id không tồn tại -> 404",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/999999/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "999999",
+                "branches"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchIds\": [\n    \"{{cn01Id}}\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"error.code = NOT_FOUND\", () => pm.expect(pm.response.json().error.code).to.eql(\"NOT_FOUND\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.10 MANAGER gán CN01 + CN02 (gửi trùng CN02) -> 200, không trùng",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenManager}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{asgId}}/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{asgId}}",
+                "branches"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchIds\": [\n    \"{{cn01Id}}\",\n    \"{{cn02Id}}\",\n    \"{{cn02Id}}\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Chi nhánh = CN01, CN02\", () => pm.expect(pm.response.json().data.branches.map(b => b.id)).to.eql([Number(pm.collectionVariables.get(\"cn01Id\")), Number(pm.collectionVariables.get(\"cn02Id\"))]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.11 OWNER đổi sang CN02 + CN03 -> 200",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{asgId}}/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{asgId}}",
+                "branches"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchIds\": [\n    \"{{cn03Id}}\",\n    \"{{cn02Id}}\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Chi nhánh = CN02, CN03\", () => pm.expect(pm.response.json().data.branches.map(b => b.id)).to.eql([Number(pm.collectionVariables.get(\"cn02Id\")), Number(pm.collectionVariables.get(\"cn03Id\"))]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.12 Chi tiết user kèm chi nhánh được phân công",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{asgId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{asgId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const br = pm.response.json().data.branches;",
+                  "pm.test(\"Chi nhánh = CN02, CN03\", () => pm.expect(br.map(b => b.id)).to.eql([Number(pm.collectionVariables.get(\"cn02Id\")), Number(pm.collectionVariables.get(\"cn03Id\"))]));",
+                  "pm.test(\"Có mã, tên, trạng thái chi nhánh\", () => br.forEach(b => pm.expect(b).to.have.keys(\"id\", \"branchCode\", \"name\", \"status\")));",
+                  "pm.test(\"Mã CN02, CN03\", () => pm.expect(br.map(b => b.branchCode)).to.eql([\"CN02\", \"CN03\"]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.13 Đăng nhập lại -> thấy đúng chi nhánh mới (CN02, CN03)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "auth",
+                "login"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"asg_{{suffix}}\",\n  \"password\": \"Init@1234\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Chi nhánh = CN02, CN03\", () => pm.expect(pm.response.json().data.user.branches.map(b => b.id)).to.eql([Number(pm.collectionVariables.get(\"cn02Id\")), Number(pm.collectionVariables.get(\"cn03Id\"))]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.14 Token cũ mất quyền CN01 ngay -> 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAsg}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{cn01Id}}/inventory",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "branches",
+                "{{cn01Id}}",
+                "inventory"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error.code = FORBIDDEN\", () => pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.15 Token cũ có quyền CN03 ngay -> 200",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenAsg}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/branches/{{cn03Id}}/inventory",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "branches",
+                "{{cn03Id}}",
+                "inventory"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.16 MANAGER (CN01, CN02) không còn quản lý asg_ (có CN03) -> 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenManager}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{asgId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{asgId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error.code = FORBIDDEN\", () => pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.17 OWNER đổi về CN01 -> 200",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{asgId}}/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{asgId}}",
+                "branches"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchIds\": [\n    \"{{cn01Id}}\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Chi nhánh = CN01\", () => pm.expect(pm.response.json().data.branches.map(b => b.id)).to.eql([Number(pm.collectionVariables.get(\"cn01Id\"))]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "1.18 Gửi lại cùng tập -> 200, vẫn 1 dòng",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{asgId}}/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{asgId}}",
+                "branches"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchIds\": [\n    \"{{cn01Id}}\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"Chi nhánh = CN01\", () => pm.expect(pm.response.json().data.branches.map(b => b.id)).to.eql([Number(pm.collectionVariables.get(\"cn01Id\"))]));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. Danh sách theo quyền (GET /users)",
+      "item": [
+        {
+          "name": "2.1 EMPLOYEE GET /users -> 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenEmployee}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error.code = FORBIDDEN\", () => pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.2 OWNER keyword -> đúng 2 tài khoản vừa tạo",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?keyword={{suffix}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": "{{suffix}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const page = pm.response.json().data; const items = page.items; const ids = items.map(u => u.id);",
+                  "pm.test(\"total = 2\", () => pm.expect(page.total).to.eql(2));",
+                  "pm.test(\"Có asg_ và asg2_\", () => pm.expect(ids.sort()).to.eql([Number(pm.collectionVariables.get(\"asgId\")), Number(pm.collectionVariables.get(\"asg2Id\"))].sort()));",
+                  "pm.test(\"Không có mật khẩu\", () => pm.expect(pm.response.text()).to.not.match(/password/i));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.3 OWNER keyword + branchId=CN03 -> chỉ asg2_",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?keyword={{suffix}}&branchId={{cn03Id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": "{{suffix}}"
+                },
+                {
+                  "key": "branchId",
+                  "value": "{{cn03Id}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const page = pm.response.json().data; const items = page.items; const ids = items.map(u => u.id);",
+                  "pm.test(\"Chỉ asg2_\", () => pm.expect(ids).to.eql([Number(pm.collectionVariables.get(\"asg2Id\"))]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.4 OWNER keyword theo họ tên (không phân biệt hoa/thường)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?keyword=PHÂN CÔNG POSTMAN",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": "PHÂN CÔNG POSTMAN"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const page = pm.response.json().data; const items = page.items; const ids = items.map(u => u.id);",
+                  "pm.test(\"Có asg_\", () => pm.expect(ids).to.include(Number(pm.collectionVariables.get(\"asgId\"))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.5 OWNER role=MANAGER -> chỉ MANAGER",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?role=MANAGER&pageSize=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "MANAGER"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "100"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const page = pm.response.json().data; const items = page.items; const ids = items.map(u => u.id);",
+                  "pm.test(\"Tất cả MANAGER\", () => items.forEach(u => pm.expect(u.role).to.eql(\"MANAGER\")));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.6 OWNER status=LOCKED -> chỉ LOCKED (có locked01)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?status=LOCKED&keyword=locked01",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "LOCKED"
+                },
+                {
+                  "key": "keyword",
+                  "value": "locked01"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const page = pm.response.json().data; const items = page.items; const ids = items.map(u => u.id);",
+                  "pm.test(\"Tất cả LOCKED\", () => items.forEach(u => pm.expect(u.status).to.eql(\"LOCKED\")));",
+                  "pm.test(\"Có locked01\", () => pm.expect(items.map(u => u.username)).to.include(\"locked01\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.7 Phân trang: page 1, pageSize 2",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?pageSize=2&page=1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "pageSize",
+                  "value": "2"
+                },
+                {
+                  "key": "page",
+                  "value": "1"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const page = pm.response.json().data; const items = page.items; const ids = items.map(u => u.id);",
+                  "pm.test(\"<= 2 dòng, đúng page/pageSize\", () => { pm.expect(items.length).to.be.at.most(2); pm.expect(page.page).to.eql(1); pm.expect(page.pageSize).to.eql(2); });",
+                  "pm.test(\"totalPages = ceil(total / 2)\", () => pm.expect(page.totalPages).to.eql(Math.ceil(page.total / 2)));",
+                  "pm.collectionVariables.set(\"page1Ids\", JSON.stringify(ids));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.8 Phân trang: page 2 khác page 1",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?pageSize=2&page=2",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "pageSize",
+                  "value": "2"
+                },
+                {
+                  "key": "page",
+                  "value": "2"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const page = pm.response.json().data; const items = page.items; const ids = items.map(u => u.id);",
+                  "const p1 = JSON.parse(pm.collectionVariables.get(\"page1Ids\"));",
+                  "pm.test(\"Không trùng dòng với page 1\", () => ids.forEach(id => pm.expect(p1).to.not.include(id)));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.9 MANAGER: chỉ nhân viên thuộc CN01/CN02",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenManager}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?pageSize=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "pageSize",
+                  "value": "100"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const page = pm.response.json().data; const items = page.items; const ids = items.map(u => u.id);",
+                  "const mine = [Number(pm.collectionVariables.get(\"cn01Id\")), Number(pm.collectionVariables.get(\"cn02Id\"))];",
+                  "pm.test(\"Chỉ EMPLOYEE\", () => items.forEach(u => pm.expect(u.role).to.eql(\"EMPLOYEE\")));",
+                  "pm.test(\"Chi nhánh ACTIVE đều thuộc CN01/CN02\", () => items.forEach(u => u.branches.filter(b => b.status === \"ACTIVE\").forEach(b => pm.expect(mine).to.include(b.id))));",
+                  "pm.test(\"Có asg_, không có asg2_ (có CN03)\", () => { pm.expect(ids).to.include(Number(pm.collectionVariables.get(\"asgId\"))); pm.expect(ids).to.not.include(Number(pm.collectionVariables.get(\"asg2Id\"))); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.10 MANAGER branchId=CN03 (không quản lý) -> 403",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenManager}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?branchId={{cn03Id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "branchId",
+                  "value": "{{cn03Id}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));",
+                  "pm.test(\"error.code = FORBIDDEN\", () => pm.expect(pm.response.json().error.code).to.eql(\"FORBIDDEN\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.11 MANAGER branchId=CN01 -> mọi dòng có CN01",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenManager}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?branchId={{cn01Id}}&pageSize=100",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "branchId",
+                  "value": "{{cn01Id}}"
+                },
+                {
+                  "key": "pageSize",
+                  "value": "100"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const page = pm.response.json().data; const items = page.items; const ids = items.map(u => u.id);",
+                  "pm.test(\"Mọi dòng được phân công CN01\", () => items.forEach(u => pm.expect(u.branches.map(b => b.id)).to.include(Number(pm.collectionVariables.get(\"cn01Id\")))));",
+                  "pm.test(\"Có asg_\", () => pm.expect(ids).to.include(Number(pm.collectionVariables.get(\"asgId\"))));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.12 OWNER branchId không tồn tại -> 404",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?branchId=999999",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "branchId",
+                  "value": "999999"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"error.code = NOT_FOUND\", () => pm.expect(pm.response.json().error.code).to.eql(\"NOT_FOUND\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.13 role không hợp lệ -> 422",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?role=ADMIN",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "role",
+                  "value": "ADMIN"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"error.code = VALIDATION_ERROR\", () => pm.expect(pm.response.json().error.code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.14 pageSize > 100 -> 422",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?pageSize=101",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "pageSize",
+                  "value": "101"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"error.code = VALIDATION_ERROR\", () => pm.expect(pm.response.json().error.code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.15 page = 0 -> 422",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?page=0",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "0"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 422\", () => pm.response.to.have.status(422));",
+                  "pm.test(\"error.code = VALIDATION_ERROR\", () => pm.expect(pm.response.json().error.code).to.eql(\"VALIDATION_ERROR\"));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2.16 keyword '%' được hiểu là ký tự thường -> 0 kết quả",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users?keyword=%25",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "keyword",
+                  "value": "%25"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"total = 0\", () => pm.expect(pm.response.json().data.total).to.eql(0));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "3. Dọn dẹp",
+      "item": [
+        {
+          "name": "3.1 Khóa asg_",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{asgId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{asgId}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"LOCKED\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3.2 Khóa asg2_",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{tokenOwner}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/users/{{asg2Id}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "users",
+                "{{asg2Id}}",
+                "status"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"LOCKED\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "password",
+      "value": "Dkat@1234"
+    },
+    {
+      "key": "tokenOwner",
+      "value": ""
+    },
+    {
+      "key": "tokenManager",
+      "value": ""
+    },
+    {
+      "key": "tokenEmployee",
+      "value": ""
+    },
+    {
+      "key": "tokenAsg",
+      "value": ""
+    },
+    {
+      "key": "ownerId",
+      "value": ""
+    },
+    {
+      "key": "cn01Id",
+      "value": ""
+    },
+    {
+      "key": "cn02Id",
+      "value": ""
+    },
+    {
+      "key": "cn03Id",
+      "value": ""
+    },
+    {
+      "key": "suffix",
+      "value": ""
+    },
+    {
+      "key": "asgId",
+      "value": ""
+    },
+    {
+      "key": "asg2Id",
+      "value": ""
+    },
+    {
+      "key": "page1Ids",
+      "value": ""
+    }
+  ]
+}

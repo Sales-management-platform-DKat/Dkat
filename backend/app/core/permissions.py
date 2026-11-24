@@ -1,8 +1,10 @@
 from datetime import timezone
+from dataclasses import dataclass
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
 from app.core.security import decode_access_token
@@ -51,3 +53,46 @@ def require_roles(*roles: str):
         return user
 
     return dependency
+@dataclass(frozen=True)
+class Actor:
+    store_id: int
+    role: str
+    user_id: int
+
+
+def require_auth(user: User = Depends(get_current_user)) -> Actor:
+    return Actor(store_id=user.shop_id, role=user.role, user_id=user.id)
+
+
+def require_owner(user: User = Depends(require_roles("owner"))) -> Actor:
+    return Actor(store_id=user.shop_id, role=user.role, user_id=user.id)
+
+
+def require_owner_or_manager(user: User = Depends(require_roles("owner", "manager"))) -> Actor:
+    return Actor(store_id=user.shop_id, role=user.role, user_id=user.id)
+
+
+def get_accessible_branch_ids(db: Connection, actor: Actor, branch_id: int | None = None) -> list[int]:
+    return list(db.execute(
+        text("""
+            SELECT b.branch_id
+            FROM branches AS b
+            WHERE b.store_id = :store_id
+              AND (:branch_id IS NULL OR b.branch_id = :branch_id)
+              AND (:owner OR EXISTS (
+                  SELECT 1 FROM user_branches AS ub
+                  WHERE ub.branch_id = b.branch_id AND ub.user_id = :user_id
+              ))
+        """),
+        {
+            "store_id": actor.store_id,
+            "branch_id": branch_id,
+            "owner": actor.role == "OWNER",
+            "user_id": actor.user_id,
+        },
+    ).scalars())
+
+
+def require_branch_access(db: Connection, actor: Actor, branch_id: int) -> None:
+    if not get_accessible_branch_ids(db, actor, branch_id):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Bạn không có quyền truy cập chi nhánh này.")

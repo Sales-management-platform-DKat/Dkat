@@ -1,0 +1,194 @@
+{
+  "info": {
+    "name": "DKat PBI 66",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Dùng OWNER và EMPLOYEE cùng cửa hàng. Gán EMPLOYEE vào branchId qua user_branches. otherBranchId là chi nhánh cùng cửa hàng chưa gán. variantId cần có tồn kho tại branchId. Điền expectedReserved theo tổng allocated_quantity của các đơn WAITING_STOCK, READY, NOTIFIED ở chi nhánh này, có thể để trống nếu chỉ kiểm tra công thức."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "employeeToken",
+      "value": ""
+    },
+    {
+      "key": "branchId",
+      "value": ""
+    },
+    {
+      "key": "otherBranchId",
+      "value": ""
+    },
+    {
+      "key": "variantId",
+      "value": ""
+    },
+    {
+      "key": "expectedReserved",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Inventory",
+      "item": [
+        {
+          "name": "OWNER xem tất cả chi nhánh",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory?page=1&size=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.expect(pm.response.json().length).to.be.at.most(20);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "OWNER lọc hàng sắp hết hoặc hết",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory?branchId={{branchId}}&lowStock=true"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "pm.response.json().forEach(row => pm.expect(row.available).to.be.below(5));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Chi tiết tồn và giữ chỗ",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{branchId}}/{{variantId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const item = pm.response.json();",
+                  "pm.expect(item.available).to.eql(item.quantity - item.reserved);",
+                  "const expected = pm.collectionVariables.get('expectedReserved');",
+                  "if (expected !== '') pm.expect(item.reserved).to.eql(Number(expected));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "EMPLOYEE chỉ xem chi nhánh được phân công",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{employeeToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(200);",
+                  "const id = Number(pm.collectionVariables.get('branchId'));",
+                  "pm.response.json().forEach(row => pm.expect(row.branchId).to.eql(id));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "EMPLOYEE xem chi nhánh chưa được phân công",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory?branchId={{otherBranchId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{employeeToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(403);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "EMPLOYEE xem chi tiết chi nhánh chưa được phân công",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/{{otherBranchId}}/{{variantId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{employeeToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.response.to.have.status(403);"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

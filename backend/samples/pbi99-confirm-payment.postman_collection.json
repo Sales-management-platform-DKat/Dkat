@@ -1,0 +1,386 @@
+{
+  "info": {
+    "name": "DKat PBI 99 | Xác nhận thanh toán POS",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Dùng database kiểm thử. Điền accessToken, branchId, variantId có ít nhất 1 hàng khả dụng và giá nhỏ hơn 9999999999.99. Chạy đúng thứ tự. Collection tạo và thanh toán một đơn, giảm tồn một hàng. Đổi paymentMethod để thử CASH, BANK_TRANSFER, CARD hoặc OTHER. Kiểm thử đồng thời và rollback thực nằm trong integration_tests/test_sales_payment_mysql.py."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "branchId",
+      "value": ""
+    },
+    {
+      "key": "variantId",
+      "value": ""
+    },
+    {
+      "key": "paymentMethod",
+      "value": "CASH"
+    },
+    {
+      "key": "orderId",
+      "value": ""
+    },
+    {
+      "key": "orderTotal",
+      "value": ""
+    },
+    {
+      "key": "stockBefore",
+      "value": ""
+    },
+    {
+      "key": "wrongAmount",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "SalesPayment",
+      "item": [
+        {
+          "name": "01. Đọc tồn kho trước thanh toán",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory?branchId={{branchId}}&variantId={{variantId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const row = pm.response.json().find(x => x.variantId == pm.variables.get('variantId'));",
+                  "pm.test('Còn ít nhất một hàng khả dụng', () => pm.expect(row.available).to.be.at.least(1));",
+                  "pm.collectionVariables.set('stockBefore', row.quantity);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02. Tạo đơn PENDING",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"branchId\": {{branchId}}, \"items\": [{\"variantId\": {{variantId}}, \"quantity\": 1}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const order = pm.response.json();",
+                  "pm.test('Đơn chờ thanh toán', () => pm.expect(order.status).to.equal('PENDING'));",
+                  "pm.collectionVariables.set('orderId', order.salesOrderId);",
+                  "pm.collectionVariables.set('orderTotal', order.totalAmount);",
+                  "pm.collectionVariables.set('wrongAmount', (Number(order.totalAmount) + 0.01).toFixed(2));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03. Số tiền không khớp",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}/confirm-payment",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"paymentMethod\": \"CASH\", \"amount\": \"{{wrongAmount}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                  "pm.test('PAYMENT_AMOUNT_MISMATCH', () => pm.expect(pm.response.json().detail.code).to.equal('PAYMENT_AMOUNT_MISMATCH'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04. Phương thức không hợp lệ",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}/confirm-payment",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"paymentMethod\": \"WIRE\", \"amount\": \"{{orderTotal}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05. Kiểm tra chưa đổi dữ liệu",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const order = pm.response.json();",
+                  "pm.test('Vẫn PENDING và chưa có thanh toán', () => {",
+                  "  pm.expect(order.status).to.equal('PENDING'); pm.expect(order.payments).to.have.lengthOf(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06. Thiếu đăng nhập",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}/confirm-payment",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"paymentMethod\": \"{{paymentMethod}}\", \"amount\": \"{{orderTotal}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07. Xác nhận thanh toán",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}/confirm-payment",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"paymentMethod\": \"{{paymentMethod}}\", \"amount\": \"{{orderTotal}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const order = pm.response.json();",
+                  "pm.test('PAID, đúng một payment SUCCESS và đúng số tiền', () => {",
+                  "  pm.expect(order.status).to.equal('PAID'); pm.expect(order.payments).to.have.lengthOf(1);",
+                  "  pm.expect(order.payments[0].status).to.equal('SUCCESS');",
+                  "  pm.expect(order.payments[0].paymentMethod).to.equal(pm.variables.get('paymentMethod'));",
+                  "  pm.expect(Number(order.payments[0].amount)).to.equal(Number(pm.variables.get('orderTotal')));",
+                  "  pm.expect(order.paidAt).to.equal(order.payments[0].confirmedAt);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08. Bấm thanh toán lần hai",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}/confirm-payment",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\"paymentMethod\": \"{{paymentMethod}}\", \"amount\": \"{{orderTotal}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "pm.test('ORDER_NOT_PENDING', () => pm.expect(pm.response.json().detail.code).to.equal('ORDER_NOT_PENDING'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09. Kiểm tra tồn chỉ giảm một lần",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory?branchId={{branchId}}&variantId={{variantId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const row = pm.response.json().find(x => x.variantId == pm.variables.get('variantId'));",
+                  "pm.test('Tồn giảm đúng một', () => pm.expect(row.quantity).to.equal(Number(pm.variables.get('stockBefore')) - 1));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10. Kiểm tra movement SALE tham chiếu đơn",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory/movements?branchId={{branchId}}&variantId={{variantId}}&type=SALE&size=100"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const rows = pm.response.json().filter(x => x.referenceType === 'SALES_ORDER' && x.referenceId == pm.variables.get('orderId'));",
+                  "pm.test('Đúng một SALE, giảm một và có người xác nhận', () => {",
+                  "  pm.expect(rows).to.have.lengthOf(1); pm.expect(rows[0].quantityChange).to.equal(-1);",
+                  "  pm.expect(rows[0].createdBy).to.be.a('number');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11. Kiểm tra thanh toán sau khi gọi lặp",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/sales-orders/{{orderId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Vẫn đúng một payment SUCCESS', () => {",
+                  "  pm.expect(pm.response.json().payments).to.have.lengthOf(1);",
+                  "  pm.expect(pm.response.json().payments[0].status).to.equal('SUCCESS');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,362 @@
+{
+  "info": {
+    "name": "DKat PBI 110 | Tạo đơn đặt trước công khai",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Chạy trên database kiểm thử, từ IP chưa gửi POST /preorders trong 10 phút. Điền accessToken (chỉ để đọc kho), branchId, variantId ACTIVE có dòng inventory và available < 2, inStockVariantId cùng cửa hàng có available >= 1. Chạy cả thư mục Preorder đúng thứ tự, delay tối đa vài giây. Collection gửi 6 POST: 5 yêu cầu đầu được xử lý, lần 6 bị 429; tạo hai đơn thật dùng chung hồ sơ khách. Chờ 10 phút trước khi chạy lại từ cùng IP. Không tự sửa tồn kho."
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "branchId",
+      "value": ""
+    },
+    {
+      "key": "variantId",
+      "value": ""
+    },
+    {
+      "key": "inStockVariantId",
+      "value": ""
+    },
+    {
+      "key": "phone",
+      "value": ""
+    },
+    {
+      "key": "stockBefore",
+      "value": ""
+    },
+    {
+      "key": "reservedBefore",
+      "value": ""
+    },
+    {
+      "key": "preorderId",
+      "value": ""
+    },
+    {
+      "key": "preorderCode",
+      "value": ""
+    },
+    {
+      "key": "customerId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Preorder",
+      "item": [
+        {
+          "name": "01. Đọc tồn trước khi đặt",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory?branchId={{branchId}}&variantId={{variantId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set('phone', '09' + String(Date.now()).slice(-8));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const row = pm.response.json().find(x => x.variantId == pm.variables.get('variantId'));",
+                  "pm.test('Biến thể có dòng tồn kho', () => pm.expect(row).to.be.an('object'));",
+                  "pm.test('Không đủ hai hàng khả dụng', () => pm.expect(row.available).to.be.below(2));",
+                  "pm.collectionVariables.set('stockBefore', row.quantity);",
+                  "pm.collectionVariables.set('reservedBefore', row.reserved);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02. Thiếu địa chỉ",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/preorders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"customer\": {\n    \"fullName\": \"Khách test PBI 110\",\n    \"phone\": \"{{phone}}\",\n    \"email\": \"pbi110@example.com\"\n  },\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"quantity\": 2\n    }\n  ],\n  \"note\": \"Đặt hàng từ Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Lỗi INVALID_PREORDER đúng trường địa chỉ', () => {",
+                  "  const error = pm.response.json(); pm.expect(error.code).to.equal('INVALID_PREORDER');",
+                  "  pm.expect(error.details.some(x => x.field === 'customer.address')).to.equal(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03. Số điện thoại sai",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/preorders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"customer\": {\n    \"fullName\": \"Khách test PBI 110\",\n    \"phone\": \"123\",\n    \"email\": \"pbi110@example.com\",\n    \"address\": \"123 Đường thử nghiệm\"\n  },\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"quantity\": 2\n    }\n  ],\n  \"note\": \"Đặt hàng từ Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                  "pm.test('Lỗi đúng trường điện thoại', () => pm.expect(pm.response.json().details.some(x => x.field === 'customer.phone')).to.equal(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04. Biến thể còn hàng thì từ chối",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/preorders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"customer\": {\n    \"fullName\": \"Khách test PBI 110\",\n    \"phone\": \"{{phone}}\",\n    \"email\": \"pbi110@example.com\",\n    \"address\": \"123 Đường thử nghiệm\"\n  },\n  \"items\": [\n    {\n      \"variantId\": {{inStockVariantId}},\n      \"quantity\": 1\n    }\n  ],\n  \"note\": \"Đặt hàng từ Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 409', () => pm.response.to.have.status(409));",
+                  "pm.test('VARIANT_IN_STOCK', () => pm.expect(pm.response.json().code).to.equal('VARIANT_IN_STOCK'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05. Tạo đơn công khai không cần token",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/preorders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"customer\": {\n    \"fullName\": \"Khách test PBI 110\",\n    \"phone\": \"{{phone}}\",\n    \"email\": \"pbi110@example.com\",\n    \"address\": \"123 Đường thử nghiệm\"\n  },\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"quantity\": 2\n    }\n  ],\n  \"note\": \"Đặt hàng từ Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const order = pm.response.json();",
+                  "pm.test('WAITING_STOCK, UNPAID, chưa phân bổ', () => {",
+                  "  pm.expect(order.status).to.equal('WAITING_STOCK'); pm.expect(order.paymentStatus).to.equal('UNPAID');",
+                  "  pm.expect(order.items[0].allocatedQuantity).to.equal(0);",
+                  "});",
+                  "pm.test('Có mã đơn và địa chỉ khách', () => {",
+                  "  pm.expect(order.preorderCode).to.match(/^PD-\\d{6}-[A-F0-9]{32}$/);",
+                  "  pm.expect(order.customer.address).to.equal('123 Đường thử nghiệm');",
+                  "});",
+                  "pm.collectionVariables.set('preorderId', order.preorderId);",
+                  "pm.collectionVariables.set('customerId', order.customerId);",
+                  "pm.collectionVariables.set('preorderCode', order.preorderCode);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06. Cùng số điện thoại dùng lại hồ sơ khách",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/preorders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"customer\": {\n    \"fullName\": \"Khách test PBI 110\",\n    \"phone\": \"{{phone}}\",\n    \"email\": \"pbi110@example.com\",\n    \"address\": \"123 Đường thử nghiệm\"\n  },\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"quantity\": 2\n    }\n  ],\n  \"note\": \"Đặt hàng từ Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Dùng lại customerId, tạo đơn mới', () => {",
+                  "  const order = pm.response.json(); pm.expect(order.customerId).to.equal(Number(pm.variables.get('customerId')));",
+                  "  pm.expect(order.preorderCode).not.to.equal(pm.variables.get('preorderCode'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07. Yêu cầu thứ sáu bị giới hạn",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/preorders",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchId\": {{branchId}},\n  \"customer\": {\n    \"fullName\": \"Khách test PBI 110\",\n    \"phone\": \"{{phone}}\",\n    \"email\": \"pbi110@example.com\",\n    \"address\": \"123 Đường thử nghiệm\"\n  },\n  \"items\": [\n    {\n      \"variantId\": {{variantId}},\n      \"quantity\": 2\n    }\n  ],\n  \"note\": \"Đặt hàng từ Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 429', () => pm.response.to.have.status(429));",
+                  "pm.test('Có RATE_LIMIT_EXCEEDED và Retry-After', () => {",
+                  "  pm.expect(pm.response.json().code).to.equal('RATE_LIMIT_EXCEEDED');",
+                  "  pm.expect(Number(pm.response.headers.get('Retry-After'))).to.be.above(0);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08. Kho và giữ chỗ không đổi",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/inventory?branchId={{branchId}}&variantId={{variantId}}",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{accessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Không trừ tồn, không tăng giữ chỗ', () => {",
+                  "  const row = pm.response.json().find(x => x.variantId == pm.variables.get('variantId'));",
+                  "  pm.expect(row.quantity).to.equal(Number(pm.variables.get('stockBefore')));",
+                  "  pm.expect(row.reserved).to.equal(Number(pm.variables.get('reservedBefore')));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

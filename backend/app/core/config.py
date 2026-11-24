@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import certifi
 from dotenv import load_dotenv
@@ -8,6 +9,13 @@ from sqlalchemy.engine import URL
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 ADMIN_TOKEN = os.getenv("DKAT_ADMIN_TOKEN", "")
+ALLOW_EMPLOYEE_STOCK = os.getenv("ALLOW_EMPLOYEE_STOCK", "false").strip().lower() in {"1", "true", "yes", "on"}
+try:
+    PREORDER_READY_DAYS = int(os.getenv("PREORDER_READY_DAYS", "7"))
+except ValueError:
+    raise ValueError("PREORDER_READY_DAYS must be an integer from 1 to 365") from None
+if not 1 <= PREORDER_READY_DAYS <= 365:
+    raise ValueError("PREORDER_READY_DAYS must be an integer from 1 to 365")
 AUTH_SECRET_KEY = os.getenv("DKAT_AUTH_SECRET_KEY", os.getenv("SECRET_KEY", ""))
 ACCESS_TOKEN_TTL_SECONDS = 15 * 60
 SESSION_TTL_SECONDS = 12 * 60 * 60
@@ -57,3 +65,5 @@ else:
         if DATABASE_URL.startswith("sqlite")
         else {}
     )
+
+settings = SimpleNamespace(is_production=os.getenv("DKAT_ENV", "development").strip().lower() == "production")

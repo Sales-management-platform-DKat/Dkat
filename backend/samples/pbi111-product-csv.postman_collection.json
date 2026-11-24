@@ -1,0 +1,273 @@
+{
+  "info": {
+    "name": "DKat PBI 111 | Import CSV sản phẩm và biến thể",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Dùng database kiểm thử chưa có SKU CSV111-* và sản phẩm Sản phẩm thử CSV. Điền accessToken của OWNER. Đặt Working directory của Postman/Newman là thư mục gốc dự án để đọc data/sample-products.csv và data/sample-products-invalid.csv (hoặc chọn lại file trong Body). Chạy thư mục ProductCsv theo thứ tự. Collection tạo 20 biến thể thật, gom thành 5 sản phẩm và tự khởi tạo tồn 0; không thêm số lượng tồn."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:8000"
+    },
+    {
+      "key": "accessToken",
+      "value": ""
+    },
+    {
+      "key": "productId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "ProductCsv",
+      "item": [
+        {
+          "name": "01. Chưa đăng nhập",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/products/import-csv?dryRun=true",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "data/sample-products.csv"
+                }
+              ]
+            },
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02. Preview file mẫu 20 dòng",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/products/import-csv?dryRun=true",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "data/sample-products.csv"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const result = pm.response.json();",
+                  "pm.test('20 dòng hợp lệ', () => {",
+                  "  pm.expect(result.valid).to.equal(true); pm.expect(result.totalRows).to.equal(20);",
+                  "  pm.expect(result.summary.variants).to.equal(20);",
+                  "});",
+                  "pm.test('Preview chưa tạo dữ liệu', () => { pm.expect(result.dryRun).to.equal(true); pm.expect(result.rows).to.have.lengthOf(0); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03. Preview file có giá âm",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/products/import-csv?dryRun=true",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "data/sample-products-invalid.csv"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('File không hợp lệ', () => pm.expect(pm.response.json().valid).to.equal(false));",
+                  "pm.test('Chỉ rõ giá sai ở dòng 3', () => {",
+                  "  const errors = pm.response.json().errors; pm.expect(errors.some(x => x.line === 3 && x.field === 'price')).to.equal(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04. Import file lỗi bị từ chối toàn bộ",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/products/import-csv?dryRun=false",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "data/sample-products-invalid.csv"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                  "pm.test('INVALID_PRODUCT_CSV', () => pm.expect(pm.response.json().detail.code).to.equal('INVALID_PRODUCT_CSV'));",
+                  "pm.test('Có dòng lỗi 3', () => pm.expect(pm.response.json().detail.errors.some(x => x.line === 3)).to.equal(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05. Không tạo sản phẩm từ file lỗi",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/products?keyword=S%E1%BA%A3n%20ph%E1%BA%A9m%20th%E1%BB%AD%20CSV"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Không có sản phẩm từ file lỗi', () => pm.expect(pm.response.json()).to.have.lengthOf(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06. Import thật file 20 dòng",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/products/import-csv?dryRun=false",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "data/sample-products.csv"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 201', () => pm.response.to.have.status(201));",
+                  "const result = pm.response.json();",
+                  "pm.test('Đã import 20 biến thể', () => {",
+                  "  pm.expect(result.dryRun).to.equal(false); pm.expect(result.rows).to.have.lengthOf(20); pm.expect(result.errors).to.have.lengthOf(0);",
+                  "});",
+                  "pm.test('Gom thành 5 sản phẩm', () => pm.expect(new Set(result.rows.map(x => x.productId)).size).to.equal(5));",
+                  "pm.collectionVariables.set('productId', result.rows[0].productId);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07. Import lại SKU bị từ chối",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/products/import-csv?dryRun=false",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "data/sample-products.csv"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 422', () => pm.response.to.have.status(422));",
+                  "pm.test('20 SKU trùng được báo lỗi', () => {",
+                  "  const errors = pm.response.json().detail.errors; pm.expect(errors).to.have.lengthOf(20);",
+                  "  pm.expect(errors.every(x => x.code === 'DUPLICATE_SKU')).to.equal(true);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "08. Chi tiết sản phẩm vừa import",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/products/{{productId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('HTTP 200', () => pm.response.to.have.status(200));",
+                  "const product = pm.response.json();",
+                  "pm.test('Áo thun có 8 biến thể', () => { pm.expect(product.name).to.equal('Áo thun basic'); pm.expect(product.variants).to.have.lengthOf(8); });",
+                  "pm.test('Giữ đúng giá và thuộc tính', () => {",
+                  "  pm.expect(Number(product.variants[0].price)).to.equal(99000); pm.expect(product.variants[0].attributes).to.have.lengthOf(2);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
