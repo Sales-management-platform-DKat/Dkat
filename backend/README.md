@@ -274,3 +274,15 @@ File `data/sample-import.csv` dùng 20 SKU từ `data/sample-products.csv`. Trê
 Owner accounts can upload JPEG, PNG, and WebP product images from the product editor. Uploads are validated and normalized by the API, limited to 5 MiB and 40 megapixels, and stored outside the database. Product rows keep the relative API path in the existing `products.image_url` column; no schema migration is needed.
 
 Set `DKAT_PRODUCT_IMAGE_DIR` to a persistent directory on the VPS (for example, `/var/lib/dkat/product-images`) and make sure the backend service user can write to it. Back up this directory along with the database. If unset, files go to `backend/uploads/products`, which is excluded from Git.
+
+## Thông báo đặt trước FR-09 (SMS/email)
+
+Khi nhập kho làm một đơn đặt trước chuyển sang READY, `notify_ready_preorders` gọi `NotificationService.notifyPreorder(preorder_id, "PREORDER_READY")` (`app/modules/notifications/service.py`):
+
+- Gửi SMS trước (eSMS.vn). Nếu SMS lỗi và khách có email, hệ thống gửi email (SMTP). Mỗi lần gửi ghi một dòng vào bảng `notifications`. Khi có một kênh gửi thành công, đơn chuyển sang `NOTIFIED`.
+- Nội dung chọn theo trạng thái thanh toán của đơn (FR-09.6), SMS luôn vừa 1 tin. Kiểm tra bằng `python -m unittest tests.test_notification_templates`.
+- Cấu hình `SMTP_*` và `ESMS_*` trong `.env` (xem `.env.example`). Để trống thì lần gửi được ghi `FAILED` với lỗi `NOT_CONFIGURED`, nghiệp vụ nhập kho vẫn chạy bình thường. Tài khoản eSMS dùng thử chỉ gửi được mẫu đã đăng ký (lỗi 146), khi đó hệ thống tự chuyển sang email.
+- Server tự gửi lại các thông báo `FAILED` mỗi 5 phút, tối đa 3 lần (`NOTIFY_RETRY_*`). Không gửi lại khi khách đã nhận được qua kênh khác.
+- API: `GET /api/v1/preorders/{id}/notifications` (lịch sử gửi, người nhận đã che) và `POST /api/v1/notifications/{id}/resend` (gửi lại ngay một thông báo `FAILED`).
+- Database đã tạo trước ngày 26/11/2026: chạy `database/09_notification_retry.sql`. Database mới tạo từ `01_schema.sql` đã có sẵn các cột này.
+- Integration test: tạo DB `dkat_notify_test` từ `01_schema.sql`, rồi chạy `DKAT_NOTIFY_TEST_DB=1 DB_NAME=dkat_notify_test python -m unittest -v integration_tests.test_notifications_mysql`.
