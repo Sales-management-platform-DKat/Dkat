@@ -131,6 +131,7 @@ class PreorderNotificationMySQLTests(unittest.TestCase):
         self.assertEqual(r.status_code, 200, r.text)
         self.assertEqual(r.json()["result"], "SENT")
         self.assertEqual(r.json()["notification"]["retryCount"], 1)
+        self.assertEqual(self.status(pid), "NOTIFIED")  # BUG-018: reached by the re-send
         again = self.client.post(f"/api/v1/notifications/{row['notification_id']}/resend", headers=self.owner)
         self.assertEqual(again.status_code, 409, again.text)
         self.assertEqual(again.json()["detail"]["code"], "NOTIFICATION_NOT_FAILED")

@@ -57,6 +57,10 @@ async def resend_notification(notification_id: int, *, automatic: bool = False) 
         if not ok and attempt >= settings.NOTIFY_MAX_RETRIES:
             error = f"RETRY_EXHAUSTED: đã gửi lại {attempt} lần vẫn lỗi, dừng tự động. Lỗi cuối: {error}"
             await repository.set_error(notification_id, error)
+        if ok and row["event_type"] in (None, "PREORDER_READY"):
+            # same rule as the first send (preorders/services/notifications.py): the customer has been
+            # reached, so a still-READY order becomes NOTIFIED (BUG-018)
+            await repository.mark_preorder_notified(row["preorder_id"])
         logger.log(
             logging.INFO if ok else logging.WARNING,
             "NOTIFY_RESEND id=%s attempt=%s automatic=%s result=%s error=%s",

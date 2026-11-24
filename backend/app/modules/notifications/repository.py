@@ -107,6 +107,13 @@ async def auto_retry_candidates(max_retries: int, permanent_codes: tuple[str, ..
     return [r["notification_id"] for r in rows]
 
 
+async def mark_preorder_notified(preorder_id: int) -> None:
+    """READY -> NOTIFIED once a notification reached the customer. Only a still-READY order changes:
+    an order fulfilled, cancelled or expired in the meantime keeps its status."""
+    await asyncio.to_thread(_write, "UPDATE preorders SET status = 'NOTIFIED' WHERE preorder_id = :id AND status = 'READY'",
+                            {"id": preorder_id})
+
+
 async def set_error(notification_id: int, error: str) -> None:
     await asyncio.to_thread(_write, "UPDATE notifications SET error_message = :e WHERE notification_id = :id",
                             {"id": notification_id, "e": error})
