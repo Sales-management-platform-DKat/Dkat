@@ -99,6 +99,8 @@ class PreorderNotificationMySQLTests(unittest.TestCase):
         self.assertEqual(sms.await_count, 1)
         self.assertEqual(email.await_count, 1)
         self.assertIn("PD-", sms.await_args.args[1])  # the SMS text carries the pre-order code
+        # eSMS refuses a RequestId reused within 24 h: unique per attempt, even after a database reset
+        self.assertRegex(sms.await_args.kwargs["request_id"], r"^dkat-n\d+-a0-[0-9a-f]{16}$")
         rows = self.rows(pid)
         self.assertEqual([(r["channel"], r["status"], r["event_type"]) for r in rows],
                          [("SMS", "FAILED", "PREORDER_READY"), ("EMAIL", "SENT", "PREORDER_READY")])

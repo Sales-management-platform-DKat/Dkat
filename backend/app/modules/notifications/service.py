@@ -12,6 +12,7 @@ Never raises and never touches the caller's transaction: it opens its own sessio
 caller has committed the pre-order change, otherwise it may read the old data.
 """
 import asyncio
+import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 
@@ -59,6 +60,13 @@ async def _confirm_sms(sms_id: str) -> str | None:
     return None
 
 
+def sms_request_id(notification_id: int, attempt: int = 0) -> str:
+    """eSMS RequestId for one send attempt. eSMS refuses a RequestId seen in the last 24 h (code 124
+    DUPLICATE_REQUEST) across the whole account, so the id must not repeat after a database reset or
+    between two environments sharing the same eSMS keys: notification id + attempt + random part."""
+    return f"dkat-n{notification_id}-a{attempt}-{uuid.uuid4().hex[:16]}"
+
+
 async def _deliver_sms(notification_id: int, phone: str, text: str, request_id: str) -> tuple[bool, str | None]:
     """Send an SMS for an existing PENDING row and record the result on it."""
     try:
@@ -102,7 +110,7 @@ def _split_email(message: str) -> tuple[str, str]:
 async def _try_sms(preorder_id: int, phone: str, text: str, event_type: str) -> tuple[int, bool, str | None]:
     sms_text, _ = prepare_content(text, settings.SMS_UNICODE)  # store exactly what is sent
     notification_id = await repository.insert_pending(preorder_id, "SMS", phone, sms_text or text, event_type)
-    ok, error = await _deliver_sms(notification_id, phone, text, f"notification-{notification_id}")
+    ok, error = await _deliver_sms(notification_id, phone, text, sms_request_id(notification_id))
     return notification_id, ok, error
 
 

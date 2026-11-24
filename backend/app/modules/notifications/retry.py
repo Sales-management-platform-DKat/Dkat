@@ -19,7 +19,7 @@ import logging
 
 from app.core.config import settings
 from app.modules.notifications import repository
-from app.modules.notifications.service import _deliver_email, _deliver_sms, _split_email
+from app.modules.notifications.service import _deliver_email, _deliver_sms, _split_email, sms_request_id
 from app.utils.logger import get_logger
 
 logger = get_logger("app.notifications.retry")
@@ -49,7 +49,7 @@ async def resend_notification(notification_id: int, *, automatic: bool = False) 
         attempt = row["retry_count"] + 1
         if row["channel"] == "SMS":
             # a new RequestId per attempt: eSMS rejects a RequestId already used in the last 24 h
-            ok, error = await _deliver_sms(notification_id, row["recipient"], row["message"], f"notification-{notification_id}-r{attempt}")
+            ok, error = await _deliver_sms(notification_id, row["recipient"], row["message"], sms_request_id(notification_id, attempt))
         else:
             subject, body = _split_email(row["message"])
             ok, error = await _deliver_email(notification_id, row["recipient"], subject, body)

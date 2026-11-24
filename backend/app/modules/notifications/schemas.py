@@ -1,8 +1,8 @@
 """Response bodies of the notification API (camelCase JSON, snake_case attributes)."""
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_serializer
 from pydantic.alias_generators import to_camel
 
 
@@ -24,7 +24,14 @@ class NotificationOut(CamelModel):
     error_message: str | None
     sent_at: datetime | None  # UTC
     last_attempt_at: datetime | None  # UTC
-    created_at: datetime
+    created_at: datetime  # database server time (CURRENT_TIMESTAMP), kept as stored
+
+    @field_serializer("sent_at", "last_attempt_at")
+    def _utc(self, value: datetime | None) -> str | None:
+        """Stored naive in UTC by the notification service: say so, or browsers read them as local time."""
+        if value is None:
+            return None
+        return (value if value.tzinfo else value.replace(tzinfo=timezone.utc)).isoformat().replace("+00:00", "Z")
 
 
 class PreorderNotificationsOut(CamelModel):
