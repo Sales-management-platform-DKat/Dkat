@@ -1,0 +1,10 @@
+$ python -c "from app.db.session import engine; engine.connect()"   # DB_HOST=127.0.0.1, MySQL 8.0.45 local
+sqlalchemy.exc.OperationalError: (pymysql.err.OperationalError) (2003, "Can't connect to MySQL server on '127.0.0.1' ([SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1081))")
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+
+$ python -m scripts.seed  (scripts/seed.py = 0 byte)
+0
+$ python -m scripts.seed_auth
+ImportError: cannot import name 'close_engine' from 'app.db.session' (<qa>\develop\backend\app\db\session.py)
+$ python -m scripts.check_rbac
+ModuleNotFoundError: No module named 'jwt'
