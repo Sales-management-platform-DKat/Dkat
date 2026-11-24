@@ -4,9 +4,12 @@ from types import SimpleNamespace
 
 import certifi
 from dotenv import load_dotenv
-from sqlalchemy.engine import URL
+from sqlalchemy.engine import URL, make_url
 
 load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+
+ENVIRONMENT = os.getenv("DKAT_ENV", os.getenv("APP_ENV", "development")).strip().lower()
+IS_PRODUCTION = ENVIRONMENT == "production"
 
 ADMIN_TOKEN = os.getenv("DKAT_ADMIN_TOKEN", "")
 ALLOW_EMPLOYEE_STOCK = os.getenv("ALLOW_EMPLOYEE_STOCK", "false").strip().lower() in {"1", "true", "yes", "on"}
@@ -37,13 +40,26 @@ _database_fields = {
     "DB_PASSWORD": os.getenv("DB_PASSWORD"),
     "DB_NAME": os.getenv("DB_NAME"),
 }
-_configured_fields = {key for key, value in _database_fields.items() if value}
+_required_database_fields = {"DB_HOST", "DB_PORT", "DB_USER", "DB_NAME"}
+_configured_fields = {key for key, value in _database_fields.items() if value is not None and value.strip()}
+_missing_database_fields = {
+    key for key in _required_database_fields
+    if not (_database_fields[key] and _database_fields[key].strip())
+}
 
-if _configured_fields and len(_configured_fields) != len(_database_fields):
-    missing = ", ".join(sorted(set(_database_fields) - _configured_fields))
+if _configured_fields and _missing_database_fields:
+    missing = ", ".join(sorted(_missing_database_fields))
     raise RuntimeError(f"Thiếu cấu hình database bắt buộc: {missing}")
 
+if _required_database_fields.isdisjoint(_configured_fields) and IS_PRODUCTION and not os.getenv("DKAT_DATABASE_URL", "").strip():
+    raise RuntimeError(
+        "Production requires DB_HOST, DB_PORT, DB_NAME, DB_USER, and DB_PASSWORD "
+        "or a non-SQLite DKAT_DATABASE_URL; SQLite fallback is disabled."
+    )
+
 if _configured_fields:
+    if IS_PRODUCTION and not (_database_fields["DB_PASSWORD"] or "").strip():
+        raise RuntimeError("Production requires a non-empty DB_PASSWORD.")
     DATABASE_URL = URL.create(
         "mysql+pymysql",
         username=_database_fields["DB_USER"],
@@ -60,10 +76,19 @@ if _configured_fields:
     }
 else:
     DATABASE_URL = os.getenv("DKAT_DATABASE_URL", "sqlite:///./dkat.db")
+    if IS_PRODUCTION:
+        try:
+            production_database = make_url(DATABASE_URL)
+        except Exception:
+            raise RuntimeError("Production DKAT_DATABASE_URL is invalid.") from None
+        if production_database.get_backend_name() not in {"mysql", "mariadb"}:
+            raise RuntimeError(
+                "Production requires the MySQL/MariaDB database engine used by this deployment; SQLite fallback is disabled."
+            )
     DATABASE_CONNECT_ARGS = (
         {"check_same_thread": False}
         if DATABASE_URL.startswith("sqlite")
         else {}
     )
 
-settings = SimpleNamespace(is_production=os.getenv("DKAT_ENV", "development").strip().lower() == "production")
+settings = SimpleNamespace(is_production=IS_PRODUCTION)

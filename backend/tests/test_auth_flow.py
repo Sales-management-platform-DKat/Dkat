@@ -95,6 +95,27 @@ class AuthFlowTests(unittest.TestCase):
             json={"username": username, "password": password},
         )
 
+    def test_health_reports_compatible_users_schema(self):
+        response = self.client.get("/health")
+        self.assertEqual(response.status_code, 200, response.text)
+        self.assertEqual(response.json(), {"status": "ok", "database": "up"})
+
+    def test_health_rejects_database_without_user_id_column(self):
+        from sqlalchemy import create_engine
+
+        incompatible = create_engine("sqlite://", connect_args={"check_same_thread": False})
+        with incompatible.begin() as connection:
+            connection.exec_driver_sql("CREATE TABLE users (id INTEGER PRIMARY KEY)")
+        previous_engine = main_module.engine
+        main_module.engine = incompatible
+        try:
+            response = self.client.get("/health")
+            self.assertEqual(response.status_code, 503, response.text)
+            self.assertEqual(response.json()["database"], "unavailable_or_incompatible")
+        finally:
+            main_module.engine = previous_engine
+            incompatible.dispose()
+
     def test_admin_provisions_shop_and_owner_login(self):
         config.ADMIN_TOKEN = ""
         unconfigured = self.client.post("/api/v1/admin/accounts")

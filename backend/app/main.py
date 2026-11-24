@@ -3,6 +3,9 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import CORS_ORIGINS
 from app.db.base import Base
@@ -52,6 +55,14 @@ app.include_router(preorders_router, prefix="/api/v1")
 
 @app.get("/health")
 def health():
-    return {"status": "ok"}
+    try:
+        with engine.connect() as db:
+            db.execute(text("SELECT user_id FROM users LIMIT 0"))
+    except SQLAlchemyError:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "error", "database": "unavailable_or_incompatible"},
+        )
+    return {"status": "ok", "database": "up"}
 
 
