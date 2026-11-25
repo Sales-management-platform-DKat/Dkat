@@ -66,6 +66,7 @@ function RevenueChart({ orders, preorders, period }) {
 }
 
 export default function BusinessAnalytics({ state, branch, role, isDemo }) {
+  useLanguage();
   const [period, setPeriod] = useState('30');
   const [rankBy, setRankBy] = useState('quantity');
   const now = nowDate();
@@ -143,3 +144,4 @@ export default function BusinessAnalytics({ state, branch, role, isDemo }) {
     {role === 'OWNER' && <section className="analytics-panel"><div className="analytics-section-head"><div><h2>So sánh chi nhánh</h2><p>Chủ cửa hàng · dữ liệu cục bộ của bản demo.</p></div></div>{branches.length > 1 && branchTotal > 0 ? <><div className="branch-comparison-chart">{branches.map((item) => <div className="branch-comparison-row" key={item.id}><span>{item.name}</span><div><i style={{ width: `${Math.max(item.amount / Math.max(...branches.map((branchItem) => branchItem.amount), 1) * 100, item.amount ? 2 : 0)}%` }} /></div><b>{money(item.amount)}</b></div>)}</div><div className="analytics-table-wrap"><table><thead><tr><th>Chi nhánh</th><th>Doanh thu</th><th>Tiền đã thu</th><th>Đơn hoàn tất</th><th>Giá trị TB</th><th>Tỷ trọng</th></tr></thead><tbody>{branches.map((item) => <tr key={item.id}><td>{item.name}</td><td>{money(item.amount)}</td><td>{money(item.collected)}</td><td>{item.count}</td><td>{money(item.aov)}</td><td>{branchTotal ? `${(item.amount / branchTotal * 100).toFixed(1)}%` : '—'}</td></tr>)}</tbody></table></div></> : <EmptyReport title="Chưa đủ dữ liệu để so sánh">Cần dữ liệu giao dịch tại ít nhất một chi nhánh để hiển thị biểu đồ so sánh.</EmptyReport>}</section>}
   </div>;
 }
+import { useLanguage } from './i18n';

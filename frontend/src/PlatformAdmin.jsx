@@ -28,6 +28,7 @@ function planName(value) {
 }
 
 export default function PlatformAdmin() {
+  useLanguage();
   const [adminToken, setAdminToken] = useState('');
   const [accounts, setAccounts] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -289,3 +290,4 @@ export default function PlatformAdmin() {
     </main>
   );
 }
+import { useLanguage } from './i18n';

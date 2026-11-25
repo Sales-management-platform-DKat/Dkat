@@ -6,6 +6,13 @@ const apiProxy = {
 };
 
 export default defineConfig({
+  // Use the classic JSX factory so the existing centralized React.createElement
+  // localization hook also receives literal JSX text in the legacy screens.
+  esbuild: {
+    jsx: 'transform',
+    jsxFactory: 'React.createElement',
+    jsxFragment: 'React.Fragment',
+  },
   server: {
     allowedHosts: ['terminal.local', '.trycloudflare.com'],
     proxy: apiProxy,
