@@ -28,7 +28,13 @@ from app.workers.preorder_expiry import run_preorder_expiry
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(bind=engine)
-    yield
+    stop = asyncio.Event()
+    expiry_task = asyncio.create_task(run_preorder_expiry(stop))
+    try:
+        yield
+    finally:
+        stop.set()
+        await expiry_task
 
 
 app = FastAPI(title="DKat API", version="1.0.0", lifespan=lifespan)
