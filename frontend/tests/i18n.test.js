@@ -17,3 +17,9 @@ test('demo amounts use English VND number formatting', () => {
   assert.equal(translate('28.640.000 ₫', 'en'), new Intl.NumberFormat('en-US', { style: 'currency', currency: 'VND' }).format(28640000));
   assert.equal(translate('12,8 triệu', 'en'), '12.8 million');
 });
+
+test('literal English UI copy resolves back to Vietnamese through the shared catalogs', () => {
+  assert.equal(translate('Explore the demo', 'vi'), 'Trải nghiệm bản demo');
+  assert.equal(translate('Overview', 'vi'), 'Tổng quan');
+  assert.equal(translate('Quản lý chi nhánh', 'en'), 'Branch management');
+});

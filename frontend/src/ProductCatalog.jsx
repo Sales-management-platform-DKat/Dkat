@@ -67,6 +67,7 @@ function PreviewOrder({ variant, branchName, quantity, onClose }) {
 }
 
 export function ProductCatalog({ variants, inventory, preorders, branches, branch, setBranch }) {
+  useLanguage();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [category, setCategory] = useState('all');
@@ -128,3 +129,4 @@ export function ProductCatalog({ variants, inventory, preorders, branches, branc
     </main>
   );
 }
+import { useLanguage } from './i18n';

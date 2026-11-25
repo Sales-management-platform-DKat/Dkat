@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { LanguageSwitcher, getLocale } from './i18n';
+import { LanguageSwitcher, getLocale, useLanguage } from './i18n';
 import './landing.css';
 
 const featureItems = [
@@ -176,6 +176,7 @@ function FeatureIllustration({ id }) {
 }
 
 export default function LandingPage({ BrandLogo, go, startDemo, dark, setDark }) {
+  useLanguage();
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {

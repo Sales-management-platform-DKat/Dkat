@@ -11,7 +11,14 @@ const LanguageContext = createContext(null);
 export function translate(value, language = getLanguage()) {
   if (typeof value !== 'string' || !value.trim()) return value;
   const repaired = repairMojibake(value);
-  if (language === 'vi') return catalogs.vi?.[repaired] || repaired;
+  if (language === 'vi') {
+    if (catalogs.vi?.[repaired]) return catalogs.vi[repaired];
+    // The catalogs also contain Vietnamese-source -> English entries. Reverse
+    // those so literal English UI copy is localized even when it was not
+    // written as an explicit translation key in the component.
+    const sourceVietnamese = Object.entries(catalogs.en).find(([, english]) => english === repaired)?.[0];
+    return sourceVietnamese || repaired;
+  }
   const vndAmount = repaired.match(/^([\d.]+)(?:,(\d+))?\s*(?:₫|VND)$/);
   if (vndAmount) {
     const amount = Number(vndAmount[1].replaceAll('.', '') + (vndAmount[2] ? `.${vndAmount[2]}` : ''));
