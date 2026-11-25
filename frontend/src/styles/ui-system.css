@@ -1159,6 +1159,10 @@ input[type='radio']:disabled {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .dashboard-page .stat-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .stat {
     gap: 7px;
     padding: 13px 14px;
@@ -1230,6 +1234,12 @@ input[type='radio']:disabled {
     max-width: 100% !important;
     padding-inline: 14px;
     white-space: normal;
+  }
+}
+
+@media (max-width: 520px) {
+  .dashboard-page .stat-grid {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
