@@ -35,11 +35,11 @@ class ProductCsvMySQLTests(unittest.TestCase):
         cls.roles = []
         for role in ("manager", "staff"):
             name = role + cls.suffix
-            with TestClient(app, base_url="http://testserver/api/v1") as client:
-                r = client.post("/users", headers=cls.owner, json={"username": name, "full_name": role,
+            with TestClient(app) as client:
+                r = client.post("/api/v1/users", headers=cls.owner, json={"username": name, "full_name": role,
                                 "role": role, "password": cls.password})
                 assert r.status_code == 201, r.text
-                r = client.post("/auth/login", json={"username": name + ":" + role, "password": cls.password})
+                r = client.post("/api/v1/auth/login", json={"username": name + ":" + role, "password": cls.password})
                 assert r.status_code == 200, r.text
                 cls.roles.append({"Authorization": "Bearer " + r.json()["access_token"]})
         with engine.begin() as db:
@@ -51,16 +51,21 @@ class ProductCsvMySQLTests(unittest.TestCase):
     @classmethod
     def provision(cls, prefix):
         name = prefix + cls.suffix
-        with TestClient(app, base_url="http://testserver/api/v1") as client:
-            r = client.post("/admin/accounts", headers={"X-Admin-Token": config.ADMIN_TOKEN}, json={
-                "shop_name": name, "plan": "basic", "subscription_months": 12, "owner_username": name, "owner_email": name + "@example.test",
+        with TestClient(app) as client:
+            r = client.post("/api/v1/admin/accounts", headers={"X-Admin-Token": config.ADMIN_TOKEN}, json={
+                "shop_name": name, "plan": "basic", "subscription_months": 12, "owner_email": f"{name}@example.test", "owner_username": name,
                 "owner_full_name": name, "owner_password": cls.password,
             })
             assert r.status_code == 201, r.text
             store = r.json()["shop_id"]
-            r = client.post("/auth/login", json={"username": name, "password": cls.password})
+            r = client.post("/api/v1/auth/login", json={"username": name, "password": cls.password})
             assert r.status_code == 200, r.text
             return store, {"Authorization": "Bearer " + r.json()["access_token"]}, r.json()["user"]["id"]
+
+    def active_branch_ids(self):
+        with engine.connect() as db:
+            return set(db.execute(text("SELECT branch_id FROM branches WHERE store_id=:s AND status='ACTIVE'"),
+                                  {"s": self.store}).scalars())
 
     def setUp(self):
         token = f"{self.suffix}-{next(self.seq)}"
@@ -77,8 +82,8 @@ class ProductCsvMySQLTests(unittest.TestCase):
 
     def submit(self, rows=None, *, content=None, dry=True, status=200, auth=None):
         content = self.csv_bytes([self.row] if rows is None else rows) if content is None else content
-        with TestClient(app, base_url="http://testserver/api/v1") as client:
-            response = client.post("/products/import-csv", params={"dryRun": str(dry).lower()},
+        with TestClient(app) as client:
+            response = client.post("/api/v1/products/import-csv", params={"dryRun": str(dry).lower()},
                                    headers=self.owner if auth is None else auth,
                                    files={"file": ("products.csv", content, "text/csv")})
         self.assertEqual(response.status_code, status, response.text)
@@ -101,14 +106,19 @@ class ProductCsvMySQLTests(unittest.TestCase):
             result = self.submit(content=sample, dry=False, status=201)
         self.assertEqual((product_fn.call_count, variant_fn.call_count), (5, 20))
         self.assertEqual(len(result["rows"]), 20)
-        self.assertEqual(self.snapshot(), tuple(a+b for a,b in zip(before, (2, 5, 3, 20, 38, 40, 0))))
+        # Inventory rows: one zero row per variant for every ACTIVE branch, including the default
+        # branch created at the owner's first login.
+        active = self.active_branch_ids()
+        self.assertEqual(self.snapshot(), tuple(a+b for a,b in zip(before, (2, 5, 3, 20, 38, 20 * len(active), 0))))
         with engine.connect() as db:
             created = db.execute(text("""
                 SELECT DISTINCT p.created_by,i.branch_id,i.quantity FROM inventory i
                 JOIN product_variants v ON v.variant_id=i.variant_id JOIN products p ON p.product_id=v.product_id
                 WHERE v.sku LIKE 'CSV111-%'
             """)).all()
-        self.assertEqual(set(created), {(self.uid, self.branches[0], 0), (self.uid, self.branches[1], 0)})
+        self.assertEqual(set(created), {(self.uid, branch_id, 0) for branch_id in active})
+        self.assertIn(self.branches[0], active)
+        self.assertNotIn(self.branches[2], active)
         before = self.snapshot()
         repeated = self.submit(content=sample, dry=False, status=422)
         self.assertEqual(len(repeated["detail"]["errors"]), 20)
@@ -133,8 +143,8 @@ class ProductCsvMySQLTests(unittest.TestCase):
         # Catalog maintenance is owner + manager (docs/rbac-matrix.md); a dry run writes nothing.
         self.submit(auth=manager, status=200)
         self.submit(auth=staff, status=403)
-        with TestClient(app, base_url="http://testserver/api/v1") as client:
-            r = client.post("/products/import-csv", headers=self.owner)
+        with TestClient(app) as client:
+            r = client.post("/api/v1/products/import-csv", headers=self.owner)
         self.assertEqual(r.status_code, 422)
         self.assertEqual(self.snapshot(), before)
         other = self.submit(auth=self.other_owner, dry=False, status=201)
@@ -146,12 +156,12 @@ class ProductCsvMySQLTests(unittest.TestCase):
         self.assertEqual(self.submit()["errors"][0]["code"], "DUPLICATE_SKU")
 
     def test_existing_category_product_and_typed_attributes_are_reused(self):
-        with TestClient(app, base_url="http://testserver/api/v1") as client:
-            cat = client.post("/categories", headers=self.owner, json={"name": self.row["category"]}).json()["categoryId"]
-            product = client.post("/products", headers=self.owner, json={"name": self.row["product_name"], "categoryId": cat,
+        with TestClient(app) as client:
+            cat = client.post("/api/v1/categories", headers=self.owner, json={"name": self.row["category"]}).json()["categoryId"]
+            product = client.post("/api/v1/products", headers=self.owner, json={"name": self.row["product_name"], "categoryId": cat,
                                   "productCode": self.row["sku"]}).json()["productId"]
             for name, kind in ((self.row["sku"] + "-N", "NUMBER"), (self.row["sku"] + "-B", "BOOLEAN")):
-                r = client.post("/attributes", headers=self.owner, json={"name": name, "dataType": kind})
+                r = client.post("/api/v1/attributes", headers=self.owner, json={"name": name, "dataType": kind})
                 self.assertEqual(r.status_code, 201, r.text)
         row = {**self.row, "attributes": self.row["sku"] + "-N:42.5;" + self.row["sku"] + "-B:TRUE"}
         result = self.submit([row], dry=False, status=201)
@@ -249,8 +259,8 @@ class ProductCsvMySQLTests(unittest.TestCase):
         content = self.csv_bytes([self.row])
         def invoke():
             barrier.wait(timeout=10)
-            with TestClient(app, base_url="http://testserver/api/v1") as client:
-                return client.post("/products/import-csv?dryRun=false", headers=self.owner,
+            with TestClient(app) as client:
+                return client.post("/api/v1/products/import-csv?dryRun=false", headers=self.owner,
                                    files={"file": ("products.csv", content, "text/csv")}).status_code
         with ThreadPoolExecutor(max_workers=2) as pool:
             futures = [pool.submit(invoke) for _ in range(2)]

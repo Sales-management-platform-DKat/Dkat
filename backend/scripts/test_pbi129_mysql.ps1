@@ -17,7 +17,7 @@ $listener = [Net.Sockets.TcpListener]::new([Net.IPAddress]::Loopback, 0)
 $listener.Start()
 $testPort = $listener.LocalEndpoint.Port
 $listener.Stop()
-$envNames = @('DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'DKAT_ADMIN_TOKEN', 'DKAT_FIFO_TEST_DB', 'MYSQL_PWD', 'PYTHONIOENCODING', 'PREORDER_READY_DAYS')
+$envNames = @('DB_HOST', 'DB_SSL_MODE', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'DKAT_ADMIN_TOKEN', 'DKAT_FIFO_TEST_DB', 'MYSQL_PWD', 'PYTHONIOENCODING', 'PREORDER_READY_DAYS')
 $savedEnv = @{}
 foreach ($envName in $envNames) { $savedEnv[$envName] = [Environment]::GetEnvironmentVariable($envName, 'Process') }
 $serverProcess = $null
@@ -70,6 +70,7 @@ VALUES ('LEGACY-PBI129',@legacy_branch,'Legacy before FIFO','0900000000',0,'UNPA
     & $mysqlExe @mysqlArgs "--execute=CREATE USER 'pbi129'@'127.0.0.1' IDENTIFIED BY '$testPassword'; GRANT ALL ON dkat_pbi129_test.* TO 'pbi129'@'127.0.0.1'"
     if ($LASTEXITCODE -ne 0) { throw 'Test user creation failed' }
     $env:DB_HOST = '127.0.0.1'
+    $env:DB_SSL_MODE = 'disabled'  # isolated mysqld uses a self-signed certificate
     $env:DB_PORT = [string]$testPort
     $env:DB_NAME = 'dkat_pbi129_test'
     $env:DB_USER = 'pbi129'

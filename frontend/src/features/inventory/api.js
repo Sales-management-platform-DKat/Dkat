@@ -22,9 +22,13 @@ export function changeInventory(action, payload) {
 }
 
 // Accepts .csv and .xlsx. dryRun=true validates and previews without writing.
-export function importInventoryCsv({ branchId, file, dryRun = false, allowDuplicate = false }) {
+export function importInventoryCsv({ branchId, file, dryRun = false, allowDuplicate = false, signal }) {
+  branchId = Number(branchId);
+  if (!Number.isSafeInteger(branchId) || branchId <= 0) {
+    throw new Error('inventory.branchRequired');
+  }
   const form = new FormData();
   form.append('file', file);
   const params = new URLSearchParams({ branchId: String(branchId), dryRun: String(dryRun), allowDuplicate: String(allowDuplicate) });
-  return apiRequest(`/inventory/import-csv?${params}`, { method: 'POST', body: form });
+  return apiRequest(`/inventory/import-csv?${params}`, { method: 'POST', body: form, signal });
 }

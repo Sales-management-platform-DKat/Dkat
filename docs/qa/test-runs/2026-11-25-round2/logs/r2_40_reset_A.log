@@ -1,0 +1,7 @@
+OK demo database 'dkat_demo' reset in 16s
+  storeId=1  (frontend/.env: VITE_PUBLIC_STORE_ID=1)
+  branches: CN01=1, CN02=2, CN03=3
+  accounts (password DKat@Demo2026): owner01 | manager01:manager | staff01:staff
+  hero product: Áo khoác gió DKat - Đen / M (SKU AK-GIO-DEN-M, variantId=8): out of stock everywhere
+  queue #1: PD-261125-798871CE39AC41F98F5B63E5CE7B5647 Trần Thị Lan (email <email>) WAITING_STOCK at CN01
+  sales history: 74 paid orders over the last 29 days

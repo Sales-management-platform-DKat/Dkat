@@ -1,0 +1,30 @@
+[02:13:37] SEED POST /api/v1/admin/accounts {"shop_name": "DKat QA Develop", "plan": "basic", "subscription_months": 12, "owner_username": "owner01", "owner_full_name": "Chủ cửa hàng QA", "owner_password": "***", "owner_email": "owner01@example.com"}
+    -> 201 (441 ms) {"shop_id": 1, "shop_name": "DKat QA Develop", "owner_username": "owner01", "owner_email": "owner01@example.com", "owner_full_name": "Chủ cửa hàng QA", "plan": "basic", "status": "active", "subscription_status": "ACTIVE", "subscription_expires_at": "2027-11-24T19:13:37", "created_at": "2026-11-24T19:13:37"}
+[02:13:37] SEED POST /api/v1/auth/login {"username": "owner01", "password": "***"}
+    -> 200 (422 ms) {"access_token": "***", "token_type": "bearer", "expires_at": "2026-11-24T19:28:37Z", "user": {"id": 1, "shop_id": 1, "username": "owner01", "email": "owner01@example.com", "full_name": "Chủ cửa hàng QA", "role": "owner", "shop_name": "DKat QA Develop", "plan": "basic", "subscription_expires_at": "2027-11-24T19:13:37"}}
+[02:13:37] SEED POST /api/v1/branches {"branchCode": "CN01", "name": "Chi nhánh Quận 1", "address": "Địa chỉ CN01", "phone": null}
+    -> 201 (415 ms) {"id": 1, "storeId": 1, "branchCode": "CN01", "name": "Chi nhánh Quận 1", "address": "Địa chỉ CN01", "phone": null, "status": "ACTIVE", "createdAt": "2026-11-25T02:13:37", "inventoryRowsCreated": 0}
+[02:13:37] SEED POST /api/v1/branches {"branchCode": "CN02", "name": "Chi nhánh Cầu Giấy", "address": "Địa chỉ CN02", "phone": null}
+    -> 201 (30 ms) {"id": 2, "storeId": 1, "branchCode": "CN02", "name": "Chi nhánh Cầu Giấy", "address": "Địa chỉ CN02", "phone": null, "status": "ACTIVE", "createdAt": "2026-11-25T02:13:37", "inventoryRowsCreated": 0}
+[02:13:37] SEED POST /api/v1/branches {"branchCode": "CN03", "name": "Chi nhánh Hải Châu", "address": "Địa chỉ CN03", "phone": null}
+    -> 201 (35 ms) {"id": 3, "storeId": 1, "branchCode": "CN03", "name": "Chi nhánh Hải Châu", "address": "Địa chỉ CN03", "phone": null, "status": "ACTIVE", "createdAt": "2026-11-25T02:13:37", "inventoryRowsCreated": 0}
+[02:13:38] SEED POST /api/v1/users {"username": "manager01", "full_name": "manager01", "password": "***", "role": "manager", "branch_ids": [1, 2]}
+    -> 201 (505 ms) {"id": 2, "shop_id": 1, "username": "manager01", "email": null, "full_name": "manager01", "role": "manager", "shop_name": "DKat QA Develop", "plan": "basic", "subscription_expires_at": "2027-11-24T19:13:37"}
+[02:13:38] SEED POST /api/v1/users {"username": "staff01", "full_name": "staff01", "password": "***", "role": "staff", "branch_ids": [1]}
+    -> 201 (493 ms) {"id": 3, "shop_id": 1, "username": "staff01", "email": null, "full_name": "staff01", "role": "staff", "shop_name": "DKat QA Develop", "plan": "basic", "subscription_expires_at": "2027-11-24T19:13:37"}
+[02:13:39] SEED POST /api/v1/users {"username": "locked01", "full_name": "locked01", "password": "***", "role": "staff", "branch_ids": [1]}
+    -> 201 (459 ms) {"id": 4, "shop_id": 1, "username": "locked01", "email": null, "full_name": "locked01", "role": "staff", "shop_name": "DKat QA Develop", "plan": "basic", "subscription_expires_at": "2027-11-24T19:13:37"}
+[02:13:39] SEED PATCH /api/v1/users/4/status {"status": "LOCKED"}
+    -> 200 (33 ms) {"id": 4, "store_id": 1, "username": "locked01", "full_name": "locked01", "email": null, "phone": null, "role": "employee", "status": "LOCKED", "created_at": "2026-11-24T19:13:39", "branches": []}
+[02:13:39] SEED POST /api/v1/categories {"name": "Áo thun"}
+    -> 201 (30 ms) {"categoryId": 1, "parentCategoryId": null, "name": "Áo thun", "description": null, "status": "ACTIVE"}
+[02:13:39] SEED POST /api/v1/products {"categoryId": 1, "name": "Áo thun QA", "productCode": "QA-AO-01"}
+    -> 201 (35 ms) {"categoryId": 1, "name": "Áo thun QA", "description": null, "imageUrl": null, "productId": 1, "productCode": "QA-AO-01", "status": "ACTIVE", "createdBy": 1}
+[02:13:39] SEED POST /api/v1/products/1/variants {"sku": "QA-AO-01-S", "variantName": "Size S", "price": "150000", "costPrice": "90000"}
+    -> 201 (41 ms) {"variant_id": 1, "sku": "QA-AO-01-S", "variant_name": "Size S", "price": "150000.00", "barcode": null, "cost_price": "90000.00", "status": "ACTIVE", "attributes": []}
+[02:13:39] SEED POST /api/v1/products/1/variants {"sku": "QA-AO-01-M", "variantName": "Size M", "price": "160000", "costPrice": "90000"}
+    -> 201 (39 ms) {"variant_id": 2, "sku": "QA-AO-01-M", "variant_name": "Size M", "price": "160000.00", "barcode": null, "cost_price": "90000.00", "status": "ACTIVE", "attributes": []}
+[02:13:39] SEED POST /api/v1/products/1/variants {"sku": "QA-AO-01-L", "variantName": "Size L", "price": "170000", "costPrice": "90000"}
+    -> 201 (32 ms) {"variant_id": 3, "sku": "QA-AO-01-L", "variant_name": "Size L", "price": "170000.00", "barcode": null, "cost_price": "90000.00", "status": "ACTIVE", "attributes": []}
+[02:13:39] SEED POST /api/v1/inventory/import {"branchId": 1, "note": "Seed QA", "items": [{"variantId": 1, "quantity": 10}, {"variantId": 2, "quantity": 10}]}
+    -> 201 (90 ms) {"branchId": 1, "movementType": "IMPORT", "reason": null, "items": [{"variantId": 1, "inventoryId": 1, "movementId": 1, "quantityBefore": 0, "quantityChange": 10, "quantityAfter": 10}, {"variantId": 2, "inventoryId": 4, "movementId": 2, "quantityBefore": 0, "quantityChange": 10, "quantityAfter": 10}]}

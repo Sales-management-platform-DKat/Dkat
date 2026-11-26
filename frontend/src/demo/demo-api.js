@@ -4,6 +4,8 @@
 // (localStorage) and never reaches the server or the store database.
 // Response shapes and permission rules mirror the FastAPI backend.
 
+import { DEMO_ATTRIBUTES, DEMO_BRANCHES, DEMO_CATALOG, DEMO_CATEGORIES, DEMO_CUSTOMERS, DEMO_STORE_NAME, DEMO_USERS, demoDescription } from './demo-seed.js';
+
 export const DEMO_STORE_KEY = 'dkat-demo-api-v2';
 const ROLE_USERS = { OWNER: 1, MANAGER: 2, EMPLOYEE: 3 };
 const OPEN_PREORDER = ['WAITING_STOCK', 'READY', 'NOTIFIED'];
@@ -25,44 +27,25 @@ const fold = (value) => String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g,
 function seed() {
   const s = {
     next: { branch: 3, user: 4, category: 4, product: 5, variant: 9, attribute: 3, movement: 1, order: 1, preorder: 1, customer: 3, payment: 1 },
-    store: { id: 1, name: 'DKat Fashion (Demo)' },
-    branches: [
-      { id: 1, storeId: 1, branchCode: 'CN01', name: 'DKat Quận 1', address: '12 Lê Lợi, Quận 1, TP.HCM', phone: '0901000001', status: 'ACTIVE', createdAt: daysAgo(60) },
-      { id: 2, storeId: 1, branchCode: 'CN02', name: 'DKat Cầu Giấy', address: '88 Xuân Thủy, Cầu Giấy, Hà Nội', phone: '0901000002', status: 'ACTIVE', createdAt: daysAgo(30) },
-    ],
-    users: [
-      { id: 1, username: 'demo.owner', full_name: 'Chủ cửa hàng Demo', email: 'owner@demo.dkat', phone: null, role: 'OWNER', status: 'ACTIVE', created_at: daysAgo(60), branchIds: [] },
-      { id: 2, username: 'demo.manager', full_name: 'Quản lý Demo', email: null, phone: '0902000002', role: 'MANAGER', status: 'ACTIVE', created_at: daysAgo(40), branchIds: [1] },
-      { id: 3, username: 'demo.staff', full_name: 'Nhân viên Demo', email: null, phone: '0903000003', role: 'EMPLOYEE', status: 'ACTIVE', created_at: daysAgo(20), branchIds: [1] },
-    ],
-    categories: [
-      { categoryId: 1, parentCategoryId: null, name: 'Áo', description: 'Áo sơ mi, áo thun', status: 'ACTIVE' },
-      { categoryId: 2, parentCategoryId: null, name: 'Quần', description: null, status: 'ACTIVE' },
-      { categoryId: 3, parentCategoryId: null, name: 'Phụ kiện', description: null, status: 'ACTIVE' },
-    ],
-    attributes: [{ attributeId: 1, name: 'Màu sắc', dataType: 'TEXT', status: 'ACTIVE' }, { attributeId: 2, name: 'Kích thước', dataType: 'TEXT', status: 'ACTIVE' }],
+    store: { id: 1, name: DEMO_STORE_NAME },
+    branches: DEMO_BRANCHES.map(({ ageDays, ...branch }) => ({ ...branch, storeId: 1, status: 'ACTIVE', createdAt: daysAgo(ageDays) })),
+    users: DEMO_USERS.map(({ ageDays, ...user }) => ({ ...user, status: 'ACTIVE', created_at: daysAgo(ageDays) })),
+    categories: structuredClone(DEMO_CATEGORIES),
+    attributes: [{ attributeId: 1, name: DEMO_ATTRIBUTES.color, dataType: 'TEXT', status: 'ACTIVE' }, { attributeId: 2, name: DEMO_ATTRIBUTES.size, dataType: 'TEXT', status: 'ACTIVE' }],
     products: [],
     inventory: [],
     movements: [],
     orders: [],
     preorders: [],
-    customers: [
-      { customerId: 1, fullName: 'Nguyễn Minh Anh', phone: '0912345678', email: 'minhanh@example.vn', address: '5 Nguyễn Huệ, Quận 1', note: null },
-      { customerId: 2, fullName: 'Trần Gia Hân', phone: '0987654321', email: null, address: '20 Trần Duy Hưng, Hà Nội', note: 'Khách thân thiết' },
-    ],
+    customers: structuredClone(DEMO_CUSTOMERS),
   };
-  const catalog = [
-    [1, 'Áo sơ mi Oxford', 'ASM', 1, [['Trắng', 'M', 350000, 12], ['Trắng', 'L', 350000, 0], ['Xanh', 'M', 360000, 6]]],
-    [2, 'Áo thun Basic', 'ATB', 1, [['Đen', 'M', 180000, 25], ['Be', 'L', 180000, 0]]],
-    [3, 'Quần jean Slim', 'QJS', 2, [['Xanh đậm', '30', 520000, 8]]],
-    [4, 'Túi tote canvas', 'TTC', 3, [['Kem', 'Free', 150000, 0], ['Đen', 'Free', 150000, 4]]],
-  ];
+  const catalog = DEMO_CATALOG;
   let variantId = 1;
   for (const [productId, name, code, categoryId, variants] of catalog) {
-    const product = { productId, productCode: `${code}-${String(productId).padStart(4, '0')}`, categoryId, name, description: `${name} – sản phẩm mẫu của bản demo.`, imageUrl: null, status: 'ACTIVE', createdBy: 1, variants: [] };
+    const product = { productId, productCode: `${code}-${String(productId).padStart(4, '0')}`, categoryId, name, description: demoDescription(name), imageUrl: null, status: 'ACTIVE', createdBy: 1, variants: [] };
     for (const [color, size, price, stock] of variants) {
       const id = variantId++;
-      product.variants.push({ variant_id: id, sku: `${code}-${fold(color).replace(/\s+/g, '').toUpperCase()}-${size.toUpperCase()}`, variant_name: `${color} / ${size}`, price: String(price), cost_price: String(Math.round(price * 0.55)), barcode: null, status: 'ACTIVE', attributes: [{ attribute_id: 1, name: 'Màu sắc', data_type: 'TEXT', value: color }, { attribute_id: 2, name: 'Kích thước', data_type: 'TEXT', value: size }] });
+      product.variants.push({ variant_id: id, sku: `${code}-${fold(color).replace(/\s+/g, '').toUpperCase()}-${size.toUpperCase()}`, variant_name: `${color} / ${size}`, price: String(price), cost_price: String(Math.round(price * 0.55)), barcode: null, status: 'ACTIVE', attributes: [{ attribute_id: 1, name: DEMO_ATTRIBUTES.color, data_type: 'TEXT', value: color }, { attribute_id: 2, name: DEMO_ATTRIBUTES.size, data_type: 'TEXT', value: size }] });
       s.inventory.push({ branchId: 1, variantId: id, quantity: stock, updatedAt: daysAgo(2) });
       s.inventory.push({ branchId: 2, variantId: id, quantity: Math.max(0, stock - 3), updatedAt: daysAgo(2) });
     }

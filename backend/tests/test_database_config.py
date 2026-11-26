@@ -18,6 +18,8 @@ def load_config(*, environment: str, database_url: str = "", **database_fields: 
         env.pop("DKAT_DATABASE_URL", None)
     for key in DB_ENV_KEYS:
         env[key] = database_fields.get(key, "")
+    # explicit, so a developer's backend/.env (e.g. DB_SSL_MODE=disabled for a local MySQL) cannot change the result
+    env["DB_SSL_MODE"] = database_fields.get("DB_SSL_MODE", "verify")
     return subprocess.run(
         [
             sys.executable,
@@ -72,6 +74,35 @@ class DatabaseConfigTests(unittest.TestCase):
         result = load_config(environment="development")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(result.stdout.strip(), "sqlite")
+
+    def ssl_args(self, environment: str, mode: str | None):
+        env = os.environ.copy()
+        env.update(DKAT_ENV=environment, DB_HOST="127.0.0.1", DB_PORT="3306", DB_NAME="dkat_test",
+                   DB_USER="dkat_app", DB_PASSWORD="test-only-password")
+        env.pop("DKAT_DATABASE_URL", None)
+        env.pop("DB_SSL_MODE", None)
+        if mode is not None:
+            env["DB_SSL_MODE"] = mode
+        return subprocess.run(
+            # backend/.env is ignored here: the test checks the code's own default, not a developer's settings
+            [sys.executable, "-c", "import dotenv; dotenv.load_dotenv = lambda *a, **k: False; "
+                                   "from app.core.config import DATABASE_CONNECT_ARGS as a; print(sorted(a))"],
+            cwd=BACKEND_DIR, env=env, capture_output=True, text=True, check=False,
+        )
+
+    def test_ssl_is_verified_by_default(self):
+        result = self.ssl_args("development", None)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("ssl_verify_identity", result.stdout)
+
+    def test_local_mysql_can_disable_ssl_in_development(self):
+        result = self.ssl_args("development", "disabled")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "['connect_timeout']")
+
+    def test_production_refuses_disabled_ssl_and_unknown_modes(self):
+        self.assertIn("Production requires DB_SSL_MODE=verify", self.ssl_args("production", "disabled").stderr)
+        self.assertIn("DB_SSL_MODE must be", self.ssl_args("development", "off").stderr)
 
 
 if __name__ == "__main__":

@@ -96,7 +96,8 @@ function BranchDetail({ branch, canManage, onClose, onEdit, t, formatDateTime })
   </Drawer>;
 }
 
-export default function BranchesPage({ canManage }) {
+export default function BranchesPage({ canManage, onBranchesChanged }) {
+  const changed = () => { notifyBranchesChanged(); onBranchesChanged?.(); };
   const { t, formatDateTime } = useLanguage();
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -136,7 +137,7 @@ export default function BranchesPage({ canManage }) {
       await setBranchStatus(row.id, deactivate ? 'INACTIVE' : 'ACTIVE');
       notify.success(deactivate ? t('Đã ngừng hoạt động chi nhánh.') : t('Đã kích hoạt chi nhánh.'));
       await reload();
-      notifyBranchesChanged();
+      changed();
     } catch (error) {
       notify.error(error, { title: t('Không đổi được trạng thái chi nhánh') });
     } finally {
@@ -147,7 +148,7 @@ export default function BranchesPage({ canManage }) {
   async function saved(branch) {
     setEditing(null);
     await reload();
-    notifyBranchesChanged();
+    changed();
     if (viewing?.id === branch.id) setViewing(branch);
   }
 

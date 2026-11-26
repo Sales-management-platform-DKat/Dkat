@@ -1,0 +1,26 @@
+PASS  TC-PA-01 Đăng nhập OWNER
+      200, role=owner, cửa hàng=DKat Fashion, chi nhánh=['DKat Quận 1', 'DKat Cầu Giấy', 'DKat Hải Châu']
+PASS  TC-PA-02 Đăng nhập MANAGER (manager01:manager), chỉ CN01 + CN02
+      200, role=manager; tồn kho CN02 -> 200, CN03 -> 403
+PASS  TC-PA-03 Đăng nhập EMPLOYEE (staff01:staff), chỉ CN01, không vào báo cáo
+      200, role=staff; báo cáo -> 403; tồn kho CN02 -> 403
+PASS  TC-PA-04 Đăng nhập sai: thiếu hậu tố vai trò / sai mật khẩu
+      staff01 (thiếu :staff) -> 401; owner01 sai mật khẩu -> 401; /auth/me không token -> 401
+PASS  TC-PA-05 Tạo đơn POS chờ thanh toán: Áo thun Trắng/M x2 + Mũ x1, khách Nguyễn Minh Anh
+      201 DK-261125-8B4E7B11083A40FC909B0A081C7AB30C PENDING tổng 547000.00, khách Nguyễn Minh Anh; tồn AT-COT-M CN01 vẫn 11
+PASS  TC-PA-06 Xác nhận thanh toán tiền mặt 547.000 đ, trừ kho đúng
+      200 PAID; tồn CN01 AT-COT-M 11 -> 9, MU-LT-DEN 10 -> 9
+PASS  TC-PA-07 Xác nhận thanh toán sai số tiền bị từ chối
+      tổng 449000.00, trả 400000 -> 422 {"detail":{"code":"PAYMENT_AMOUNT_MISMATCH","expectedAmount":"449000.00"}}; đơn vẫn PENDING; tồn QJ-SLIM-31 10
+PASS  TC-PA-08 Không đủ tồn: Quần jean Xanh/30 x11 (tồn 10), Áo khoác Đen/M x1 (tồn 0)
+      QJ-SLIM-30 x11 -> 409 {"detail":{"code":"OUT_OF_STOCK","items":[{"variantId":5,"available":10}]}}; AK-GIO-DEN-M x1 -> 409 {"detail":{"code":"OUT_OF_STOCK","items":[{"variantId":8,"available":0}]}}; tồn QJ-SLIM-30 10
+PASS  TC-PA-09 Hủy đơn PENDING: Quần jean Xanh/29 x1, tồn không đổi, không thu tiền được nữa
+      hủy -> 200 CANCELLED lý do 'Khách đổi ý'; thu tiền sau khi hủy -> 409; tồn QJ-SLIM-29 11
+PASS  TC-PA-10 Hoàn đơn đã thanh toán (OWNER): đơn 547.000 đ của TC-PA-06, hoàn kho
+      200 đơn CANCELLED, thanh toán ['REFUNDED']; hoàn lần 2 -> 409; tồn AT-COT-M 9 -> 11, MU-LT-DEN 9 -> 10
+PASS  TC-PA-11 EMPLOYEE không hoàn được đơn đã thanh toán
+      staff01 hoàn -> 403 {"detail":"Bạn không có quyền thực hiện thao tác này."}; đơn vẫn PAID
+PASS  TC-PA-12 Phân quyền theo chi nhánh khi bán hàng
+      staff01 tạo đơn CN02 -> 403; staff01 xem đơn CN02 -> 403; manager01 tạo đơn CN03 -> 403; manager01 tạo đơn CN02 -> 201
+
+12/12 test case đạt

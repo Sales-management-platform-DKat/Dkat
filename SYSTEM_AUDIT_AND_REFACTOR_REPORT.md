@@ -178,3 +178,16 @@ cd frontend; npm run dev   # http://127.0.0.1:5173/#/login
 # Kiểm thử MySQL tự động:
 backend\scripts\test_system_audit_mysql.ps1
 ```
+
+---
+
+## 14. Ghi chú sau khi hợp nhất với `master` (2026-11-27)
+
+Trong lúc làm việc, `master` đã có thêm 30 commit (thông báo SMS/email, catalog công khai qua API thật, trang Cài đặt, chi nhánh mặc định, i18n và ESLint). Nhánh này đã merge `origin/master` và giải quyết 16 file xung đột:
+
+- **Giữ của `master`**: `ProductCatalog.jsx` / `LiveCatalog` (catalog công khai dùng API thật, thay cho bản demo của tôi), lifespan trong `main.py` (job hết hạn đặt trước + vòng gửi lại thông báo), các integration test đã được sửa trên `master`.
+- **Giữ bản viết lại của nhánh này** cho các trang Chi nhánh, Nhân viên, Sản phẩm, Kho, POS, Đặt trước, đồng thời đưa vào tính năng mới của `master`: lịch sử/gửi lại thông báo đơn đặt trước, callback `onBranchesChanged`, `branchState`, tham số `signal` khi import, định dạng lỗi `{"error": …}`.
+- `main.jsx`: lấy bản của `master` rồi áp lại phần demo dùng chung màn hình thật, Customer Display, toast dùng chung (hàm `notify` cũ đi qua cùng hệ thống toast).
+- Bổ sung 375 bản dịch tiếng Anh vào `src/locales/en.json` để đạt kiểm tra i18n của `master`; dữ liệu mẫu demo tách sang `src/demo/demo-seed.js`.
+
+Kết quả sau merge: backend unit 62/62, frontend `npm test` 56/56, `npm run check:i18n` 0 lỗi, `eslint` 0 lỗi (15 cảnh báo), build thành công. MySQL: kiểm thử audit 8/8; PBI 99/110/111/121/122 đạt, PBI 129 đạt 35/36 (bài migration cần script riêng); default branch 3/3, notifications 4/4. `test_public_catalog_mysql` lỗi 2/5 **giống hệt trên `master` gốc** (đã kiểm tra trên worktree sạch): chi nhánh mặc định tự tạo khiến test thấy thêm một chi nhánh. Lỗi có sẵn trên `master`, cần nhóm sửa test hoặc tính năng.

@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLanguage } from '../../i18n/index.js';
-import { confirmAction, notify } from '../../components/overlay/index.js';
+import { confirmAction, Dialog, notify } from '../../components/overlay/index.js';
 import { EmptyState, ErrorState, LoadingState, StatusBadge } from '../../components/states.jsx';
 import { listInventory } from '../inventory/api.js';
 import { listProducts } from '../products/api.js';
-import { cancelPreorder, confirmPreorderPayment, fulfillPreorder, listPreorders } from './api.js';
+import { cancelPreorder, confirmPreorderPayment, fulfillPreorder, listPreorderNotifications, listPreorders, resendNotification } from './api.js';
 import PreorderDialog from './PreorderDialog.jsx';
 
 const STATUS_OPTIONS = ['WAITING_STOCK', 'READY', 'NOTIFIED', 'FULFILLED', 'CANCELLED', 'EXPIRED'];
@@ -78,6 +78,32 @@ export default function PreordersPage({ branchId, branch }) {
     }
   }
 
+  // SMS/email history for a pre-order (FR-09), with resend for failed deliveries.
+  const [history, setHistory] = useState(null);
+  async function openHistory(row) {
+    setHistory({ row, items: null });
+    try {
+      const data = await listPreorderNotifications(row.preorderId);
+      setHistory({ row, items: data.items || [] });
+    } catch (error) {
+      setHistory({ row, items: [] });
+      notify.error(error, { title: t('Không tải được lịch sử thông báo') });
+    }
+  }
+  async function resend(item) {
+    setBusyId(history.row.preorderId);
+    try {
+      await resendNotification(item.id);
+      notify.success(t('Đã gửi lại thông báo.'));
+    } catch (error) {
+      notify.error(error, { title: t('Không gửi lại được thông báo') });
+    } finally {
+      setBusyId(null);
+    }
+    await openHistory(history.row);
+    await reload();
+  }
+
   const counts = useMemo(() => rows.reduce((acc, row) => ({ ...acc, [row.status]: (acc[row.status] || 0) + 1 }), {}), [rows]);
 
   return <>
@@ -102,11 +128,24 @@ export default function PreordersPage({ branchId, branch }) {
                 <td><div className="actions wrap">
                   {row.paymentStatus === 'UNPAID' && !['CANCELLED', 'EXPIRED'].includes(row.status) && <button className="link" disabled={busyId === row.preorderId} onClick={() => act(row, 'pay')}>{t('Ghi nhận tiền')}</button>}
                   {['READY', 'NOTIFIED'].includes(row.status) && row.paymentStatus === 'PAID' && <button className="link" disabled={busyId === row.preorderId} onClick={() => act(row, 'fulfill')}>{t('Xác nhận giao')}</button>}
+                  {row.status !== 'WAITING_STOCK' && <button className="link" onClick={() => openHistory(row)}>{t('Thông báo')}</button>}
                   {!['CANCELLED', 'FULFILLED', 'EXPIRED'].includes(row.status) && <button className="link danger" disabled={busyId === row.preorderId} onClick={() => act(row, 'cancel')}>{t('Hủy')}</button>}
                 </div></td>
               </tr>)}
             </tbody></table></div>}
     </section>
+    {history && <Dialog open size="lg" title={t('Lịch sử thông báo')} description={`${history.row.preorderCode} · ${history.row.customer?.fullName || ''}`} onClose={() => setHistory(null)}>
+      {history.items === null ? <LoadingState /> : !history.items.length ? <p className="muted">{t('Chưa có lần gửi nào.')}</p>
+        : <div className="table-wrap"><table><thead><tr>{['Kênh', 'Người nhận', 'Trạng thái', 'Thời gian', 'Ghi chú', ''].map((x) => <th key={x}>{t(x)}</th>)}</tr></thead><tbody>
+          {history.items.map((n) => <tr key={n.id}>
+            <td>{n.channel === 'SMS' ? 'SMS' : 'Email'}</td><td>{n.recipient}</td>
+            <td>{n.status === 'SENT' ? t('Đã gửi') : n.status === 'FAILED' ? t('Lỗi') : t('Đang gửi')}{n.retryCount ? ` · ${t('gửi lại')} ${n.retryCount}` : ''}</td>
+            <td>{formatDateTime(new Date(n.sentAt || n.lastAttemptAt || n.createdAt))}</td>
+            <td><small className="muted">{n.errorMessage ? n.errorMessage.split(':')[0] : ''}</small></td>
+            <td>{n.canResend && <button className="link" disabled={busyId === history.row.preorderId} onClick={() => resend(n)}>{t('Gửi lại')}</button>}</td>
+          </tr>)}
+        </tbody></table></div>}
+    </Dialog>}
     {creating && branch && <PreorderDialog branch={branch} options={options} t={t} formatCurrency={formatCurrency}
       onClose={() => setCreating(false)} onCreated={() => reload()} />}
   </>;

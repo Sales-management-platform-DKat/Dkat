@@ -10,6 +10,8 @@ export class ApiError extends Error {
     this.code = code;
     this.detail = detail;
     this.fieldErrors = fieldErrors;
+    // Older screens read `error.details`.
+    this.details = detail;
   }
 }
 
@@ -89,6 +91,10 @@ function fieldName(issue) {
 }
 
 export function errorFromResponse(status, data) {
+  // Also accept the {"error": {code, message, details}} envelope used by some endpoints.
+  if (data?.error && typeof data.error === 'object' && data.detail === undefined) {
+    data = { detail: { code: data.error.code, message: data.error.message }, details: data.error.details };
+  }
   const detail = data?.detail ?? data;
   const fieldErrors = {};
   let message = '';

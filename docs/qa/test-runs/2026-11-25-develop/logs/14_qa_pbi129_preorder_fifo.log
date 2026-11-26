@@ -1,0 +1,70 @@
+<qa>\develop\backend\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+test_acceptance_6_for_A2_B3_C4_fifo_ties_and_repeat_is_idempotent (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_acceptance_6_for_A2_B3_C4_fifo_ties_and_repeat_is_idempotent) ... ok
+test_api_lifespan_runs_scheduled_expiry (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_api_lifespan_runs_scheduled_expiry) ... FAIL
+test_batch_hook_handles_unsorted_duplicate_variants_and_is_idempotent (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_batch_hook_handles_unsorted_duplicate_variants_and_is_idempotent) ... ok
+test_batch_second_variant_failure_rolls_back_first_variant (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_batch_second_variant_failure_rolls_back_first_variant) ... ok
+test_branch_and_variant_queues_are_independent (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_branch_and_variant_queues_are_independent) ... ok
+test_cancel_paid_order_transfers_its_holds_to_next_fifo_order (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_cancel_paid_order_transfers_its_holds_to_next_fifo_order) ... ok
+test_cancel_releases_partially_reserved_waiting_order (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_cancel_releases_partially_reserved_waiting_order) ... ok
+test_configured_deadline_and_repeat_do_not_extend_ready_times (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_configured_deadline_and_repeat_do_not_extend_ready_times) ... ok
+test_earlier_created_time_takes_priority_over_lower_id (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_earlier_created_time_takes_priority_over_lower_id) ... ok
+test_empty_queue_and_zero_fund_do_not_change_stock (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_empty_queue_and_zero_fund_do_not_change_stock) ... ok
+test_expiry_pages_due_orders_without_refunding_and_preserves_future_and_legacy_orders (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_expiry_pages_due_orders_without_refunding_and_preserves_future_and_legacy_orders) ... ok
+test_failed_post_commit_hook_keeps_import_committed_but_no_partial_allocation (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_failed_post_commit_hook_keeps_import_committed_but_no_partial_allocation) ... ok
+test_import_notifies_after_commits_and_uses_persisted_channel_statuses (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_import_notifies_after_commits_and_uses_persisted_channel_statuses) ... ok
+test_input_and_transaction_contract_are_explicit (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_input_and_transaction_contract_are_explicit) ... ok
+test_item_sql_failure_rolls_back_earlier_allocations_and_ready_states (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_item_sql_failure_rolls_back_earlier_allocations_and_ready_states) ... ok
+test_missing_inventory_is_zero_without_inserting_rows (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_missing_inventory_is_zero_without_inserting_rows) ... ok
+test_multiple_lines_require_all_variants_before_ready (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_multiple_lines_require_all_variants_before_ready) ... ok
+test_notification_cannot_overwrite_closed_orders (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_notification_cannot_overwrite_closed_orders) ... ok
+test_open_reservations_are_protected_and_closed_reservations_are_excluded (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_open_reservations_are_protected_and_closed_reservations_are_excluded) ... ok
+test_opposite_line_order_across_orders_does_not_deadlock (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_opposite_line_order_across_orders_does_not_deadlock) ... ok
+test_partial_allocations_only_top_up_missing_quantity (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_partial_allocations_only_top_up_missing_quantity) ... ok
+test_ready_sql_failure_rolls_back_all_changes (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_ready_sql_failure_rolls_back_all_changes) ... ok
+test_release_failure_rolls_back_cancel_and_expiry_and_can_be_retried (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_release_failure_rolls_back_cancel_and_expiry_and_can_be_retried) ... ok
+test_reservations_above_stock_abort_without_new_allocations (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_reservations_above_stock_abort_without_new_allocations) ... ok
+test_stock_csv_accepts_thousand_distinct_rows_and_rejects_next_row (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_stock_csv_accepts_thousand_distinct_rows_and_rejects_next_row) ... ok
+test_stock_csv_combines_duplicate_skus_and_notifies_after_fifo_commits (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_stock_csv_combines_duplicate_skus_and_notifies_after_fifo_commits) ... ok
+test_stock_csv_errors_keep_physical_line_numbers_and_reject_entire_batch (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_stock_csv_errors_keep_physical_line_numbers_and_reject_entire_batch) ... ok
+test_stock_csv_rejects_file_limits_and_malformed_structure (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_stock_csv_rejects_file_limits_and_malformed_structure) ... ok
+test_stock_csv_reports_group_overflow_and_rechecks_locked_quantity (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_stock_csv_reports_group_overflow_and_rechecks_locked_quantity) ... ok
+test_stock_csv_rolls_back_late_movement_error_and_skips_fifo (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_stock_csv_rolls_back_late_movement_error_and_skips_fifo) ... ok
+test_stock_csv_sample_twenty_lines_preview_and_import (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_stock_csv_sample_twenty_lines_preview_and_import) ... ok
+test_stock_import_existing_hook_and_expiry_visible_in_detail (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_stock_import_existing_hook_and_expiry_visible_in_detail) ... ok
+test_two_expiry_workers_release_and_allocate_once (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_two_expiry_workers_release_and_allocate_once) ... ok
+test_two_workers_same_variant_do_not_allocate_twice (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_two_workers_same_variant_do_not_allocate_twice) ... ok
+test_upgrade_migration_preserves_legacy_ready_order (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_upgrade_migration_preserves_legacy_ready_order) ... ERROR
+test_workers_for_different_variants_mark_multi_line_order_ready_once (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_workers_for_different_variants_mark_multi_line_order_ready_once) ... ok
+
+======================================================================
+ERROR: test_upgrade_migration_preserves_legacy_ready_order (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_upgrade_migration_preserves_legacy_ready_order)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>\develop\backend\integration_tests_qa\test_preorder_fifo_mysql.py", line 461, in test_upgrade_migration_preserves_legacy_ready_order
+    """)).one()
+          ~~~^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\result.py", line 1116, in one
+    return self._only_one_row(
+           ~~~~~~~~~~~~~~~~~~^
+        raise_for_second_row=True, raise_for_none=True, scalar=False
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "lib/sqlalchemy/engine/_result_cy.py", line 539, in sqlalchemy.engine._result_cy.BaseResultInternal._only_one_row
+sqlalchemy.exc.NoResultFound: No row was found when one was required
+
+======================================================================
+FAIL: test_api_lifespan_runs_scheduled_expiry (integration_tests_qa.test_preorder_fifo_mysql.PreorderFifoMySQLTests.test_api_lifespan_runs_scheduled_expiry)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>\develop\backend\integration_tests_qa\test_preorder_fifo_mysql.py", line 602, in test_api_lifespan_runs_scheduled_expiry
+    self.assertTrue(completed.wait(timeout=5))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 36 tests in 29.217s
+
+FAILED (failures=1, errors=1)
+FIFO acceptance passed: stock=6; A=2 READY, B=3 READY, C=1 WAITING_STOCK; rerun allocates 0.

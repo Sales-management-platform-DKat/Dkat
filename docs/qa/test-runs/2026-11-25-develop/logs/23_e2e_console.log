@@ -1,0 +1,33 @@
+PASS TC-DEV-AUTH-01 | 200, role=owner, token=có
+PASS TC-DEV-AUTH-02 | 401 {"detail":"Tên đăng nhập hoặc mật khẩu không chính xác, hoặc tài khoản đã hết hạn."}
+PASS TC-DEV-AUTH-03 | 200 role=manager; 200 role=staff
+PASS TC-DEV-AUTH-04 | 401 {"detail":"Tên đăng nhập hoặc mật khẩu không chính xác, hoặc tài khoản đã hết hạn."}
+PASS TC-DEV-AUTH-05 | 401 {"detail":"Vui lòng đăng nhập."}
+PASS TC-DEV-AUTH-06 | logout 204; /auth/me sau logout 401
+PASS TC-DEV-AUTH-07 | 403 {"detail":"Bạn không có quyền thực hiện thao tác này."}
+PASS TC-DEV-AUTH-08 | 403 {"detail":"Bạn không có quyền truy cập chi nhánh này."}
+PASS TC-DEV-AUTH-09 | 403 {"detail":"Bạn không có quyền truy cập chi nhánh này."}
+PASS TC-DEV-POS-01 | 201, status=PENDING, total=290000.00
+PASS TC-DEV-POS-02 | 422 {"detail":{"code":"PAYMENT_AMOUNT_MISMATCH","expectedAmount":"290000.00"}}; đơn PENDING
+PASS TC-DEV-POS-03 | 200, status=PAID, tồn Size S=8
+PASS TC-DEV-POS-04 | 409 {"detail":{"code":"OUT_OF_STOCK","items":[{"variantId":2,"available":10}]}}
+PASS TC-DEV-POS-05 | 200, status=CANCELLED, tồn Size M=10
+PASS TC-DEV-POS-06 | 200, status=CANCELLED, payments=['REFUNDED'], tồn Size S=10
+FAIL TC-DEV-POS-09 | createdAt=2026-11-25T02:13:45Z, paidAt=2026-11-24T19:13:45Z, lệch 7.0 giờ
+PASS TC-DEV-POS-07 | 403 {"detail":"Bạn không có quyền truy cập chi nhánh này."}
+PASS TC-DEV-POS-08 | khách 201 id=1; quick-search 200 thấy=True; đơn 201 customerId=1
+PASS TC-DEV-PRE-01 | 201, status=WAITING_STOCK, mã=PD-261125-720B8441517D4173AEC75D266457FA97
+PASS TC-DEV-PRE-02 | 409 {"code":"VARIANT_IN_STOCK","message":"Hàng còn đủ; vui lòng mua trực tiếp tại cửa hàng","details":[{"field":"items.0.quantity","reason":"Biến thể 1 cò
+FAIL TC-DEV-PRE-03 | 422 {"code":"INVALID_PREORDER","message":"Đơn đặt trước không hợp lệ","details":[{"field":"customer","reason":"Field required"},{"field":"customerName","reason":"Extra inputs are not permitted"},{"field":
+PASS TC-DEV-PRE-04 | staff 200 thấy đơn=True; manager CN03 403
+PASS TC-DEV-PRE-05 | import 201; đơn READY, expiresAt=2026-12-01T19:13:46Z
+FAIL TC-DEV-NOTI-01 | đơn READY; notifications trong API=[]; trong DB=0 dòng
+FAIL TC-DEV-NOTI-02 | Có 1 dòng: NotificationService unavailable for 1 ready preorders (ImportError)
+FAIL TC-DEV-NOTI-03 | 404 {"detail":"Not Found"}; 404 {"detail":"Not Found"}
+PASS TC-DEV-PRE-06 | 200, paymentStatus=PAID 
+PASS TC-DEV-PRE-07 | fulfillment 200; fulfill 200 status=FULFILLED; tồn Size L=3
+PASS TC-DEV-PRE-08 | tạo 201; hủy 200 status=CANCELLED
+PASS TC-DEV-PRE-09 | mã trả về: [201, 201, 201, 201, 201, 429]
+FAIL TC-DEV-PRE-10 | Job không được khởi động: lifespan chỉ gọi create_all; test lifespan FAIL (completed.wait timeout)
+
+25/31 passed

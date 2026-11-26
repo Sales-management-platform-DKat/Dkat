@@ -1,0 +1,301 @@
+<qa>/develop/backend/.venv/Lib/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+FFFEFFFFFFFFFFFFFFFFFFFF
+======================================================================
+ERROR: test_inactive_missing_and_cross_store_entities (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_inactive_missing_and_cross_store_entities)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 205, in test_inactive_missing_and_cross_store_entities
+    self.assertEqual(self.submit(expected, body).json()["code"], code)
+                     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^
+KeyError: 'code'
+
+======================================================================
+FAIL: test_concurrent_creations_same_phone_reuse_one_profile (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_concurrent_creations_same_phone_reuse_one_profile)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 300, in test_concurrent_creations_same_phone_reuse_one_profile
+    customer_ids = [future.result(timeout=30) for future in futures]
+                    ~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "<home>/AppData/Local/Programs/Python/Python314/Lib/concurrent/futures/_base.py", line 450, in result
+    return self.__get_result()
+           ~~~~~~~~~~~~~~~~~^^
+  File "<home>/AppData/Local/Programs/Python/Python314/Lib/concurrent/futures/_base.py", line 395, in __get_result
+    raise self._exception
+  File "<home>/AppData/Local/Programs/Python/Python314/Lib/concurrent/futures/thread.py", line 86, in run
+    result = ctx.run(self.task)
+  File "<home>/AppData/Local/Programs/Python/Python314/Lib/concurrent/futures/thread.py", line 73, in run
+    return fn(*args, **kwargs)
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 291, in invoke
+    self.assertEqual(response.status_code, 201, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 201 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_concurrent_requests_same_ip_are_limited_across_connections (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_concurrent_requests_same_ip_are_limited_across_connections)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 274, in test_concurrent_requests_same_ip_are_limited_across_connections
+    self.assertEqual(sorted(results), [201] * 5 + [429] * 3)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [404, 404, 404, 404, 404, 404, 404, 404] != [201, 201, 201, 201, 201, 429, 429, 429]
+
+First differing element 0:
+404
+201
+
+- [404, 404, 404, 404, 404, 404, 404, 404]
++ [201, 201, 201, 201, 201, 429, 429, 429]
+
+======================================================================
+FAIL: test_fully_available_line_rejects_the_entire_batch (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_fully_available_line_rejects_the_entire_batch)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 164, in test_fully_available_line_rejects_the_entire_batch
+    self.assertEqual(self.submit(409).json()["code"], "VARIANT_IN_STOCK")
+                     ~~~~~~~~~~~^^^^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 409 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_invalid_items_untrusted_prices_and_malformed_json (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_invalid_items_untrusted_prices_and_malformed_json)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 153, in test_invalid_items_untrusted_prices_and_malformed_json
+    self.submit(422, body, ip=f"2001:db8::{next(self.ips):x}")
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 422 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_malformed_json_requests_are_also_rate_limited (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_malformed_json_requests_are_also_rate_limited)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 280, in test_malformed_json_requests_are_also_rate_limited
+    self.assertEqual(response.status_code, 422)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 422
+
+======================================================================
+FAIL: test_missing_customer_fields_and_invalid_phone_email (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_missing_customer_fields_and_invalid_phone_email) (field='customer.fullName')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 138, in test_missing_customer_fields_and_invalid_phone_email
+    result = self.submit(422, body, ip=f"2001:db8::{next(self.ips):x}").json()
+             ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 422 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_missing_customer_fields_and_invalid_phone_email (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_missing_customer_fields_and_invalid_phone_email) (field='customer.phone')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 138, in test_missing_customer_fields_and_invalid_phone_email
+    result = self.submit(422, body, ip=f"2001:db8::{next(self.ips):x}").json()
+             ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 422 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_missing_customer_fields_and_invalid_phone_email (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_missing_customer_fields_and_invalid_phone_email) (field='customer.address')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 138, in test_missing_customer_fields_and_invalid_phone_email
+    result = self.submit(422, body, ip=f"2001:db8::{next(self.ips):x}").json()
+             ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 422 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_missing_customer_fields_and_invalid_phone_email (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_missing_customer_fields_and_invalid_phone_email) (field='customer.fullName')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 138, in test_missing_customer_fields_and_invalid_phone_email
+    result = self.submit(422, body, ip=f"2001:db8::{next(self.ips):x}").json()
+             ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 422 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_missing_customer_fields_and_invalid_phone_email (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_missing_customer_fields_and_invalid_phone_email) (field='customer.address')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 138, in test_missing_customer_fields_and_invalid_phone_email
+    result = self.submit(422, body, ip=f"2001:db8::{next(self.ips):x}").json()
+             ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 422 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_missing_customer_fields_and_invalid_phone_email (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_missing_customer_fields_and_invalid_phone_email) (field='customer.phone')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 138, in test_missing_customer_fields_and_invalid_phone_email
+    result = self.submit(422, body, ip=f"2001:db8::{next(self.ips):x}").json()
+             ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 422 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_missing_customer_fields_and_invalid_phone_email (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_missing_customer_fields_and_invalid_phone_email) (field='customer.phone')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 138, in test_missing_customer_fields_and_invalid_phone_email
+    result = self.submit(422, body, ip=f"2001:db8::{next(self.ips):x}").json()
+             ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 422 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_missing_customer_fields_and_invalid_phone_email (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_missing_customer_fields_and_invalid_phone_email) (field='customer.phone')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 138, in test_missing_customer_fields_and_invalid_phone_email
+    result = self.submit(422, body, ip=f"2001:db8::{next(self.ips):x}").json()
+             ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 422 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_missing_customer_fields_and_invalid_phone_email (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_missing_customer_fields_and_invalid_phone_email) (field='customer.email')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 138, in test_missing_customer_fields_and_invalid_phone_email
+    result = self.submit(422, body, ip=f"2001:db8::{next(self.ips):x}").json()
+             ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 422 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_missing_inventory_does_not_create_inventory (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_missing_inventory_does_not_create_inventory)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 195, in test_missing_inventory_does_not_create_inventory
+    self.submit(body={**self.body, "items": [{"variantId": variant, "quantity": 1}]})
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 201 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_optional_email_and_zero_price (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_optional_email_and_zero_price)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 238, in test_optional_email_and_zero_price
+    result = self.submit(body=body).json()
+             ~~~~~~~~~~~^^^^^^^^^^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 201 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_partial_stock_and_open_reservations (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_partial_stock_and_open_reservations)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 182, in test_partial_stock_and_open_reservations
+    self.submit()
+    ~~~~~~~~~~~^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 201 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_phone_normalization_reuses_profile_but_keeps_order_snapshots (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_phone_normalization_reuses_profile_but_keeps_order_snapshots)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 215, in test_phone_normalization_reuses_profile_but_keeps_order_snapshots
+    first = self.submit().json()
+            ~~~~~~~~~~~^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 201 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_public_creation_snapshots_and_no_stock_or_payment_changes (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_public_creation_snapshots_and_no_stock_or_payment_changes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 105, in test_public_creation_snapshots_and_no_stock_or_payment_changes
+    result = self.submit().json()
+             ~~~~~~~~~~~^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 201 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_rollback_includes_customer_header_and_all_items (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_rollback_includes_customer_header_and_all_items)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 313, in test_rollback_includes_customer_header_and_all_items
+    self.assertEqual(self.submit(503).json()["code"], "DATABASE_UNAVAILABLE")
+                     ~~~~~~~~~~~^^^^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 503 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_rolling_rate_limit_and_untrusted_forwarded_header (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_rolling_rate_limit_and_untrusted_forwarded_header)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 252, in test_rolling_rate_limit_and_untrusted_forwarded_header
+    result = self.submit(429, headers={"X-Forwarded-For": "1.2.3.4"})
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 429 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_same_phone_in_different_stores_is_independent (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_same_phone_in_different_stores_is_independent)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 228, in test_same_phone_in_different_stores_is_independent
+    first = self.submit().json()
+            ~~~~~~~~~~~^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 201 : {"detail":"Not Found"}
+
+======================================================================
+FAIL: test_total_overflow_is_rejected_before_any_writes (integration_tests.test_public_preorders_mysql.PublicPreorderMySQLTests.test_total_overflow_is_rejected_before_any_writes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 246, in test_total_overflow_is_rejected_before_any_writes
+    self.assertEqual(self.submit(422).json()["code"], "INVALID_PREORDER")
+                     ~~~~~~~~~~~^^^^^
+  File "<qa>/develop/backend/integration_tests/test_public_preorders_mysql.py", line 92, in submit
+    self.assertEqual(response.status_code, expected, response.text)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 404 != 422 : {"detail":"Not Found"}
+
+----------------------------------------------------------------------
+Ran 16 tests in 2.971s
+
+FAILED (failures=23, errors=1)

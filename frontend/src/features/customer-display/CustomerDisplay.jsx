@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { apiAssetUrl } from '../../auth-client.js';
+import { useLanguage } from '../../i18n/index.js';
 import { createDisplaySubscriber } from './channel.js';
 import './customer-display.css';
 
@@ -22,11 +23,12 @@ function Logo() {
 }
 
 function Welcome({ connected }) {
+  const { t } = useLanguage();
   return <section className="cd-welcome">
     <img className="cd-welcome-mark" src={`${BRAND_URL}dkat-icon-light.svg`} alt="" />
-    <h1>Chào mừng quý khách</h1>
-    <p>Vui lòng chờ nhân viên quét sản phẩm. Thông tin đơn hàng sẽ hiển thị tại đây.</p>
-    {!connected && <small className="cd-waiting">Đang chờ kết nối với quầy thanh toán…</small>}
+    <h1>{t('Chào mừng quý khách')}</h1>
+    <p>{t('Vui lòng chờ nhân viên quét sản phẩm. Thông tin đơn hàng sẽ hiển thị tại đây.')}</p>
+    {!connected && <small className="cd-waiting">{t('Đang chờ kết nối với quầy thanh toán…')}</small>}
   </section>;
 }
 
@@ -41,6 +43,7 @@ function ItemImage({ src, name }) {
  * has no controls that could change an order.
  */
 export default function CustomerDisplay() {
+  const { t } = useLanguage();
   const [state, setState] = useState(null);
   const [connected, setConnected] = useState(false);
   const [paidHold, setPaidHold] = useState(null);
@@ -73,24 +76,24 @@ export default function CustomerDisplay() {
     <header className="cd-header">
       <div className="cd-brand"><Logo /><div><b>{view?.storeName || 'DKat'}</b>{view?.branchName && <span>{view.branchName}</span>}</div></div>
       <div className="cd-header-right">
-        <span className={`cd-connection${connected ? ' is-on' : ''}`} title={connected ? 'Đã kết nối quầy' : 'Mất kết nối quầy'}><i />{connected ? 'Đang phục vụ' : 'Chờ kết nối'}</span>
+        <span className={`cd-connection${connected ? ' is-on' : ''}`} title={t(connected ? 'Đã kết nối quầy' : 'Mất kết nối quầy')}><i />{t(connected ? 'Đang phục vụ' : 'Chờ kết nối')}</span>
         <Clock />
-        <button type="button" className="cd-fullscreen" onClick={() => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.())} aria-label="Toàn màn hình">⛶</button>
+        <button type="button" className="cd-fullscreen" onClick={() => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen?.())} aria-label={t('Toàn màn hình')}>⛶</button>
       </div>
     </header>
 
     {status === 'idle' || (status !== 'paid' && !view?.items?.length) ? <Welcome connected={connected} />
       : status === 'paid' ? <section className="cd-paid" role="status">
         <span className="cd-paid-icon" aria-hidden="true">✓</span>
-        <h1>Thanh toán thành công</h1>
+        <h1>{t('Thanh toán thành công')}</h1>
         <p className="cd-paid-total">{money(view.total)}</p>
-        {view.change > 0 && <p className="cd-paid-change">Tiền thừa trả khách: <b>{money(view.change)}</b></p>}
-        {view.orderCode && <p className="cd-paid-code">Mã đơn hàng: <b>{view.orderCode}</b></p>}
-        <p className="cd-thanks">Cảm ơn quý khách và hẹn gặp lại!</p>
+        {view.change > 0 && <p className="cd-paid-change">{t('Tiền thừa trả khách')}: <b>{money(view.change)}</b></p>}
+        {view.orderCode && <p className="cd-paid-code">{t('Mã đơn hàng')}: <b>{view.orderCode}</b></p>}
+        <p className="cd-thanks">{t('Cảm ơn quý khách và hẹn gặp lại!')}</p>
       </section>
         : <main className="cd-main">
-          <section className="cd-items" aria-label="Sản phẩm đang mua">
-            <div className="cd-items-head"><span>Sản phẩm</span><span>SL</span><span>Đơn giá</span><span>Thành tiền</span></div>
+          <section className="cd-items" aria-label={t('Sản phẩm đang mua')}>
+            <div className="cd-items-head"><span>{t('Sản phẩm')}</span><span>{t('SL')}</span><span>{t('Đơn giá')}</span><span>{t('Thành tiền')}</span></div>
             <ol ref={listRef}>{view.items.map((item) => <li key={item.key} className="cd-item">
               <ItemImage src={item.imageUrl} name={item.name} />
               <div className="cd-item-name"><b>{item.name}</b>{item.variantName && <small>{item.variantName}</small>}</div>
@@ -100,20 +103,20 @@ export default function CustomerDisplay() {
             </li>)}</ol>
           </section>
           <aside className="cd-summary" aria-live="polite">
-            {status === 'paying' && <div className="cd-paying"><i aria-hidden="true" />Đang thanh toán{view.paymentMethod ? ` · ${METHODS[view.paymentMethod] || view.paymentMethod}` : ''}</div>}
+            {status === 'paying' && <div className="cd-paying"><i aria-hidden="true" />{t('Đang thanh toán')}{view.paymentMethod ? ` · ${t(METHODS[view.paymentMethod] || view.paymentMethod)}` : ''}</div>}
             <dl>
-              <div><dt>Số lượng</dt><dd>{view.itemCount} sản phẩm</dd></div>
-              <div><dt>Tổng tiền hàng</dt><dd>{money(view.subtotal)}</dd></div>
-              <div className="cd-discount"><dt>Giảm giá</dt><dd>{view.discount ? `− ${money(view.discount)}` : money(0)}</dd></div>
+              <div><dt>{t('Số lượng')}</dt><dd>{view.itemCount} {t('sản phẩm')}</dd></div>
+              <div><dt>{t('Tổng tiền hàng')}</dt><dd>{money(view.subtotal)}</dd></div>
+              <div className="cd-discount"><dt>{t('Giảm giá')}</dt><dd>{view.discount ? `− ${money(view.discount)}` : money(0)}</dd></div>
             </dl>
-            <div className="cd-grand"><span>{status === 'paying' ? 'Quý khách cần thanh toán' : 'Tổng thanh toán'}</span><strong>{money(view.total)}</strong></div>
+            <div className="cd-grand"><span>{t(status === 'paying' ? 'Quý khách cần thanh toán' : 'Tổng thanh toán')}</span><strong>{money(view.total)}</strong></div>
             {view.tendered != null && <dl className="cd-cash">
-              <div><dt>Khách đưa</dt><dd>{money(view.tendered)}</dd></div>
-              <div><dt>Tiền thừa</dt><dd>{view.change != null ? money(view.change) : '—'}</dd></div>
+              <div><dt>{t('Khách đưa')}</dt><dd>{money(view.tendered)}</dd></div>
+              <div><dt>{t('Tiền thừa')}</dt><dd>{view.change != null ? money(view.change) : '—'}</dd></div>
             </dl>}
-            {view.orderCode && <p className="cd-order-code">Mã đơn: {view.orderCode}</p>}
+            {view.orderCode && <p className="cd-order-code">{t('Mã đơn')}: {view.orderCode}</p>}
           </aside>
         </main>}
-    <footer className="cd-footer">Cảm ơn quý khách đã mua sắm · Powered by DKat</footer>
+    <footer className="cd-footer">{t('Cảm ơn quý khách đã mua sắm')} · Powered by DKat</footer>
   </div>;
 }

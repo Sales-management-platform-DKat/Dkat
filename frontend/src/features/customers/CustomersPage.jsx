@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useLanguage } from '../../i18n/index.js';
+import { errorMessage, useLanguage } from '../../i18n/index.js';
 import { createCustomer, getCustomerPurchaseHistory, listCustomers, updateCustomer } from './api.js';
 
 const emptyForm = { fullName: '', phone: '', email: '', address: '', note: '' };
@@ -51,7 +51,7 @@ export default function CustomersPage({ canEdit = true }) {
       setCustomers(Array.isArray(result) ? result : []);
     } catch (cause) {
       setCustomers([]);
-      setError(cause.message || t('Không tải được danh sách khách hàng.'));
+      setError(errorMessage(cause, 'Không tải được danh sách khách hàng.'));
     } finally {
       setLoading(false);
     }
@@ -71,10 +71,10 @@ export default function CustomersPage({ canEdit = true }) {
       if (editing?.customerId) await updateCustomer(editing.customerId, payload);
       else await createCustomer(payload);
       setEditing(null);
-      setNotice(t('Đã lưu khách hàng.'));
+      setNotice('Đã lưu khách hàng.');
       await reload();
     } catch (cause) {
-      setError(cause.message || t('Không lưu được khách hàng.'));
+      setError(errorMessage(cause, 'Không lưu được khách hàng.'));
     } finally {
       setBusy(false);
     }
@@ -89,7 +89,7 @@ export default function CustomersPage({ canEdit = true }) {
       const result = await getCustomerPurchaseHistory(customer.customerId);
       setHistory(Array.isArray(result) ? result : []);
     } catch (cause) {
-      setError(cause.message || t('Không tải được lịch sử mua.'));
+      setError(errorMessage(cause, 'Không tải được lịch sử mua.'));
     } finally {
       setHistoryLoading(false);
     }
@@ -101,8 +101,8 @@ export default function CustomersPage({ canEdit = true }) {
       <button className="btn primary" onClick={() => { setNotice(''); setEditing({}); }}>{t('+ Thêm khách hàng')}</button>
       <span className="muted small" aria-live="polite">{t('Khách hàng')}: {customers.length}</span>
     </div>
-    {error && <div className="notice error-state" role="alert">{error}</div>}
-    {notice && <div className="notice success-state" role="status">{notice}</div>}
+    {error && <div className="notice error-state" role="alert">{t(error)}</div>}
+    {notice && <div className="notice success-state" role="status">{t(notice)}</div>}
     <section className="panel">
       {loading ? <p className="muted" role="status">{t('Đang tải khách hàng…')}</p> : customers.length === 0 ? <div className="empty"><h3>{t('Chưa có khách hàng')}</h3><p>{query ? t('Thử từ khóa tìm kiếm khác.') : t('Khách hàng được tạo sẽ hiển thị tại đây.')}</p></div> :
         <div className="table-wrap"><table><thead><tr><th>{t('Khách hàng')}</th><th>{t('Điện thoại')}</th><th>{t('Email')}</th><th>{t('Số đơn')}</th><th>{t('Tổng đã mua')}</th><th>{t('Thao tác')}</th></tr></thead><tbody>

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from './ConfirmDialog.jsx';
 import { dismissToast, subscribeToasts } from './toast.js';
+import { translate } from '../../i18n/index.js';
 
 export function Toaster() {
   const [items, setItems] = useState([]);
@@ -54,7 +55,7 @@ function ToastCard({ item }) {
         <strong>{item.title}{item.repeat > 1 && <span className="dk-toast-repeat"> ×{item.repeat}</span>}</strong>
         <p>{item.message}</p>
       </div>
-      <button type="button" aria-label="Đóng thông báo" onClick={close}>×</button>
+      <button type="button" aria-label={translate('Đóng thông báo')} onClick={close}>×</button>
     </article>
   );
 }

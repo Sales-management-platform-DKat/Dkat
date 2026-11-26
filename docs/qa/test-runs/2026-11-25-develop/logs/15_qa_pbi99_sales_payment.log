@@ -1,0 +1,23 @@
+<qa>\develop\backend\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+test_all_methods_snapshots_ledger_and_exactly_once (integration_tests_qa.test_sales_payment_mysql.SalesPaymentMySQLTests.test_all_methods_snapshots_ledger_and_exactly_once) ... ok
+test_amount_and_payload_validation (integration_tests_qa.test_sales_payment_mysql.SalesPaymentMySQLTests.test_amount_and_payload_validation) ... ok
+test_auth_branch_and_store_scope (integration_tests_qa.test_sales_payment_mysql.SalesPaymentMySQLTests.test_auth_branch_and_store_scope) ... ok
+test_cancelled_order_cannot_be_paid (integration_tests_qa.test_sales_payment_mysql.SalesPaymentMySQLTests.test_cancelled_order_cannot_be_paid) ... ok
+test_closed_reservations_do_not_block_sale (integration_tests_qa.test_sales_payment_mysql.SalesPaymentMySQLTests.test_closed_reservations_do_not_block_sale) ... ok
+test_missing_inventory_is_zero_stock (integration_tests_qa.test_sales_payment_mysql.SalesPaymentMySQLTests.test_missing_inventory_is_zero_stock) ... ok
+test_only_available_stock_can_be_sold (integration_tests_qa.test_sales_payment_mysql.SalesPaymentMySQLTests.test_only_available_stock_can_be_sold) ... ok
+test_open_reservations_are_protected_even_above_physical_stock (integration_tests_qa.test_sales_payment_mysql.SalesPaymentMySQLTests.test_open_reservations_are_protected_even_above_physical_stock) ... ok
+test_payment_and_cancellation_are_serialized (integration_tests_qa.test_sales_payment_mysql.SalesPaymentMySQLTests.test_payment_and_cancellation_are_serialized) ... ok
+test_reverse_line_order_uses_consistent_inventory_lock_order (integration_tests_qa.test_sales_payment_mysql.SalesPaymentMySQLTests.test_reverse_line_order_uses_consistent_inventory_lock_order) ... ok
+test_rollback_on_real_database_failure_at_every_stage (integration_tests_qa.test_sales_payment_mysql.SalesPaymentMySQLTests.test_rollback_on_real_database_failure_at_every_stage) ... ok
+test_shortage_rolls_back_all_lines_and_retry (integration_tests_qa.test_sales_payment_mysql.SalesPaymentMySQLTests.test_shortage_rolls_back_all_lines_and_retry) ... ok
+test_stock_endpoints_still_work_without_order_references (integration_tests_qa.test_sales_payment_mysql.SalesPaymentMySQLTests.test_stock_endpoints_still_work_without_order_references) ... ok
+test_two_orders_compete_for_last_item (integration_tests_qa.test_sales_payment_mysql.SalesPaymentMySQLTests.test_two_orders_compete_for_last_item) ... ok
+test_two_payments_same_order_only_one_succeeds (integration_tests_qa.test_sales_payment_mysql.SalesPaymentMySQLTests.test_two_payments_same_order_only_one_succeeds) ... ok
+test_zero_total_can_be_paid (integration_tests_qa.test_sales_payment_mysql.SalesPaymentMySQLTests.test_zero_total_can_be_paid) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 13.519s
+
+OK

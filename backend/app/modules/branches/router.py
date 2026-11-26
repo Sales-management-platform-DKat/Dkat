@@ -13,6 +13,7 @@ from app.core.permissions import (
     require_owner,
 )
 from app.db.session import engine, get_db
+from app.modules.branches.defaults import create_zero_inventory_rows
 from app.modules.branches.schemas import (
     BranchCreatedOut,
     BranchIn,
@@ -136,17 +137,7 @@ def create_branch(body: BranchIn, actor: Owner) -> BranchCreatedOut:
                 },
             )
             branch_id = result.lastrowid
-            inventory_rows = db.execute(
-                text("""
-                    INSERT INTO inventory (branch_id, variant_id, quantity)
-                    SELECT :branch_id, v.variant_id, 0
-                    FROM product_variants v
-                    JOIN products p ON p.product_id = v.product_id
-                    LEFT JOIN inventory i ON i.branch_id = :branch_id AND i.variant_id = v.variant_id
-                    WHERE p.store_id = :store_id AND v.status = 'ACTIVE' AND i.inventory_id IS NULL
-                """),
-                {"branch_id": branch_id, "store_id": actor.store_id},
-            ).rowcount or 0
+            inventory_rows = create_zero_inventory_rows(db, branch_id, actor.store_id)
             row = db.execute(
                 text("""
                     SELECT branch_id, store_id, branch_code, name, address, phone, status, created_at

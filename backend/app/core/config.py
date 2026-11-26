@@ -68,7 +68,15 @@ if _configured_fields:
         port=int(_database_fields["DB_PORT"]),
         database=_database_fields["DB_NAME"],
     )
-    DATABASE_CONNECT_ARGS = {
+    # DB_SSL_MODE=verify (default): TLS with certificate + host name check (TiDB Cloud / production).
+    # DB_SSL_MODE=disabled: plain connection for a local MySQL with its self-signed certificate (BUG-008).
+    # Production refuses "disabled".
+    DB_SSL_MODE = os.getenv("DB_SSL_MODE", "verify").strip().lower()
+    if DB_SSL_MODE not in {"verify", "disabled"}:
+        raise RuntimeError("DB_SSL_MODE must be 'verify' or 'disabled'")
+    if DB_SSL_MODE == "disabled" and IS_PRODUCTION:
+        raise RuntimeError("Production requires DB_SSL_MODE=verify.")
+    DATABASE_CONNECT_ARGS = {"connect_timeout": 10} if DB_SSL_MODE == "disabled" else {
         "ssl_ca": os.getenv("DB_SSL_CA", certifi.where()),
         "ssl_verify_cert": True,
         "ssl_verify_identity": True,
@@ -91,4 +99,51 @@ else:
         else {}
     )
 
-settings = SimpleNamespace(is_production=IS_PRODUCTION)
+def _env_str(name: str, default: str = "") -> str:
+    return os.getenv(name, default).strip()
+
+
+def _env_float(name: str, default: float) -> float:
+    try:
+        return float(os.getenv(name, str(default)))
+    except ValueError:
+        raise ValueError(f"{name} must be a number") from None
+
+
+def _env_bool(name: str, default: bool) -> bool:
+    return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}
+
+
+settings = SimpleNamespace(
+    is_production=IS_PRODUCTION,
+    PREORDER_READY_DAYS=PREORDER_READY_DAYS,
+    # ---- Pre-order notifications (FR-09). Empty SMTP_HOST / ESMS keys = channel not configured:
+    # the send is recorded as FAILED with NOT_CONFIGURED and never breaks the business flow.
+    SMTP_HOST=_env_str("SMTP_HOST"),
+    SMTP_PORT=int(_env_float("SMTP_PORT", 587)),
+    SMTP_SECURITY=_env_str("SMTP_SECURITY", "starttls").lower(),  # starttls | ssl | none
+    SMTP_USERNAME=_env_str("SMTP_USERNAME"),
+    SMTP_PASSWORD=_env_str("SMTP_PASSWORD"),  # Gmail: 16-character App Password
+    SMTP_FROM_EMAIL=_env_str("SMTP_FROM_EMAIL"),
+    SMTP_FROM_NAME=_env_str("SMTP_FROM_NAME", "DKat"),
+    SMTP_TIMEOUT_SECONDS=_env_float("SMTP_TIMEOUT_SECONDS", 10.0),
+    EMAIL_TEST_TO=_env_str("EMAIL_TEST_TO"),
+    ESMS_API_KEY=_env_str("ESMS_API_KEY"),
+    ESMS_SECRET_KEY=_env_str("ESMS_SECRET_KEY"),
+    ESMS_BRANDNAME=_env_str("ESMS_BRANDNAME", "Baotrixemay"),
+    ESMS_SMS_TYPE=_env_str("ESMS_SMS_TYPE", "2"),
+    ESMS_SANDBOX=_env_bool("ESMS_SANDBOX", False),
+    ESMS_CALLBACK_URL=_env_str("ESMS_CALLBACK_URL"),
+    ESMS_BASE_URL=_env_str("ESMS_BASE_URL", "https://rest.esms.vn/MainService.svc/json"),
+    SMS_UNICODE=_env_bool("SMS_UNICODE", False),
+    SMS_MAX_PARTS=int(_env_float("SMS_MAX_PARTS", 3)),
+    SMS_TIMEOUT_SECONDS=_env_float("SMS_TIMEOUT_SECONDS", 10.0),
+    SMS_TEST_TO=_env_str("SMS_TEST_TO"),
+    NOTIFY_SMS_CONFIRM_SECONDS=_env_float("NOTIFY_SMS_CONFIRM_SECONDS", 30.0),
+    NOTIFY_SMS_POLL_SECONDS=_env_float("NOTIFY_SMS_POLL_SECONDS", 5.0),
+    STORE_CONTACT_PHONE=_env_str("STORE_CONTACT_PHONE"),
+    NOTIFY_RETRY_ENABLED=_env_bool("NOTIFY_RETRY_ENABLED", True),
+    NOTIFY_RETRY_INTERVAL_SECONDS=_env_float("NOTIFY_RETRY_INTERVAL_SECONDS", 300.0),
+    NOTIFY_MAX_RETRIES=int(_env_float("NOTIFY_MAX_RETRIES", 3)),
+    NOTIFY_RETRY_BATCH=int(_env_float("NOTIFY_RETRY_BATCH", 50)),
+)

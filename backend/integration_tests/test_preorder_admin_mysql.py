@@ -29,13 +29,13 @@ class PreorderAdminMySQLTests(unittest.TestCase):
         cls.other_store, cls.other_owner, _ = cls.provision("other")
         cls.members = {}
         for name, role in (("manager", "manager"), ("staff", "staff"), ("unassigned", "staff")):
-            with TestClient(app, base_url="http://testserver/api/v1") as client:
-                r = client.post("/users", headers=cls.owner, json={
+            with TestClient(app) as client:
+                r = client.post("/api/v1/users", headers=cls.owner, json={
                     "username": name + cls.suffix, "full_name": name, "role": role, "password": cls.password,
                 })
                 assert r.status_code == 201, r.text
                 user_id = r.json()["id"]
-                r = client.post("/auth/login", json={"username": name + cls.suffix + ":" + role, "password": cls.password})
+                r = client.post("/api/v1/auth/login", json={"username": name + cls.suffix + ":" + role, "password": cls.password})
                 assert r.status_code == 200, r.text
                 cls.members[name] = ({"Authorization": "Bearer " + r.json()["access_token"]}, user_id)
         with engine.begin() as db:
@@ -64,14 +64,14 @@ class PreorderAdminMySQLTests(unittest.TestCase):
     @classmethod
     def provision(cls, prefix):
         name = prefix + cls.suffix
-        with TestClient(app, base_url="http://testserver/api/v1") as client:
-            r = client.post("/admin/accounts", headers={"X-Admin-Token": config.ADMIN_TOKEN}, json={
-                "shop_name": name, "plan": "basic", "subscription_months": 12, "owner_username": name, "owner_email": name + "@example.test",
+        with TestClient(app) as client:
+            r = client.post("/api/v1/admin/accounts", headers={"X-Admin-Token": config.ADMIN_TOKEN}, json={
+                "shop_name": name, "plan": "basic", "subscription_months": 12, "owner_email": f"{name}@example.test", "owner_username": name,
                 "owner_full_name": name, "owner_password": cls.password,
             })
             assert r.status_code == 201, r.text
             store = r.json()["shop_id"]
-            r = client.post("/auth/login", json={"username": name, "password": cls.password})
+            r = client.post("/api/v1/auth/login", json={"username": name, "password": cls.password})
             assert r.status_code == 200, r.text
             return store, {"Authorization": "Bearer " + r.json()["access_token"]}, r.json()["user"]["id"]
 
@@ -87,7 +87,7 @@ class PreorderAdminMySQLTests(unittest.TestCase):
                 db.execute(text("UPDATE product_variants SET price=:price WHERE variant_id=:v"), {"price": price, "v": variant})
 
     def request(self, method, path, expected=200, auth=None, body=None, params=None):
-        with TestClient(app, base_url="http://testserver/api/v1") as client:
+        with TestClient(app) as client:
             r = client.request(method, path, headers=self.owner if auth is None else auth, json=body, params=params)
         self.assertEqual(r.status_code, expected, r.text)
         return r.json()
@@ -103,8 +103,8 @@ class PreorderAdminMySQLTests(unittest.TestCase):
         if zero:
             with engine.begin() as db:
                 db.execute(text("UPDATE product_variants SET price=0 WHERE product_id=:p"), {"p": self.product})
-        with TestClient(app, base_url="http://testserver/api/v1", client=(f"2001:db8:121::{sequence:x}", 50000)) as client:
-            r = client.post("/preorders", json=body)
+        with TestClient(app, client=(f"2001:db8:121::{sequence:x}", 50000)) as client:
+            r = client.post("/api/v1/preorders", json=body)
         self.assertEqual(r.status_code, 201, r.text)
         order = r.json()
         with engine.begin() as db:
@@ -113,7 +113,7 @@ class PreorderAdminMySQLTests(unittest.TestCase):
         return order
 
     def pay(self, order, expected=200, method="CASH", amount=None, auth=None):
-        return self.request("POST", f"/preorders/{order['preorderId']}/confirm-payment", expected, auth, {
+        return self.request("POST", f"/api/v1/preorders/{order['preorderId']}/confirm-payment", expected, auth, {
             "paymentMethod": method, "amount": order["totalAmount"] if amount is None else amount,
         })
 
@@ -156,8 +156,8 @@ class PreorderAdminMySQLTests(unittest.TestCase):
                      {"paymentMethod": "CASH", "amount": "-1"}, {"paymentMethod": "CASH", "amount": "NaN"},
                      {"paymentMethod": "CASH", "amount": "1.001"},
                      {"paymentMethod": "CASH", "amount": "46.75", "confirmedBy": self.owner_id}):
-            self.request("POST", f"/preorders/{order['preorderId']}/confirm-payment", 422, body=body)
-        detail = self.request("GET", f"/preorders/{order['preorderId']}")
+            self.request("POST", f"/api/v1/preorders/{order['preorderId']}/confirm-payment", 422, body=body)
+        detail = self.request("GET", f"/api/v1/preorders/{order['preorderId']}")
         self.assertEqual((detail["paymentStatus"], detail["payments"]), ("UNPAID", []))
 
     def test_zero_total_can_be_recorded(self):
@@ -167,30 +167,30 @@ class PreorderAdminMySQLTests(unittest.TestCase):
     def test_all_private_routes_require_auth_and_do_not_use_public_rate_limit(self):
         order = self.order()
         for auth in ({}, {"Authorization": "Bearer invalid"}):
-            self.request("GET", "/preorders", 401, auth)
-            self.request("GET", f"/preorders/{order['preorderId']}", 401, auth)
+            self.request("GET", "/api/v1/preorders", 401, auth)
+            self.request("GET", f"/api/v1/preorders/{order['preorderId']}", 401, auth)
             self.pay(order, 401, auth=auth)
         for _ in range(8):
-            self.request("GET", "/preorders", params={"keyword": self.tag})
+            self.request("GET", "/api/v1/preorders", params={"keyword": self.tag})
 
     def test_branch_and_store_scope_for_list_detail_and_payment(self):
         own, outside = self.order(), self.order(branch=self.branches[1])
         for role in ("manager", "staff"):
             auth, uid = self.members[role]
-            orders = self.request("GET", "/preorders", auth=auth, params={"keyword": self.tag})
+            orders = self.request("GET", "/api/v1/preorders", auth=auth, params={"keyword": self.tag})
             self.assertIn(own["preorderId"], [row["preorderId"] for row in orders])
             self.assertNotIn(outside["preorderId"], [row["preorderId"] for row in orders])
             self.assertTrue(all(row["branchId"] == self.branch for row in orders))
-            self.request("GET", "/preorders", 403, auth, params={"branchId": self.branches[1]})
-            self.request("GET", f"/preorders/{outside['preorderId']}", 403, auth)
+            self.request("GET", "/api/v1/preorders", 403, auth, params={"branchId": self.branches[1]})
+            self.request("GET", f"/api/v1/preorders/{outside['preorderId']}", 403, auth)
             self.pay(outside, 403, auth=auth)
             order = self.order()
             self.assertEqual(self.pay(order, auth=auth)["payments"][0]["confirmedBy"], uid)
         for order in (own, outside):
-            self.request("GET", f"/preorders/{order['preorderId']}", 404, self.other_owner)
+            self.request("GET", f"/api/v1/preorders/{order['preorderId']}", 404, self.other_owner)
             self.pay(order, 404, auth=self.other_owner)
-        self.assertEqual(self.request("GET", "/preorders", auth=self.other_owner), [])
-        self.assertEqual(self.request("GET", "/preorders", auth=self.members["unassigned"][0]), [])
+        self.assertEqual(self.request("GET", "/api/v1/preorders", auth=self.other_owner), [])
+        self.assertEqual(self.request("GET", "/api/v1/preorders", auth=self.members["unassigned"][0]), [])
         self.pay(own, 403, auth=self.members["unassigned"][0])
 
     def test_fifo_pagination_filters_search_and_stable_ties(self):
@@ -199,30 +199,30 @@ class PreorderAdminMySQLTests(unittest.TestCase):
             db.execute(text("UPDATE preorders SET created_at='2026-01-02 00:00:00' WHERE preorder_id IN (:a,:b)"),
                        {"a": first["preorderId"], "b": second["preorderId"]})
             db.execute(text("UPDATE preorders SET created_at='2026-01-01 00:00:00' WHERE preorder_id=:p"), {"p": older["preorderId"]})
-        rows = self.request("GET", "/preorders", params={"keyword": self.tag})
+        rows = self.request("GET", "/api/v1/preorders", params={"keyword": self.tag})
         self.assertEqual([row["preorderId"] for row in rows], [older["preorderId"], first["preorderId"], second["preorderId"]])
         self.assertEqual(len(rows[0]["items"]), 2)
         self.assertEqual(rows[0]["customer"]["fullName"], self.tag)
-        page = self.request("GET", "/preorders", params={"keyword": self.tag, "page": 2, "size": 1})
+        page = self.request("GET", "/api/v1/preorders", params={"keyword": self.tag, "page": 2, "size": 1})
         self.assertEqual(page[0]["preorderId"], first["preorderId"])
         for params, expected in (({"status": "READY"}, second), ({"paymentStatus": "PAID"}, second)):
-            matches = self.request("GET", "/preorders", params={"keyword": self.tag, **params})
+            matches = self.request("GET", "/api/v1/preorders", params={"keyword": self.tag, **params})
             self.assertEqual([row["preorderId"] for row in matches], [expected["preorderId"]])
-        self.assertEqual(self.request("GET", "/preorders", params={"keyword": first["preorderCode"]})[0]["preorderId"], first["preorderId"])
+        self.assertEqual(self.request("GET", "/api/v1/preorders", params={"keyword": first["preorderCode"]})[0]["preorderId"], first["preorderId"])
         phone = "+84" + first["customer"]["phone"][1:]
-        self.assertEqual(self.request("GET", "/preorders", params={"keyword": phone})[0]["preorderId"], first["preorderId"])
+        self.assertEqual(self.request("GET", "/api/v1/preorders", params={"keyword": phone})[0]["preorderId"], first["preorderId"])
 
     def test_keyword_wildcards_are_literal_and_query_validation(self):
         order = self.order()
         code = "PD-" + self.tag + "-%_!"
         with engine.begin() as db:
             db.execute(text("UPDATE preorders SET preorder_code=:code WHERE preorder_id=:p"), {"code": code, "p": order["preorderId"]})
-        found = self.request("GET", "/preorders", params={"keyword": code})
+        found = self.request("GET", "/api/v1/preorders", params={"keyword": code})
         self.assertEqual([row["preorderId"] for row in found], [order["preorderId"]])
         for params in ({"status": "UNKNOWN"}, {"paymentStatus": "SUCCESS"}, {"page": 0}, {"size": 101}, {"branchId": 0}):
-            self.request("GET", "/preorders", 422, params=params)
-        self.request("GET", "/preorders/0", 422)
-        self.request("GET", "/preorders/9223372036854775807", 404)
+            self.request("GET", "/api/v1/preorders", 422, params=params)
+        self.request("GET", "/api/v1/preorders/0", 422)
+        self.request("GET", "/api/v1/preorders/9223372036854775807", 404)
 
     def test_detail_contains_snapshots_payments_fulfillment_and_notifications(self):
         order = self.order()
@@ -261,7 +261,7 @@ class PreorderAdminMySQLTests(unittest.TestCase):
         order = self.order()
         with engine.begin() as db:
             db.execute(text("UPDATE preorders SET customer_id=NULL,customer_address=NULL WHERE preorder_id=:p"), {"p": order["preorderId"]})
-        detail = self.request("GET", f"/preorders/{order['preorderId']}")
+        detail = self.request("GET", f"/api/v1/preorders/{order['preorderId']}")
         self.assertIsNone(detail["customerId"])
         self.assertIsNone(detail["customer"]["address"])
         self.assertEqual((detail["payments"], detail["fulfillment"], detail["notifications"]), ([], None, []))
@@ -281,14 +281,14 @@ class PreorderAdminMySQLTests(unittest.TestCase):
         barrier = Barrier(2)
         def invoke():
             barrier.wait(timeout=10)
-            with TestClient(app, base_url="http://testserver/api/v1") as client:
-                return client.post(f"/preorders/{order['preorderId']}/confirm-payment", headers=self.owner,
+            with TestClient(app) as client:
+                return client.post(f"/api/v1/preorders/{order['preorderId']}/confirm-payment", headers=self.owner,
                                    json={"paymentMethod": "CASH", "amount": order["totalAmount"]}).status_code
         with ThreadPoolExecutor(max_workers=2) as pool:
             futures = [pool.submit(invoke) for _ in range(2)]
             results = [future.result(timeout=30) for future in futures]
         self.assertEqual(sorted(results), [200, 409])
-        detail = self.request("GET", f"/preorders/{order['preorderId']}")
+        detail = self.request("GET", f"/api/v1/preorders/{order['preorderId']}")
         self.assertEqual(len(detail["payments"]), 1)
         self.assertEqual(self.stock_snapshot(), before)
 
@@ -307,7 +307,7 @@ class PreorderAdminMySQLTests(unittest.TestCase):
                 try:
                     with self.assertLogs("app.modules.preorders.router", level="ERROR"):
                         self.pay(order, 503)
-                    detail = self.request("GET", f"/preorders/{order['preorderId']}")
+                    detail = self.request("GET", f"/api/v1/preorders/{order['preorderId']}")
                     self.assertEqual((detail["paymentStatus"], detail["payments"]), ("UNPAID", []))
                     self.assertEqual(self.stock_snapshot(), before)
                 finally:
@@ -330,7 +330,7 @@ class PreorderAdminMySQLTests(unittest.TestCase):
 
     def test_fulfillment_choice_can_be_edited_without_touching_stock(self):
         order = self.order()
-        path = f"/preorders/{order['preorderId']}/fulfillment"
+        path = f"/api/v1/preorders/{order['preorderId']}/fulfillment"
         before = self.stock_snapshot()
         chosen = self.request("PUT", path, body={"method": "DELIVERY"})
         selected = chosen["fulfillment"]
@@ -352,10 +352,10 @@ class PreorderAdminMySQLTests(unittest.TestCase):
     def test_fulfill_after_import_records_payment_delivery_and_exact_stock_deltas(self):
         order = self.order()
         preorder_id = order["preorderId"]
-        path = f"/preorders/{preorder_id}"
+        path = f"/api/v1/preorders/{preorder_id}"
         staff, staff_id = self.members["staff"]
         with patch.dict("sys.modules", {"app.modules.notifications.service": None}):
-            self.request("POST", "/inventory/import", 201, body={
+            self.request("POST", "/api/v1/inventory/import", 201, body={
                 "branchId": self.branch, "items": [
                     {"variantId": item["variantId"], "quantity": item["quantity"] + 1} for item in order["items"]
                 ],
@@ -381,9 +381,9 @@ class PreorderAdminMySQLTests(unittest.TestCase):
         self.assertTrue(done["fulfilledAt"].endswith("Z"))
         self.assertEqual([item["allocatedQuantity"] for item in done["items"]], [0, 0])
         for item in order["items"]:
-            inventory = self.request("GET", f"/inventory/{self.branch}/{item['variantId']}")
+            inventory = self.request("GET", f"/api/v1/inventory/{self.branch}/{item['variantId']}")
             self.assertEqual((inventory["quantity"], inventory["reserved"], inventory["available"]), (1, 0, 1))
-        movements = self.request("GET", "/inventory/movements", params={"branchId": self.branch, "type": "PREORDER_FULFILLMENT"})
+        movements = self.request("GET", "/api/v1/inventory/movements", params={"branchId": self.branch, "type": "PREORDER_FULFILLMENT"})
         self.assertEqual({row["variantId"]: row["quantityChange"] for row in movements if row["referenceId"] == preorder_id},
                          {item["variantId"]: -item["quantity"] for item in order["items"]})
         after = self.stock_snapshot()
@@ -398,11 +398,11 @@ class PreorderAdminMySQLTests(unittest.TestCase):
         self.reserve_for_fulfillment(order, "NOTIFIED")
         self.reserve_for_fulfillment(waiting)
         paid = self.pay(order, method="BANK_TRANSFER")
-        done = self.request("POST", f"/preorders/{order['preorderId']}/fulfill", body=None)
+        done = self.request("POST", f"/api/v1/preorders/{order['preorderId']}/fulfill", body=None)
         self.assertEqual(done["payments"], paid["payments"])
         self.assertEqual((done["status"], done["fulfillment"]["method"]), ("FULFILLED", "PICKUP"))
         for item in waiting["items"]:
-            stock = self.request("GET", f"/inventory/{self.branch}/{item['variantId']}")
+            stock = self.request("GET", f"/api/v1/inventory/{self.branch}/{item['variantId']}")
             self.assertEqual((stock["quantity"], stock["reserved"], stock["available"]),
                              (item["quantity"], item["quantity"], 0))
 
@@ -414,7 +414,7 @@ class PreorderAdminMySQLTests(unittest.TestCase):
         ):
             with self.subTest(status=status):
                 order = self.order(status=status)
-                path = f"/preorders/{order['preorderId']}"
+                path = f"/api/v1/preorders/{order['preorderId']}"
                 if status == "NOTIFIED":
                     with engine.begin() as db:
                         db.execute(text("UPDATE preorders SET expires_at=UTC_TIMESTAMP() WHERE preorder_id=:id"),
@@ -427,14 +427,14 @@ class PreorderAdminMySQLTests(unittest.TestCase):
 
     def test_fulfillment_routes_enforce_auth_branch_and_store(self):
         order = self.order()
-        path = f"/preorders/{order['preorderId']}"
+        path = f"/api/v1/preorders/{order['preorderId']}"
         for auth, code in (({}, 401), (self.members["unassigned"][0], 403), (self.other_owner, 404)):
             self.request("PUT", path + "/fulfillment", code, auth, {"method": "PICKUP"})
             self.request("POST", path + "/fulfill", code, auth, {"paymentMethod": "CASH"})
 
     def test_preorder_cancel_validates_reason_access_and_closed_state(self):
         order = self.order(status="FULFILLED")
-        path = f"/preorders/{order['preorderId']}/cancel"
+        path = f"/api/v1/preorders/{order['preorderId']}/cancel"
         for auth, code in (({}, 401), (self.members["unassigned"][0], 403), (self.other_owner, 404)):
             self.request("POST", path, code, auth, {"reason": "Khách không nhận"})
         for body in ({}, {"reason": "  "}, {"reason": "x" * 256}):
@@ -443,12 +443,12 @@ class PreorderAdminMySQLTests(unittest.TestCase):
         self.assertEqual(error["detail"]["code"], "PREORDER_NOT_CANCELLABLE")
 
     def test_stock_csv_reuses_stock_write_permissions_and_scopes_skus_to_store(self):
-        path = "/inventory/import-csv"
+        path = "/api/v1/inventory/import-csv"
         sku = self.suffix + "0"
         files = {"file": ("stock.csv", f"sku,quantity,note\n{sku},1,\n", "text/csv")}
         manager, _ = self.members["manager"]
         staff, _ = self.members["staff"]
-        with TestClient(app, base_url="http://testserver/api/v1") as client, patch.object(config, "ALLOW_EMPLOYEE_STOCK", False):
+        with TestClient(app) as client, patch.object(config, "ALLOW_EMPLOYEE_STOCK", False):
             for auth, branch, code in (
                 ({}, self.branch, 401), (staff, self.branch, 403), (manager, self.branches[1], 403),
                 (self.other_owner, self.branch, 403),
@@ -470,7 +470,7 @@ class PreorderAdminMySQLTests(unittest.TestCase):
             db.execute(text("UPDATE inventory SET quantity=quantity-1 WHERE branch_id=:b AND variant_id=:v"),
                        {"b": self.branch, "v": self.variants[1]})
         before = self.stock_snapshot()
-        path = f"/preorders/{order['preorderId']}"
+        path = f"/api/v1/preorders/{order['preorderId']}"
         result = self.request("POST", path + "/fulfill", 409, body={"paymentMethod": "CASH"})
         self.assertEqual(result["detail"], {"code": "INSUFFICIENT_STOCK", "variantId": self.variants[1]})
         self.assertEqual(self.request("GET", path)["payments"], [])
@@ -479,7 +479,7 @@ class PreorderAdminMySQLTests(unittest.TestCase):
     def test_fulfillment_sql_failure_rolls_back_payment_stock_movements_and_selection(self):
         order = self.order()
         self.reserve_for_fulfillment(order)
-        path = f"/preorders/{order['preorderId']}"
+        path = f"/api/v1/preorders/{order['preorderId']}"
         selected = self.request("PUT", path + "/fulfillment", body={"method": "DELIVERY"})
         before = self.stock_snapshot()
         with engine.begin() as db:
@@ -500,13 +500,13 @@ class PreorderAdminMySQLTests(unittest.TestCase):
     def test_simultaneous_fulfill_requests_charge_and_deduct_once(self):
         order = self.order()
         self.reserve_for_fulfillment(order)
-        path = f"/preorders/{order['preorderId']}"
+        path = f"/api/v1/preorders/{order['preorderId']}"
         before = self.stock_snapshot()
         barrier = Barrier(2)
 
         def invoke():
             barrier.wait(timeout=10)
-            with TestClient(app, base_url="http://testserver/api/v1") as client:
+            with TestClient(app) as client:
                 return client.post(path + "/fulfill", headers=self.owner, json={"paymentMethod": "CASH"}).status_code
 
         with ThreadPoolExecutor(max_workers=2) as pool:

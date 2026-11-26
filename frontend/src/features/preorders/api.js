@@ -15,3 +15,5 @@ export function confirmPreorderPayment(id, payload) { return apiRequest(`/preord
 export function setPreorderFulfillment(id, payload) { return apiRequest(`/preorders/${encodeURIComponent(id)}/fulfillment`, { method: 'PUT', body: JSON.stringify(payload) }); }
 export function fulfillPreorder(id, payload = {}) { return apiRequest(`/preorders/${encodeURIComponent(id)}/fulfill`, { method: 'POST', body: JSON.stringify(payload) }); }
 export function cancelPreorder(id, reason) { return apiRequest(`/preorders/${encodeURIComponent(id)}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }); }
+export function listPreorderNotifications(id) { return apiRequest(`/preorders/${encodeURIComponent(id)}/notifications`); }
+export function resendNotification(id) { return apiRequest(`/notifications/${encodeURIComponent(id)}/resend`, { method: 'POST' }); }

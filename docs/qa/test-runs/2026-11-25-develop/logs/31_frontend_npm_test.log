@@ -1,0 +1,43 @@
+
+> dkat-frontend@1.0.0 test
+> node --test tests/*.test.js
+
+✔ CSV không lưu một phần nếu một dòng sai (6.1944ms)
+✔ CSV đọc được tên có dấu phẩy trong nháy (0.2575ms)
+✔ FIFO giữ một phần, không cho POS bán hàng giữ; nhận không giảm hai lần (17.8961ms)
+✔ Đặt trước thiếu liên hệ hoặc hàng còn bị từ chối (0.2391ms)
+✔ Đặt trước chỉ cần email hợp lệ và gửi thông báo qua email demo (0.4173ms)
+✔ Hủy đơn đã trả phải xác nhận hoàn tiền, không tăng tồn và phân bổ tiếp (0.335ms)
+✔ POS vãng lai tính giá server model, giữ snapshot và trừ kho theo branch (0.261ms)
+✔ Báo cáo không tính trùng trả trước và doanh thu khi nhận (0.5781ms)
+✔ Không được kiểm kê thấp hơn lượng giữ (0.3162ms)
+✔ brand slogan follows the selected locale (2.2076ms)
+✔ legacy Vietnamese mojibake is repaired and translated centrally (0.4508ms)
+✔ demo amounts use English VND number formatting (50.89ms)
+✔ Inventory import of five increases on-hand quantity by five (4.4663ms)
+✔ Inventory export rejects a quantity above available stock (1.3359ms)
+✔ Stocktake adjusts quantity and records an adjustment movement (0.6158ms)
+✔ POS searches products by exact SKU (0.4312ms)
+✔ POS rejects quantities above available stock (0.5977ms)
+✔ POS calculates subtotal, discount, and total (2.8712ms)
+✔ POS rejects discount greater than subtotal (0.7208ms)
+✔ Cash payment confirmation changes pending order to paid (0.9718ms)
+✔ POS rejects a second payment confirmation (0.9599ms)
+✔ Cancelling a pending order releases held stock (0.4902ms)
+✔ Manager cannot create an order in an unassigned branch (0.3468ms)
+✔ Employee cannot refund an order (0.4827ms)
+✔ Guest order has no customer requirement (0.1949ms)
+✔ Quick customer creation reuses a duplicate phone number (0.2971ms)
+✔ POS order links a selected customer (0.3569ms)
+✔ Order list filters by status and keyword (0.376ms)
+✔ Order detail keeps item snapshots and guest label data (0.2344ms)
+✔ Refund requires reason, restores stock, and marks payment refunded (0.4249ms)
+✔ Employee order list is restricted to assigned branch (0.5627ms)
+ℹ tests 31
+ℹ suites 0
+ℹ pass 31
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 232.7047

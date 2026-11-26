@@ -24,10 +24,10 @@ class SalesRefundMySQLTests(unittest.TestCase):
         cls.other_store, cls.other_owner, _ = cls.provision("other")
         cls.members = {}
         for label, role in (("manager", "manager"), ("staff", "staff"), ("unassigned", "manager")):
-            user = cls.request("POST", "/users", 201, cls.owner, {
+            user = cls.request("POST", "/api/v1/users", 201, cls.owner, {
                 "username": label + cls.suffix, "full_name": label, "role": role, "password": cls.password,
             })
-            login = cls.request("POST", "/auth/login", 200, body={
+            login = cls.request("POST", "/api/v1/auth/login", 200, body={
                 "username": label + cls.suffix + ":" + role, "password": cls.password,
             })
             cls.members[label] = ({"Authorization": "Bearer " + login["access_token"]}, user["id"])
@@ -56,7 +56,7 @@ class SalesRefundMySQLTests(unittest.TestCase):
 
     @classmethod
     def request(cls, method, path, status=200, auth=None, body=None, params=None):
-        with TestClient(app, base_url="http://testserver/api/v1") as client:
+        with TestClient(app) as client:
             response = client.request(method, path, headers=cls.owner if auth is None and hasattr(cls, "owner") else auth,
                                       json=body, params=params)
         if response.status_code != status:
@@ -66,11 +66,11 @@ class SalesRefundMySQLTests(unittest.TestCase):
     @classmethod
     def provision(cls, prefix):
         name = prefix + cls.suffix
-        shop = cls.request("POST", "/admin/accounts", 201, {"X-Admin-Token": config.ADMIN_TOKEN}, {
-            "shop_name": name, "plan": "basic", "subscription_months": 12, "owner_username": name, "owner_email": name + "@example.test",
+        shop = cls.request("POST", "/api/v1/admin/accounts", 201, {"X-Admin-Token": config.ADMIN_TOKEN}, {
+            "shop_name": name, "plan": "basic", "subscription_months": 12, "owner_email": f"{name}@example.test", "owner_username": name,
             "owner_full_name": name, "owner_password": cls.password,
         })
-        login = cls.request("POST", "/auth/login", body={"username": name, "password": cls.password})
+        login = cls.request("POST", "/api/v1/auth/login", body={"username": name, "password": cls.password})
         return shop["shop_id"], {"Authorization": "Bearer " + login["access_token"]}, login["user"]["id"]
 
     def setUp(self):
@@ -84,17 +84,17 @@ class SalesRefundMySQLTests(unittest.TestCase):
 
     def order(self, quantities=(2, 3), branch=None, paid=True, method="CASH", discount="0.00", reverse=False):
         items = [{"variantId": v, "quantity": q} for v, q in zip(self.variants, quantities) if q]
-        order = self.request("POST", "/sales-orders", 201, body={
+        order = self.request("POST", "/api/v1/sales-orders", 201, body={
             "branchId": branch or self.branch, "discountAmount": discount, "items": list(reversed(items)) if reverse else items,
         })
         if paid:
-            return self.request("POST", f"/sales-orders/{order['salesOrderId']}/confirm-payment", body={
+            return self.request("POST", f"/api/v1/sales-orders/{order['salesOrderId']}/confirm-payment", body={
                 "paymentMethod": method, "amount": order["totalAmount"],
             })
         return order
 
     def refund(self, order, status=200, auth=None, body=None):
-        return self.request("POST", f"/sales-orders/{order['salesOrderId']}/refund", status, auth,
+        return self.request("POST", f"/api/v1/sales-orders/{order['salesOrderId']}/refund", status, auth,
                             {"reason": "  Khách trả toàn bộ hàng  "} if body is None else body)
 
     def quantities(self):
@@ -122,8 +122,8 @@ class SalesRefundMySQLTests(unittest.TestCase):
             return [future.result(timeout=30) for future in futures]
 
     def raw_refund(self, order):
-        with TestClient(app, base_url="http://testserver/api/v1") as client:
-            return client.post(f"/sales-orders/{order['salesOrderId']}/refund", headers=self.owner,
+        with TestClient(app) as client:
+            return client.post(f"/api/v1/sales-orders/{order['salesOrderId']}/refund", headers=self.owner,
                                json={"reason": "QA concurrent refund"}).status_code
 
     def test_owner_full_refund_preserves_history_and_excludes_revenue(self):
@@ -195,15 +195,15 @@ class SalesRefundMySQLTests(unittest.TestCase):
                      {"reason": "QA", "amount": "1"}, {"reason": "QA", "items": [{"variantId": self.variants[0], "quantity": 1}]}):
             self.refund(order, 422, body=body)
         self.assertEqual(self.state(order), before)
-        self.request("POST", "/sales-orders/0/refund", 422, body={"reason": "QA"})
-        self.request("POST", "/sales-orders/9223372036854775807/refund", 404, body={"reason": "QA"})
+        self.request("POST", "/api/v1/sales-orders/0/refund", 422, body={"reason": "QA"})
+        self.request("POST", "/api/v1/sales-orders/9223372036854775807/refund", 404, body={"reason": "QA"})
 
     def test_pending_cancelled_and_repeat_refunds_are_rejected(self):
         pending = self.order(paid=False)
         before = self.state(pending)
         self.assertEqual(self.refund(pending, 409)["detail"]["code"], "ORDER_NOT_PAID")
         self.assertEqual(self.state(pending), before)
-        cancelled = self.request("POST", f"/sales-orders/{pending['salesOrderId']}/cancel", body={"reason": "QA"})
+        cancelled = self.request("POST", f"/api/v1/sales-orders/{pending['salesOrderId']}/cancel", body={"reason": "QA"})
         self.refund(cancelled, 409)
         paid = self.order()
         self.refund(paid)
@@ -279,7 +279,7 @@ class SalesRefundMySQLTests(unittest.TestCase):
                 VALUES (:p,:v,'QA','QA',0,50,50,0)
             """), {"p": preorder, "v": self.variants[0]})
         self.refund(order)
-        row = self.request("GET", f"/inventory/{self.branch}/{self.variants[0]}")
+        row = self.request("GET", f"/api/v1/inventory/{self.branch}/{self.variants[0]}")
         self.assertEqual((row["quantity"], row["reserved"], row["available"]), (100, 50, 50))
 
     def test_concurrent_refunds_same_order_restore_stock_once(self):
@@ -297,10 +297,10 @@ class SalesRefundMySQLTests(unittest.TestCase):
         with engine.begin() as db:
             db.execute(text("UPDATE inventory SET quantity=1 WHERE branch_id=:b AND variant_id=:v"), {"b": self.branch, "v": self.variants[0]})
         paid, competing = self.order(quantities=(1, 0), paid=False), self.order(quantities=(1, 0), paid=False)
-        self.request("POST", f"/sales-orders/{paid['salesOrderId']}/confirm-payment", body={"paymentMethod": "CASH", "amount": paid["totalAmount"]})
+        self.request("POST", f"/api/v1/sales-orders/{paid['salesOrderId']}/confirm-payment", body={"paymentMethod": "CASH", "amount": paid["totalAmount"]})
         def sale():
-            with TestClient(app, base_url="http://testserver/api/v1") as client:
-                return client.post(f"/sales-orders/{competing['salesOrderId']}/confirm-payment", headers=self.owner,
+            with TestClient(app) as client:
+                return client.post(f"/api/v1/sales-orders/{competing['salesOrderId']}/confirm-payment", headers=self.owner,
                                    json={"paymentMethod": "CASH", "amount": competing["totalAmount"]}).status_code
         refund_status, sale_status = self.concurrent([lambda: self.raw_refund(paid), sale])
         self.assertEqual(refund_status, 200)

@@ -1,0 +1,24 @@
+<qa>\develop\backend\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+setUpClass (integration_tests.test_sales_refund_mysql.SalesRefundMySQLTests) ... ERROR
+
+======================================================================
+ERROR: setUpClass (integration_tests.test_sales_refund_mysql.SalesRefundMySQLTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>\develop\backend\integration_tests\test_sales_refund_mysql.py", line 23, in setUpClass
+    cls.store, cls.owner, cls.owner_id = cls.provision("owner")
+                                         ~~~~~~~~~~~~~^^^^^^^^^
+  File "<qa>\develop\backend\integration_tests\test_sales_refund_mysql.py", line 69, in provision
+    shop = cls.request("POST", "/api/v1/admin/accounts", 201, {"X-Admin-Token": config.ADMIN_TOKEN}, {
+        "shop_name": name, "plan": "pro", "subscription_months": 12, "owner_username": name,
+        "owner_full_name": name, "owner_password": cls.password,
+    })
+  File "<qa>\develop\backend\integration_tests\test_sales_refund_mysql.py", line 63, in request
+    raise AssertionError((path, status, response.status_code, response.text))
+AssertionError: ('/api/v1/admin/accounts', 201, 422, '{"detail":[{"type":"literal_error","loc":["body","plan"],"msg":"Input should be \'basic\'","input":"pro","ctx":{"expected":"\'basic\'"}},{"type":"missing","loc":["body","owner_email"],"msg":"Field required","input":{"shop_name":"owner1fd916baeb","plan":"pro","subscription_months":12,"owner_username":"owner1fd916baeb","owner_full_name":"owner1fd916baeb","owner_password":"pbi122-test-password-123"}}]}')
+
+----------------------------------------------------------------------
+Ran 0 tests in 0.301s
+
+FAILED (errors=1)

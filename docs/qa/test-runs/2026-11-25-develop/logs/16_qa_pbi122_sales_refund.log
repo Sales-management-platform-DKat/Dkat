@@ -1,0 +1,23 @@
+<qa>\develop\backend\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+test_all_payment_methods_and_zero_total (integration_tests_qa.test_sales_refund_mysql.SalesRefundMySQLTests.test_all_payment_methods_and_zero_total) ... ok
+test_auth_roles_and_branch_store_scope (integration_tests_qa.test_sales_refund_mysql.SalesRefundMySQLTests.test_auth_roles_and_branch_store_scope) ... ok
+test_concurrent_refunds_reverse_line_order_use_consistent_locks (integration_tests_qa.test_sales_refund_mysql.SalesRefundMySQLTests.test_concurrent_refunds_reverse_line_order_use_consistent_locks) ... ok
+test_concurrent_refunds_same_order_restore_stock_once (integration_tests_qa.test_sales_refund_mysql.SalesRefundMySQLTests.test_concurrent_refunds_same_order_restore_stock_once) ... ok
+test_inactive_products_and_changed_prices_use_original_order_lines (integration_tests_qa.test_sales_refund_mysql.SalesRefundMySQLTests.test_inactive_products_and_changed_prices_use_original_order_lines) ... ok
+test_inconsistent_payment_history_and_missing_lines_are_rejected (integration_tests_qa.test_sales_refund_mysql.SalesRefundMySQLTests.test_inconsistent_payment_history_and_missing_lines_are_rejected) ... ok
+test_manager_audit_keeps_original_payment_confirmation (integration_tests_qa.test_sales_refund_mysql.SalesRefundMySQLTests.test_manager_audit_keeps_original_payment_confirmation) ... ok
+test_missing_legacy_inventory_is_created_and_only_sold_quantity_is_returned (integration_tests_qa.test_sales_refund_mysql.SalesRefundMySQLTests.test_missing_legacy_inventory_is_created_and_only_sold_quantity_is_returned) ... ok
+test_multiple_success_payments_refund_once_and_preserve_failed_attempts (integration_tests_qa.test_sales_refund_mysql.SalesRefundMySQLTests.test_multiple_success_payments_refund_once_and_preserve_failed_attempts) ... ok
+test_owner_full_refund_preserves_history_and_excludes_revenue (integration_tests_qa.test_sales_refund_mysql.SalesRefundMySQLTests.test_owner_full_refund_preserves_history_and_excludes_revenue) ... ok
+test_pending_cancelled_and_repeat_refunds_are_rejected (integration_tests_qa.test_sales_refund_mysql.SalesRefundMySQLTests.test_pending_cancelled_and_repeat_refunds_are_rejected) ... ok
+test_preorder_allocations_remain_unchanged (integration_tests_qa.test_sales_refund_mysql.SalesRefundMySQLTests.test_preorder_allocations_remain_unchanged) ... ok
+test_reason_required_and_partial_refunds_forbidden (integration_tests_qa.test_sales_refund_mysql.SalesRefundMySQLTests.test_reason_required_and_partial_refunds_forbidden) ... ok
+test_refund_racing_with_another_sale_keeps_stock_consistent (integration_tests_qa.test_sales_refund_mysql.SalesRefundMySQLTests.test_refund_racing_with_another_sale_keeps_stock_consistent) ... ok
+test_sql_failures_roll_back_payment_stock_movements_and_order (integration_tests_qa.test_sales_refund_mysql.SalesRefundMySQLTests.test_sql_failures_roll_back_payment_stock_movements_and_order) ... ok
+test_stock_overflow_rejects_all_lines_before_any_refund (integration_tests_qa.test_sales_refund_mysql.SalesRefundMySQLTests.test_stock_overflow_rejects_all_lines_before_any_refund) ... ok
+
+----------------------------------------------------------------------
+Ran 16 tests in 16.035s
+
+OK

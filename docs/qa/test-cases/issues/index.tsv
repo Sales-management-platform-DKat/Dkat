@@ -1,0 +1,24 @@
+TC-PA-01	[TC-PA-01] Đăng nhập OWNER	test-case,pos-auth,auth
+TC-PA-02	[TC-PA-02] Đăng nhập MANAGER chỉ thấy chi nhánh được phân công	test-case,pos-auth,auth,rbac
+TC-PA-03	[TC-PA-03] Đăng nhập EMPLOYEE chỉ có màn hình bán hàng	test-case,pos-auth,auth,rbac
+TC-PA-04	[TC-PA-04] Đăng nhập sai bị từ chối	test-case,pos-auth,auth
+TC-PA-05	[TC-PA-05] Tạo đơn POS chờ thanh toán	test-case,pos-auth,pos
+TC-PA-06	[TC-PA-06] Xác nhận thanh toán tiền mặt trừ kho đúng	test-case,pos-auth,pos,inventory
+TC-PA-07	[TC-PA-07] Xác nhận thanh toán sai số tiền bị từ chối (chỉ qua API)	test-case,pos-auth,pos
+TC-PA-08	[TC-PA-08] Không bán vượt tồn khả dụng	test-case,pos-auth,pos,inventory
+TC-PA-09	[TC-PA-09] Hủy đơn PENDING	test-case,pos-auth,pos
+TC-PA-10	[TC-PA-10] OWNER hoàn đơn đã thanh toán và hoàn kho	test-case,pos-auth,pos,inventory
+TC-PA-11	[TC-PA-11] EMPLOYEE không hoàn được đơn đã thanh toán	test-case,pos-auth,pos,rbac
+TC-PA-12	[TC-PA-12] Phân quyền theo chi nhánh khi bán hàng	test-case,pos-auth,pos,rbac
+TC-PN-01	[TC-PN-01] Thiếu họ tên bị từ chối	test-case,preorder-notify,preorder
+TC-PN-02	[TC-PN-02] Thiếu SĐT hoặc SĐT sai định dạng bị từ chối	test-case,preorder-notify,preorder
+TC-PN-03	[TC-PN-03] Thiếu địa chỉ bị từ chối; hàng còn thì không cho đặt trước	test-case,preorder-notify,preorder
+TC-PN-04	[TC-PN-04] Đặt trước thành công không trừ kho	test-case,preorder-notify,preorder,inventory
+TC-PN-05	[TC-PN-05] Nhập 2 chiếc -> phân bổ FIFO đúng thứ tự đặt	test-case,preorder-notify,preorder,inventory,fifo
+TC-PN-06	[TC-PN-06] Đơn đủ hàng -> READY -> gửi SMS -> Đã thông báo	test-case,preorder-notify,notification,preorder
+TC-PN-07	[TC-PN-07] SMS lỗi -> tự chuyển sang email	test-case,preorder-notify,notification
+TC-PN-08	[TC-PN-08] Thử lại tự động: email lỗi được gửi lại, không gửi trùng	test-case,preorder-notify,notification,retry
+TC-PN-09	[TC-PN-09] Gửi lại thủ công bằng nút Gửi lại	test-case,preorder-notify,notification,retry
+TC-PN-10	[TC-PN-10] Xác nhận nhận hàng mới trừ kho	test-case,preorder-notify,preorder,inventory
+TC-PN-11	[TC-PN-11] Hủy đơn đang giữ hàng -> giải phóng cho khách kế tiếp	test-case,preorder-notify,preorder,inventory,fifo
+TC-PN-12	[TC-PN-12] Hết hạn giữ hàng -> Hết hạn, giải phóng hàng	test-case,preorder-notify,preorder,inventory

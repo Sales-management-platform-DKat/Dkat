@@ -1,0 +1,33 @@
+PASS  TC-PN-01 Thiếu họ tên bị từ chối
+      422 INVALID_PREORDER [{'field': 'customer.fullName', 'reason': 'String should have at least 1 character'}]
+PASS  TC-PN-02 Thiếu SĐT / SĐT sai định dạng bị từ chối
+      thiếu -> 422 {'field': 'customer.phone', 'reason': 'Field required'}; '12345' -> 422 customer.phone
+PASS  TC-PN-03 Thiếu địa chỉ bị từ chối; hàng còn thì không cho đặt trước
+      thiếu địa chỉ -> 422 customer.address; Đen / L còn 6 -> 409 VARIANT_IN_STOCK; số đơn vẫn 1
+PASS  TC-PN-04 Đặt trước thành công không trừ kho
+      B WAITING_STOCK 1198000.00, C WAITING_STOCK, D WAITING_STOCK; tồn AK-GIO-DEN-M CN01 (thực/giữ/khả dụng) = (0, 0, 0)
+EMAIL_FAILED to=n***@gmail.com error=NOT_CONFIGURED
+NOTIFY_PREORDER preorder_id=1 event=PREORDER_READY status=FAILED channel=EMAIL ids=[1] error=EMAIL NOT_CONFIGURED
+PASS  TC-PN-05 Nhập 2 chiếc -> phân bổ FIFO đúng thứ tự
+      {'lan': 'READY 1/1', 'b': 'WAITING_STOCK 1/2', 'c': 'WAITING_STOCK 0/1', 'd': 'WAITING_STOCK 0/1'}; tồn (2, 2, 0); thông báo Lan [('EMAIL', 'FAILED', 'NOT_CONFIGURED', 0)]
+PASS  TC-PN-06 Đơn đủ hàng -> READY -> gửi SMS -> NOTIFIED (cấu hình A, SMS sandbox)
+      B NOTIFIED 2/2, gửi [('SMS', 'SENT', '', 0)]; C WAITING_STOCK 0/1; tồn (3, 3, 0)
+SMS_FAILED to=0912***002 error=AUTH_FAILED
+PASS  TC-PN-07 SMS lỗi -> tự chuyển email (cấu hình B: sai khóa eSMS, SMTP thật)
+      C NOTIFIED 1/1, gửi [('SMS', 'FAILED', 'AUTH_FAILED', 0), ('EMAIL', 'SENT', '', 0)]; tồn (4, 4, 0)
+PASS  TC-PN-08 Thử lại tự động: email lỗi của chị Lan được gửi lại, đơn -> NOTIFIED; SMS của C không gửi lại
+      lượt thử lại {'checked': 1, 'sent': 1, 'failed': 0, 'skipped': 0}; Lan NOTIFIED 1/1 [('EMAIL', 'SENT', '', 1)]; C [('SMS', 'FAILED', 'AUTH_FAILED', 0), ('EMAIL', 'SENT', '', 0)]
+SMS_FAILED to=0912***002 error=AUTH_FAILED
+NOTIFY_RESEND id=3 attempt=1 automatic=False result=FAILED error=AUTH_FAILED
+PASS  TC-PN-09 Gửi lại thủ công (nút Gửi lại): SMS lỗi của C, rồi gửi lại thông báo đã SENT bị từ chối
+      gửi lại SMS -> 200 FAILED retryCount 1 (AUTH_FAILED); gửi lại email đã SENT -> 409 NOTIFICATION_NOT_FAILED
+PASS  TC-PN-10 Xác nhận nhận hàng mới trừ kho (đơn B, 1.198.000 đ)
+      trước (4, 4, 0); sau thu tiền PAID (4, 4, 0); sau giao FULFILLED (2, 2, 0)
+SMS_FAILED to=0912***003 error=AUTH_FAILED
+NOTIFY_PREORDER preorder_id=4 event=PREORDER_READY status=FAILED channel=SMS ids=[5] error=SMS AUTH_FAILED
+PASS  TC-PN-11 Hủy đơn đang giữ hàng -> giải phóng cho khách kế tiếp (FIFO)
+      C -> CANCELLED; D READY 1/1 gửi [('SMS', 'FAILED', 'AUTH_FAILED', 0)]; tồn (2, 2, 0)
+PASS  TC-PN-12 Hết hạn giữ hàng -> EXPIRED, giải phóng hàng
+      job hết hạn: 1 đơn; Lan EXPIRED 0/1; D READY 1/1; tồn (2, 1, 1)
+
+12/12 test case đạt
