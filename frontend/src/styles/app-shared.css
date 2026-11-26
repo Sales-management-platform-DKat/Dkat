@@ -76,7 +76,7 @@ tr.clickable:hover td { background: var(--soft); }
 .import-result, .preorder-success { display: grid; justify-items: center; gap: 8px; text-align: center; }
 .import-result .table-wrap { width: 100%; text-align: left; }
 .import-result-icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: var(--green-bg); color: var(--green); font-size: 28px; font-weight: 800; }
-.preorder-code { margin: 0; font-size: 22px; font-weight: 800; letter-spacing: .02em; color: var(--primary); }
+.preorder-code { max-width: 100%; margin: 0; font-size: clamp(16px, 5vw, 22px); font-weight: 800; letter-spacing: .02em; color: var(--primary); overflow-wrap: anywhere; word-break: break-word; }
 .preorder-success .dk-meta-list { width: 100%; text-align: left; }
 .preorder-product { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: var(--soft); font-size: 13px; }
 .preorder-estimate b { padding: 10px 0; font-size: 16px; }

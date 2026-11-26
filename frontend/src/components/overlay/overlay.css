@@ -20,7 +20,9 @@
   display: flex;
   flex-direction: column;
   width: min(100%, 560px);
+  min-width: 0;
   max-height: min(640px, calc(100dvh - 32px));
+  overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 14px;
   background: var(--surface);
@@ -50,8 +52,11 @@
 }
 
 .dk-dialog-header {
+  min-width: 0;
   border-bottom: 1px solid var(--line);
 }
+
+.dk-dialog-header > div { min-width: 0; }
 
 .dk-dialog-header h2 {
   margin: 0;
@@ -107,7 +112,9 @@
 
 .dk-dialog-body {
   min-height: 0;
+  min-width: 0;
   overflow: auto;
+  overflow-x: hidden;
   padding: 16px 18px 6px;
   overscroll-behavior: contain;
   scrollbar-width: thin;
@@ -376,8 +383,9 @@
 .dk-dialog .table-wrap { margin: 0 0 12px; }
 .dk-dialog .actions { margin-top: 8px; }
 .dk-meta-list { display: grid; gap: 6px; margin: 0; font-size: 13px; }
-.dk-meta-list div { display: flex; justify-content: space-between; gap: 12px; }
+.dk-meta-list div { display: grid; grid-template-columns: minmax(74px, .45fr) minmax(0, 1fr); align-items: start; gap: 12px; min-width: 0; }
 .dk-meta-list span { color: var(--muted); }
+.dk-meta-list b { min-width: 0; text-align: right; overflow-wrap: anywhere; word-break: break-word; }
 
 .dk-toast-repeat { color: var(--muted); font-weight: 600; }
 
