@@ -14,6 +14,8 @@ from app.modules.auth.models import Shop, StoreSubscription
 from app.modules.auth.service import utcnow
 import app.main as main_module
 import app.modules.customers.router as customer_router
+import app.modules.reports.router as reports_router
+import app.modules.reports.service as reports_service
 
 
 TEST_ADMIN_TOKEN = "test-admin-token-0123456789-abcdefgh"
@@ -38,6 +40,8 @@ class AuthFlowTests(unittest.TestCase):
     def setUpClass(cls):
         main_module.engine = test_engine
         customer_router.engine = test_engine
+        reports_router.engine = test_engine
+        reports_service.engine = test_engine
         app.dependency_overrides[get_db] = override_get_db
         config.ADMIN_TOKEN = TEST_ADMIN_TOKEN
         config.AUTH_SECRET_KEY = "test-auth-secret-key-with-at-least-32-characters"
@@ -63,14 +67,15 @@ class AuthFlowTests(unittest.TestCase):
                 CREATE TABLE IF NOT EXISTS sales_orders (
                     sales_order_id INTEGER PRIMARY KEY, order_code VARCHAR(50) NOT NULL,
                     branch_id INTEGER NOT NULL, customer_id INTEGER, created_at DATETIME NOT NULL,
-                    status VARCHAR(30) NOT NULL, total_amount NUMERIC NOT NULL
+                    status VARCHAR(30) NOT NULL, total_amount NUMERIC NOT NULL, paid_at DATETIME
                 )
             """)
             connection.exec_driver_sql("""
                 CREATE TABLE IF NOT EXISTS preorders (
                     preorder_id INTEGER PRIMARY KEY, preorder_code VARCHAR(50) NOT NULL,
                     branch_id INTEGER NOT NULL, customer_id INTEGER, created_at DATETIME NOT NULL,
-                    status VARCHAR(30) NOT NULL, total_amount NUMERIC NOT NULL
+                    status VARCHAR(30) NOT NULL, total_amount NUMERIC NOT NULL,
+                    payment_status VARCHAR(30) NOT NULL DEFAULT 'UNPAID', fulfilled_at DATETIME
                 )
             """)
 
