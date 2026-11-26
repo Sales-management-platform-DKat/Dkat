@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useLanguage } from '../../i18n/index.js';
+import { errorMessage, useLanguage } from '../../i18n/index.js';
 import { listInventory } from '../inventory/api.js';
 import { listProducts } from '../products/api.js';
 import { confirmSalesOrderPayment, createSalesOrder } from '../orders/api.js';
@@ -53,7 +53,7 @@ export default function POSPage({ branchId }) {
       listProducts({ keyword: term, page: 1, size: 100, sort: 'name' }),
     ]);
     const failed = results.find((result) => result.status === 'rejected');
-    if (failed) { setInventory([]); setProducts([]); setError(failed.reason?.message || t('Không tải được danh mục bán hàng.')); }
+    if (failed) { setInventory([]); setProducts([]); setError(errorMessage(failed.reason, 'Không tải được danh mục bán hàng.')); }
     else { setInventory(results[0].value || []); setProducts(results[1].value || []); }
     setLoading(false);
   }
@@ -75,10 +75,10 @@ export default function POSPage({ branchId }) {
     setCart((current) => {
       const existing = current.find((line) => line.variantId === item.variant_id);
       if (existing) {
-        if (existing.quantity >= item.available) { setError(t('Số lượng vượt quá tồn khả dụng.')); return current; }
+        if (existing.quantity >= item.available) { setError('Số lượng vượt quá tồn khả dụng.'); return current; }
         return current.map((line) => line.variantId === item.variant_id ? { ...line, quantity: line.quantity + 1 } : line);
       }
-      if (item.available < 1) { setError(t('Sản phẩm đã hết hàng tại chi nhánh này.')); return current; }
+      if (item.available < 1) { setError('Sản phẩm đã hết hàng tại chi nhánh này.'); return current; }
       return [...current, { variantId: item.variant_id, name: item.productName, variantName: item.variant_name, sku: item.sku, price: Number(item.price), quantity: 1, available: item.available }];
     });
   }
@@ -88,7 +88,7 @@ export default function POSPage({ branchId }) {
       if (line.variantId !== variantId) return [line];
       const quantity = line.quantity + delta;
       if (quantity < 1) return [];
-      if (quantity > line.available) { setError(t('Số lượng vượt quá tồn khả dụng.')); return [line]; }
+      if (quantity > line.available) { setError('Số lượng vượt quá tồn khả dụng.'); return [line]; }
       return [{ ...line, quantity }];
     }));
   }
@@ -103,8 +103,8 @@ export default function POSPage({ branchId }) {
         discountAmount: Number(discount || 0),
         items: cart.map((line) => ({ variantId: line.variantId, quantity: line.quantity })),
       });
-      setPendingOrder(created); setCart([]); setDiscount('0'); setNotice(t('Đơn bán đã được tạo ở trạng thái chờ thanh toán.'));
-    } catch (cause) { setError(cause.message || t('Không tạo được đơn bán.')); }
+      setPendingOrder(created); setCart([]); setDiscount('0'); setNotice('Đơn bán đã được tạo ở trạng thái chờ thanh toán.');
+    } catch (cause) { setError(errorMessage(cause, 'Không tạo được đơn bán.')); }
     finally { setBusy(false); }
   }
 
@@ -114,8 +114,8 @@ export default function POSPage({ branchId }) {
     try {
       const form = new FormData(event.currentTarget);
       await confirmSalesOrderPayment(pendingOrder.salesOrderId, { paymentMethod: form.get('paymentMethod') || paymentMethod, amount: Number(pendingOrder.totalAmount) });
-      setPendingOrder(null); setNotice(t('Đã ghi nhận thanh toán.')); await loadCatalog();
-    } catch (cause) { setError(cause.message || t('Không xác nhận được thanh toán.')); }
+      setPendingOrder(null); setNotice('Đã ghi nhận thanh toán.'); await loadCatalog();
+    } catch (cause) { setError(errorMessage(cause, 'Không xác nhận được thanh toán.')); }
     finally { setBusy(false); }
   }
 
@@ -135,7 +135,7 @@ export default function POSPage({ branchId }) {
         <p className="muted small">{t('Thanh toán chỉ được ghi nhận sau khi kiểm tra tiền thực tế.')}</p>
       </section>
     </div>
-    {error && <div className="notice error-state" role="alert">{error}</div>}{notice && <div className="notice success-state" role="status">{notice}</div>}
+    {error && <div className="notice error-state" role="alert">{t(error)}</div>}{notice && <div className="notice success-state" role="status">{t(notice)}</div>}
     {pendingOrder && <PaymentDialog order={pendingOrder} busy={busy} onCancel={() => setPendingOrder(null)} onSubmit={submitPayment} t={t} formatCurrency={formatCurrency} />}
   </>;
 }

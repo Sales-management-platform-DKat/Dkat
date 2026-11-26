@@ -7,24 +7,49 @@ const STORAGE_KEY = 'dkat-language';
 const LOCALES = { en: 'en-US', vi: 'vi-VN' };
 const catalogs = { en: englishCatalog, vi: vietnameseCatalog };
 const LanguageContext = createContext(null);
+const demoVariantLabels = new Set(['Áo', 'Quần', 'Phụ kiện', 'Đen', 'Trắng', 'Xanh', 'Be', 'Tự nhiên', 'One size']);
+const vietnameseByEnglish = new Map();
 
-export function translate(value, language = getLanguage()) {
+// Support literal English copy alongside message keys. Prefer the Vietnamese value
+// when an entry uses a shared key such as a status code.
+for (const [source, english] of Object.entries(englishCatalog)) {
+  if (!vietnameseByEnglish.has(english)) {
+    vietnameseByEnglish.set(english, vietnameseCatalog[source] ?? source);
+  }
+}
+
+export function demoVariantLabel(value, t) {
+  return demoVariantLabels.has(value) ? t(value) : value;
+}
+
+export function translate(value, language = getLanguage(), values) {
+  if (value && typeof value === 'object') {
+    values = value.values;
+    value = value.key;
+  }
   if (typeof value !== 'string' || !value.trim()) return value;
   const repaired = repairMojibake(value);
-  if (language === 'vi') {
-    if (catalogs.vi?.[repaired]) return catalogs.vi[repaired];
-    // The catalogs also contain Vietnamese-source -> English entries. Reverse
-    // those so literal English UI copy is localized even when it was not
-    // written as an explicit translation key in the component.
-    const sourceVietnamese = Object.entries(catalogs.en).find(([, english]) => english === repaired)?.[0];
-    return sourceVietnamese || repaired;
-  }
   const vndAmount = repaired.match(/^([\d.]+)(?:,(\d+))?\s*(?:₫|VND)$/);
-  if (vndAmount) {
+  if (language === 'en' && vndAmount) {
     const amount = Number(vndAmount[1].replaceAll('.', '') + (vndAmount[2] ? `.${vndAmount[2]}` : ''));
     return new Intl.NumberFormat(LOCALES.en, { style: 'currency', currency: 'VND' }).format(amount);
   }
-  return catalogs[language]?.[repaired] || catalogs[language]?.[value] || repaired;
+  const catalog = catalogs[language];
+  const fallback = language === 'vi' ? vietnameseByEnglish.get(repaired) ?? repaired : repaired;
+  const template = catalog && Object.hasOwn(catalog, repaired) ? catalog[repaired] : fallback;
+  return values
+    ? template.replace(/\{(\w+)\}/g, (placeholder, name) => Object.hasOwn(values, name) ? String(values[name]) : placeholder)
+    : template;
+}
+
+// Keep messages in their source form until render so an open notice follows the switch.
+export function errorMessage(error, fallback = 'Đã xảy ra sự cố khi xử lý yêu cầu. Vui lòng thử lại.') {
+  if (error?.translation) return error.translation;
+  const message = typeof error === 'string' ? error : error?.message;
+  if (message && (Object.hasOwn(catalogs.en, message) || Object.hasOwn(catalogs.vi, message))) return message;
+  const code = error?.code;
+  const key = `api.error.${code}`;
+  return Object.hasOwn(catalogs.en, key) ? key : fallback;
 }
 
 function repairMojibake(value) {
@@ -44,41 +69,8 @@ function repairMojibake(value) {
   });
 }
 
-// JSX is created through React.createElement in this legacy Vite app. Translating
-// host-node text and accessible labels here keeps the existing screens intact
-// while routing all user-facing copy through the locale catalogs.
-if (!React.createElement.__dkatI18n) {
-  const originalCreateElement = React.createElement;
-  const translateChild = (child) => {
-    if (Array.isArray(child)) return child.map(translateChild);
-    return typeof child === 'string' ? translate(child) : child;
-  };
-  const translatedCreateElement = function (type, props, ...children) {
-    if (children.length) children = children.map(translateChild);
-    if (typeof type === 'string') {
-      if (props) {
-        const nextProps = { ...props };
-        ['aria-label', 'title', 'placeholder', 'alt'].forEach((attribute) => {
-          if (typeof nextProps[attribute] === 'string') nextProps[attribute] = translate(nextProps[attribute]);
-        });
-        props = nextProps;
-      }
-    }
-    return originalCreateElement.call(this, type, props, ...children);
-  };
-  translatedCreateElement.__dkatI18n = true;
-  React.createElement = translatedCreateElement;
-}
-
-if (typeof window !== 'undefined' && !window.__dkatConfirmI18n) {
-  const nativeConfirm = window.confirm.bind(window);
-  window.confirm = (message) => nativeConfirm(translate(String(message)));
-  window.__dkatConfirmI18n = true;
-}
-
 export function LanguageProvider({ children }) {
   const [language, setLanguageState] = useState(getLanguage);
-  setActiveLanguage(language);
   const setLanguage = (next) => {
     const normalized = next === 'en' ? 'en' : 'vi';
     setActiveLanguage(normalized);
@@ -99,9 +91,9 @@ export function LanguageProvider({ children }) {
     language,
     locale: LOCALES[language],
     setLanguage,
-    t: (text) => translate(text, language),
+    t: (text, values) => translate(text, language, values),
     formatNumber: (number, options) => new Intl.NumberFormat(LOCALES[language], options).format(number),
-    formatCurrency: (number) => new Intl.NumberFormat(LOCALES[language], { style: 'currency', currency: 'VND' }).format(number),
+    formatCurrency: (number, options) => new Intl.NumberFormat(LOCALES[language], { ...options, style: 'currency', currency: 'VND' }).format(number),
     formatDate: (date, options = {}) => new Intl.DateTimeFormat(LOCALES[language], { day: '2-digit', month: '2-digit', year: 'numeric', ...options }).format(date),
     formatDateTime: (date, options = {}) => new Intl.DateTimeFormat(LOCALES[language], { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', ...options }).format(date),
   }), [language]);
@@ -116,14 +108,13 @@ export function useLanguage() {
 }
 
 export function LanguageSwitcher({ className = '' }) {
-  const { language, setLanguage } = useLanguage();
-  return React.createElement('div', { className: `language-switch ${className}`, role: 'group', 'aria-label': translate('Language', language) },
+  const { language, setLanguage, t } = useLanguage();
+  return React.createElement('div', { className: `language-switch ${className}`, role: 'group', 'aria-label': t('Language') },
     ...['en', 'vi'].map((option) => React.createElement('button', {
       key: option,
       type: 'button',
-      lang: option,
       'aria-pressed': language === option,
-      'aria-label': option === 'en' ? 'English' : 'Tiếng Việt',
+      'aria-label': t(`language.${option}`),
       onClick: () => setLanguage(option),
     }, option.toUpperCase())),
   );
