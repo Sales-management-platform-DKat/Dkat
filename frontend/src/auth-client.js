@@ -29,10 +29,13 @@ async function readResponse(response) {
 }
 
 function responseError(data) {
-  const detail = Array.isArray(data?.detail)
-    ? data.detail.map((issue) => issue.msg).join(' ')
-    : data?.detail;
-  return new Error(typeof detail === 'string' ? detail : 'Không thể xử lý yêu cầu.');
+  const apiError = data?.error;
+  const detail = data?.detail;
+  const message = apiError?.message || detail?.message || detail;
+  const error = new Error(typeof message === 'string' ? message : undefined);
+  error.code = apiError?.code || detail?.code || (Array.isArray(detail) ? 'VALIDATION_ERROR' : undefined);
+  error.details = apiError?.details || detail;
+  return error;
 }
 
 async function requestRefresh() {
@@ -60,13 +63,13 @@ export async function refreshSession() {
   return refreshPromise;
 }
 
-async function send(path, options, token) {
+async function send(path, options, token, adminToken) {
   const headers = new Headers(options.headers || {});
   if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  if (options.adminToken) headers.set('X-Admin-Token', options.adminToken);
+  if (adminToken) headers.set('X-Admin-Token', adminToken);
   const { response, data } = await readResponse(await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     credentials: 'include',
@@ -77,7 +80,7 @@ async function send(path, options, token) {
 
 export async function apiRequest(path, { adminToken, token, ...options } = {}) {
   const requestToken = token || accessToken;
-  let result = await send(path, options, requestToken);
+  let result = await send(path, options, requestToken, adminToken);
   const canRefresh = requestToken
     && result.response.status === 401
     && !path.startsWith('/auth/');
@@ -92,7 +95,7 @@ export async function apiRequest(path, { adminToken, token, ...options } = {}) {
       throw error;
     }
     if (session?.access_token) {
-      result = await send(path, options, session.access_token);
+      result = await send(path, options, session.access_token, adminToken);
       if (result.response.status === 401) {
         setAccessToken(null);
         window.dispatchEvent(new Event('dkat-auth-expired'));

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useLanguage } from '../../i18n/index.js';
+import { errorMessage, useLanguage } from '../../i18n/index.js';
 import { listBranches } from '../branches/api.js';
 import { assignEmployeeBranches, createEmployee, listEmployees, resetEmployeePassword, setEmployeeStatus, updateEmployee } from './api.js';
 
@@ -10,7 +10,7 @@ function EmployeeDialog({ initial, branches, busy, onCancel, onSubmit, onBranchT
   return <div className="overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onCancel()}>
     <form className="dialog employee-dialog" onSubmit={onSubmit} aria-labelledby="employee-form-title">
       <div className="section-title"><h2 id="employee-form-title">{create ? t('Thêm nhân viên') : t('Cập nhật nhân viên')}</h2><button className="link" type="button" onClick={onCancel} aria-label={t('Đóng')}>×</button></div>
-      {create && <label className="field">{t('Tên đăng nhập')}<input name="username" required minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]+" value={initial.username} onChange={(event) => onBranchToggle('username', event.target.value)} autoComplete="off" /></label>}
+      {create && <label className="field">{t('Tên đăng nhập')}<input name="username" required minLength={3} maxLength={32} pattern="[A-Za-z0-9._\-]+" value={initial.username} onChange={(event) => onBranchToggle('username', event.target.value)} autoComplete="off" /></label>}
       <label className="field">{t('Họ tên')}<input name="full_name" required maxLength={150} value={initial.full_name} onChange={(event) => onBranchToggle('full_name', event.target.value)} autoFocus /></label>
       <label className="field">{t('Email')}<input name="email" type="email" maxLength={255} value={initial.email} onChange={(event) => onBranchToggle('email', event.target.value)} /></label>
       <label className="field">{t('Số điện thoại')}<input name="phone" maxLength={20} value={initial.phone} onChange={(event) => onBranchToggle('phone', event.target.value)} /></label>
@@ -63,7 +63,7 @@ export default function EmployeesPage() {
       setBranches(Array.isArray(branchesResult) ? branchesResult : []);
     } catch (cause) {
       setEmployees([]);
-      setError(cause.message || t('Không tải được danh sách nhân viên.'));
+      setError(errorMessage(cause, 'Không tải được danh sách nhân viên.'));
     } finally {
       setLoading(false);
     }
@@ -87,7 +87,7 @@ export default function EmployeesPage() {
   async function saveEmployee(event) {
     event.preventDefault();
     if (!editing?.branch_ids.length) {
-      setError(t('Hãy phân công ít nhất một chi nhánh.'));
+      setError('Hãy phân công ít nhất một chi nhánh.');
       return;
     }
     setBusy(true);
@@ -106,10 +106,10 @@ export default function EmployeesPage() {
         });
       }
       setEditing(null);
-      setNotice(t('Đã lưu thông tin nhân viên.'));
+      setNotice('Đã lưu thông tin nhân viên.');
       await reload();
     } catch (cause) {
-      setError(cause.message || t('Không lưu được nhân viên.'));
+      setError(errorMessage(cause, 'Không lưu được nhân viên.'));
     } finally {
       setBusy(false);
     }
@@ -120,10 +120,10 @@ export default function EmployeesPage() {
     setError('');
     try {
       await setEmployeeStatus(employee.id, next);
-      setNotice(next === 'LOCKED' ? t('Đã khóa tài khoản và thu hồi phiên đăng nhập.') : t('Đã mở khóa tài khoản.'));
+      setNotice(next === 'LOCKED' ? 'Đã khóa tài khoản và thu hồi phiên đăng nhập.' : 'Đã mở khóa tài khoản.');
       await reload();
     } catch (cause) {
-      setError(cause.message || t('Không cập nhật được trạng thái.'));
+      setError(errorMessage(cause, 'Không cập nhật được trạng thái.'));
     }
   }
 
@@ -135,9 +135,9 @@ export default function EmployeesPage() {
     try {
       await resetEmployeePassword(passwordTarget.id, newPassword);
       setPasswordTarget(null);
-      setNotice(t('Đã đặt lại mật khẩu và thu hồi phiên đăng nhập.'));
+      setNotice('Đã đặt lại mật khẩu và thu hồi phiên đăng nhập.');
     } catch (cause) {
-      setError(cause.message || t('Không đặt lại được mật khẩu.'));
+      setError(errorMessage(cause, 'Không đặt lại được mật khẩu.'));
     } finally {
       setBusy(false);
     }
@@ -149,8 +149,8 @@ export default function EmployeesPage() {
       <button className="btn primary" onClick={() => { setNotice(''); setEditing({ ...blankEmployee, branch_ids: [] }); }}>{t('+ Thêm nhân viên')}</button>
       <span className="muted small" aria-live="polite">{t('Nhân viên')}: {employees.length}</span>
     </div>
-    {error && <div className="notice error-state" role="alert">{error}</div>}
-    {notice && <div className="notice success-state" role="status">{notice}</div>}
+    {error && <div className="notice error-state" role="alert">{t(error)}</div>}
+    {notice && <div className="notice success-state" role="status">{t(notice)}</div>}
     <section className="panel">
       {loading ? <p className="muted" role="status">{t('Đang tải nhân viên…')}</p> : employees.length === 0 ? <div className="empty"><h3>{t('Chưa có nhân viên')}</h3><p>{query ? t('Thử từ khóa tìm kiếm khác.') : t('Tài khoản nhân viên được tạo sẽ hiển thị tại đây.')}</p></div> :
         <div className="table-wrap"><table><thead><tr><th>{t('Nhân viên')}</th><th>{t('Tài khoản')}</th><th>{t('Vai trò')}</th><th>{t('Chi nhánh')}</th><th>{t('Trạng thái')}</th><th>{t('Thao tác')}</th></tr></thead><tbody>

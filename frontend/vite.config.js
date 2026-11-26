@@ -6,8 +6,7 @@ const apiProxy = {
 };
 
 export default defineConfig({
-  // Use the classic JSX factory so the existing centralized React.createElement
-  // localization hook also receives literal JSX text in the legacy screens.
+  // Keep the classic JSX factory used by the existing React imports.
   esbuild: {
     jsx: 'transform',
     jsxFactory: 'React.createElement',

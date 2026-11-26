@@ -21,9 +21,12 @@ export function changeInventory(action, payload) {
   return apiRequest(endpoint, { method: 'POST', body: JSON.stringify(payload) });
 }
 
-export function importInventoryCsv({ branchId, file, dryRun = false }) {
+export function importInventoryCsv({ branchId, file, dryRun = false, signal }) {
+  if (!Number.isSafeInteger(branchId) || branchId <= 0) {
+    throw new Error('inventory.branchRequired');
+  }
   const form = new FormData();
   form.append('file', file);
   const params = new URLSearchParams({ branchId: String(branchId), dryRun: String(dryRun) });
-  return apiRequest(`/inventory/import-csv?${params}`, { method: 'POST', body: form });
+  return apiRequest(`/inventory/import-csv?${params}`, { method: 'POST', body: form, signal });
 }

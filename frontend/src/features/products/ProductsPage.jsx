@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiAssetUrl } from '../../auth-client.js';
-import { useLanguage } from '../../i18n/index.js';
+import { errorMessage, useLanguage } from '../../i18n/index.js';
 import { createCategory, listCategories, setCategoryStatus, updateCategory } from '../categories/api.js';
 import { listInventory } from '../inventory/api.js';
 import { createProduct, createProductVariant, deleteUnusedProductImage, getProduct, listProducts, setProductStatus, setVariantStatus, updateProduct, updateProductVariant, uploadProductImage } from './api.js';
@@ -23,12 +23,12 @@ function ProductDialog({ product, categories, busy, onCancel, onSubmit, t }) {
     if (!file) return;
     if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       event.target.value = '';
-      setImageError(t('Chỉ hỗ trợ ảnh JPEG, PNG hoặc WebP.'));
+      setImageError('Chỉ hỗ trợ ảnh JPEG, PNG hoặc WebP.');
       return;
     }
     if (file.size > 5 * 1024 * 1024) {
       event.target.value = '';
-      setImageError(t('Ảnh tối đa 5 MB.'));
+      setImageError('Ảnh tối đa 5 MB.');
       return;
     }
     setImagePreview(URL.createObjectURL(file));
@@ -42,8 +42,8 @@ function ProductDialog({ product, categories, busy, onCancel, onSubmit, t }) {
       <label className="field">{t('Mô tả')}<textarea name="description" maxLength={16000} rows={4} defaultValue={product?.description || ''} /></label>
       <label className="field">{t('Đường dẫn ảnh')}<input name="imageUrl" type="url" maxLength={500} defaultValue={product?.imageUrl || ''} placeholder="https://…" onChange={(event) => { if (!event.currentTarget.form.elements.imageFile.files?.length) setImagePreview(apiAssetUrl(event.target.value.trim())); }} /></label>
       <label className="field">{t('Hoặc tải ảnh từ máy')}<input name="imageFile" type="file" accept="image/jpeg,image/png,image/webp" onChange={selectImage} /><small className="muted">{t('JPEG, PNG hoặc WebP · tối đa 5 MB')}</small></label>
-      {imageError && <p className="error-state" role="alert">{imageError}</p>}
-      {imagePreview && <div className="product-upload-preview"><img src={imagePreview} alt={t('Xem trước ảnh sản phẩm')} onError={() => setImageError(t('Không hiển thị được ảnh xem trước.'))} /><span>{t('Xem trước ảnh')}</span></div>}
+      {imageError && <p className="error-state" role="alert">{t(imageError)}</p>}
+      {imagePreview && <div className="product-upload-preview"><img src={imagePreview} alt={t('Xem trước ảnh sản phẩm')} onError={() => setImageError('Không hiển thị được ảnh xem trước.')} /><span>{t('Xem trước ảnh')}</span></div>}
       <p className="muted small">{t('Sau khi tạo sản phẩm, thêm ít nhất một biến thể để bán và quản lý tồn kho.')}</p>
       <div className="actions"><button className="btn primary" disabled={busy}>{busy ? t('Đang lưu…') : t('Lưu thay đổi')}</button><button className="btn outline" type="button" onClick={onCancel}>{t('Hủy')}</button></div>
     </form>
@@ -58,7 +58,7 @@ function VariantDialog({ variant, busy, onCancel, onSubmit, t, isOwner }) {
       <label className="field">SKU<input name="sku" maxLength={80} defaultValue={variant?.sku || ''} placeholder={t('Để trống để hệ thống tạo SKU')} /></label>
       <label className="field">{t('Giá bán')}<input name="price" type="number" min="0" step="0.01" required defaultValue={variant?.price || ''} /></label>
       {isOwner && <label className="field">{t('Giá vốn')}<input name="costPrice" type="number" min="0" step="0.01" defaultValue={variant?.cost_price ?? ''} /></label>}
-      <label className="field">Barcode<input name="barcode" maxLength={100} defaultValue={variant?.barcode || ''} /></label>
+      <label className="field">{t('Barcode')}<input name="barcode" maxLength={100} defaultValue={variant?.barcode || ''} /></label>
       <div className="actions"><button className="btn primary" disabled={busy}>{busy ? t('Đang lưu…') : t('Lưu thay đổi')}</button><button className="btn outline" type="button" onClick={onCancel}>{t('Hủy')}</button></div>
     </form>
   </div>;
@@ -71,13 +71,13 @@ function CategoryDialog({ categories, busy, onCancel, onCreate, onToggle, onEdit
     event.preventDefault();
     setError('');
     try { await onCreate(name.trim()); setName(''); }
-    catch (cause) { setError(cause.message || t('Không lưu được danh mục.')); }
+    catch (cause) { setError(errorMessage(cause, 'Không lưu được danh mục.')); }
   }
   return <div className="overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onCancel()}>
     <section className="dialog product-dialog" role="dialog" aria-modal="true" aria-labelledby="category-manager-title">
       <div className="section-title"><h2 id="category-manager-title">{t('Quản lý danh mục')}</h2><button className="link" onClick={onCancel} aria-label={t('Đóng')}>×</button></div>
       <form className="category-create-row" onSubmit={submit}><input aria-label={t('Tên danh mục')} required maxLength={100} value={name} onChange={(event) => setName(event.target.value)} placeholder={t('Tên danh mục mới')} /><button className="btn primary" disabled={busy}>{t('Thêm')}</button></form>
-      {error && <p className="error-state" role="alert">{error}</p>}
+      {error && <p className="error-state" role="alert">{t(error)}</p>}
       <div className="category-admin-list">{flattenCategories(categories).map((category) => <div className="category-admin-row" key={category.categoryId}><span>{'— '.repeat(category.depth)}{category.name}</span><span className="muted small">{category.status === 'ACTIVE' ? t('Đang hoạt động') : t('Ngừng hoạt động')}</span><button className="link" disabled={busy} onClick={() => onEdit(category)}>{t('Sửa')}</button><button className="link" disabled={busy} onClick={() => onToggle(category)}>{category.status === 'ACTIVE' ? t('Ngừng bán') : t('Kích hoạt')}</button></div>)}</div>
       <button className="btn outline" onClick={onCancel}>{t('Đóng')}</button>
     </section>
@@ -116,7 +116,7 @@ export default function ProductsPage({ branchId, isOwner }) {
     const failed = results.find((result) => result.status === 'rejected');
     if (failed) {
       setProducts([]); setCategories([]); setStock([]);
-      setError(failed.reason?.message || t('Không tải được danh sách sản phẩm.'));
+      setError(errorMessage(failed.reason, 'Không tải được danh sách sản phẩm.'));
     } else {
       setProducts(Array.isArray(results[0].value) ? results[0].value : []);
       setCategories(Array.isArray(results[1].value) ? results[1].value : []);
@@ -130,7 +130,7 @@ export default function ProductsPage({ branchId, isOwner }) {
   async function openDetail(productId) {
     setSelectedId(productId); setDetail(null); setImageFailed(false); setError('');
     try { setDetail(await getProduct(productId)); }
-    catch (cause) { setError(cause.message || t('Không tải được chi tiết sản phẩm.')); }
+    catch (cause) { setError(errorMessage(cause, 'Không tải được chi tiết sản phẩm.')); }
   }
 
   async function saveProduct(event) {
@@ -147,11 +147,11 @@ export default function ProductsPage({ branchId, isOwner }) {
         payload.imageUrl = uploadedImageUrl;
       }
       const saved = productDialog?.productId ? await (async () => { const { productCode, ...updatePayload } = payload; return updateProduct(productDialog.productId, updatePayload); })() : await createProduct(payload);
-      setProductDialog(null); setNotice(t('Đã lưu sản phẩm.')); await reload();
+      setProductDialog(null); setNotice('Đã lưu sản phẩm.'); await reload();
       if (saved?.productId) await openDetail(saved.productId);
     } catch (cause) {
       if (uploadedImageUrl) await deleteUnusedProductImage(uploadedImageUrl).catch(() => {});
-      setError(cause.message || t('Không lưu được sản phẩm.'));
+      setError(errorMessage(cause, 'Không lưu được sản phẩm.'));
     }
     finally { setBusy(false); }
   }
@@ -164,37 +164,37 @@ export default function ProductsPage({ branchId, isOwner }) {
     try {
       if (variantDialog?.variant_id) await updateProductVariant(variantDialog.variant_id, payload);
       else await createProductVariant(selectedId, payload);
-      setVariantDialog(null); setNotice(t('Đã lưu biến thể.')); await openDetail(selectedId); await reload();
-    } catch (cause) { setError(cause.message || t('Không lưu được biến thể.')); }
+      setVariantDialog(null); setNotice('Đã lưu biến thể.'); await openDetail(selectedId); await reload();
+    } catch (cause) { setError(errorMessage(cause, 'Không lưu được biến thể.')); }
     finally { setBusy(false); }
   }
 
   async function toggleProductStatus(product) {
     const next = product.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     setBusy(true); setError('');
-    try { await setProductStatus(product.productId, next); setNotice(t('Đã cập nhật trạng thái sản phẩm.')); setSelectedId(null); setDetail(null); await reload(); }
-    catch (cause) { setError(cause.message || t('Không cập nhật được trạng thái.')); }
+    try { await setProductStatus(product.productId, next); setNotice('Đã cập nhật trạng thái sản phẩm.'); setSelectedId(null); setDetail(null); await reload(); }
+    catch (cause) { setError(errorMessage(cause, 'Không cập nhật được trạng thái.')); }
     finally { setBusy(false); }
   }
 
   async function toggleVariantStatus(variant) {
     const next = variant.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE';
     setBusy(true); setError('');
-    try { await setVariantStatus(variant.variant_id, next); setNotice(t('Đã cập nhật trạng thái biến thể.')); await openDetail(selectedId); await reload(); }
-    catch (cause) { setError(cause.message || t('Không cập nhật được trạng thái.')); }
+    try { await setVariantStatus(variant.variant_id, next); setNotice('Đã cập nhật trạng thái biến thể.'); await openDetail(selectedId); await reload(); }
+    catch (cause) { setError(errorMessage(cause, 'Không cập nhật được trạng thái.')); }
     finally { setBusy(false); }
   }
 
   async function saveCategory(name) {
     setBusy(true);
-    try { await createCategory({ name, parentCategoryId: null, description: null }); setNotice(t('Đã lưu danh mục.')); await reload(); }
+    try { await createCategory({ name, parentCategoryId: null, description: null }); setNotice('Đã lưu danh mục.'); await reload(); }
     finally { setBusy(false); }
   }
 
   async function toggleCategory(category) {
     setBusy(true); setError('');
-    try { await setCategoryStatus(category.categoryId, category.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'); setNotice(t('Đã cập nhật danh mục.')); await reload(); }
-    catch (cause) { setError(cause.message || t('Không cập nhật được danh mục.')); }
+    try { await setCategoryStatus(category.categoryId, category.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'); setNotice('Đã cập nhật danh mục.'); await reload(); }
+    catch (cause) { setError(errorMessage(cause, 'Không cập nhật được danh mục.')); }
     finally { setBusy(false); }
   }
 
@@ -202,8 +202,8 @@ export default function ProductsPage({ branchId, isOwner }) {
     const name = window.prompt(t('Tên danh mục'), category.name);
     if (!name?.trim() || name.trim() === category.name) return;
     setBusy(true); setError('');
-    try { await updateCategory(category.categoryId, { name: name.trim(), parentCategoryId: category.parentCategoryId, description: category.description }); setNotice(t('Đã cập nhật danh mục.')); await reload(); }
-    catch (cause) { setError(cause.message || t('Không cập nhật được danh mục.')); }
+    try { await updateCategory(category.categoryId, { name: name.trim(), parentCategoryId: category.parentCategoryId, description: category.description }); setNotice('Đã cập nhật danh mục.'); await reload(); }
+    catch (cause) { setError(errorMessage(cause, 'Không cập nhật được danh mục.')); }
     finally { setBusy(false); }
   }
 
@@ -212,7 +212,7 @@ export default function ProductsPage({ branchId, isOwner }) {
 
   return <>
     <div className="toolbar product-toolbar"><input aria-label={t('Tìm sản phẩm')} placeholder={t('Tìm theo tên hoặc SKU')} value={query} onChange={(event) => setQuery(event.target.value)} />{isOwner && <><button className="btn primary" onClick={() => setProductDialog({})}>{t('+ Thêm sản phẩm')}</button><button className="btn outline" onClick={() => setShowCategories(true)}>{t('Danh mục')}</button></>}<span className="muted small">{products.length} {t('sản phẩm')}</span></div>
-    {error && <div className="notice error-state" role="alert">{error}</div>}{notice && <div className="notice success-state" role="status">{notice}</div>}
+    {error && <div className="notice error-state" role="alert">{t(error)}</div>}{notice && <div className="notice success-state" role="status">{t(notice)}</div>}
     {selectedId && detail ? <section className="panel product-detail-panel">
       <div className="section-title"><div><button className="link" onClick={() => { setSelectedId(null); setDetail(null); }}>{`← ${t('Quay lại danh sách')}`}</button><h2>{detail.name}</h2><p className="muted">{detail.productCode} · {categoryName(detail.categoryId)}</p></div><div className="actions wrap">{isOwner && <><button className="btn outline" onClick={() => setProductDialog(detail)}>{t('Sửa sản phẩm')}</button><button className="btn outline" onClick={() => setVariantDialog({})}>{t('+ Thêm biến thể')}</button><button className="btn outline" disabled={busy} onClick={() => toggleProductStatus(detail)}>{detail.status === 'ACTIVE' ? t('Ngừng bán') : t('Kích hoạt')}</button></>}</div></div>
       <div className="product-detail-content"><div className="product-live-image">{detail.imageUrl && !imageFailed ? <img src={apiAssetUrl(detail.imageUrl)} alt={detail.name} onError={() => setImageFailed(true)} /> : <span aria-label={t('Chưa có ảnh')}>◇</span>}</div><div><p>{detail.description || t('Chưa có mô tả.')}</p><p className="muted small">{t('Mã sản phẩm')}: {detail.productCode} · {t('Trạng thái')}: {detail.status === 'ACTIVE' ? t('Đang hoạt động') : t('Ngừng hoạt động')}</p></div></div>
