@@ -31,7 +31,7 @@ const SILENT_CALLS = new Set(['console.log', 'console.warn', 'console.error', 'l
   'rowError']);
 const KEY_CALLS = new Set(['t', 'translate']);
 // Proper nouns in demo/marketing content (people, districts, cities) are shown as-is in every language.
-const PROPER_NOUNS = new Set(['Quận 1', 'Thảo Điền', 'Bình Thạnh', 'Thủ Đức', 'Đà Nẵng', 'Nguyễn Minh Anh', 'Trần Gia Hân']);
+const PROPER_NOUNS = new Set(['Tiếng Việt', 'Quận 1', 'Thảo Điền', 'Bình Thạnh', 'Thủ Đức', 'Đà Nẵng', 'Nguyễn Minh Anh', 'Trần Gia Hân']);
 const VIETNAMESE = /[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]/i;
 const DOTTED_KEY = /^[a-z][\w-]*(\.[\w-]+)+$/;
 const FILE_NAME = /\.(?:m?jsx?|css|json|svg|png|jpe?g|webp|csv|html)$/i;

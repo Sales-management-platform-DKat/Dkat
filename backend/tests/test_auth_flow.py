@@ -63,6 +63,10 @@ class AuthFlowTests(unittest.TestCase):
         with test_engine.begin() as connection:
             connection.exec_driver_sql("CREATE TABLE IF NOT EXISTS branches (branch_id INTEGER PRIMARY KEY, store_id INTEGER NOT NULL, branch_code VARCHAR(30) NOT NULL DEFAULT '', name VARCHAR(150) NOT NULL, address VARCHAR(255) NOT NULL DEFAULT '', phone VARCHAR(20), status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE')")
             connection.exec_driver_sql("CREATE TABLE IF NOT EXISTS user_branches (user_id INTEGER NOT NULL, branch_id INTEGER NOT NULL)")
+            # Minimal catalog tables so the default branch created at owner login can seed inventory rows.
+            connection.exec_driver_sql("CREATE TABLE IF NOT EXISTS products (product_id INTEGER PRIMARY KEY, store_id INTEGER NOT NULL)")
+            connection.exec_driver_sql("CREATE TABLE IF NOT EXISTS product_variants (variant_id INTEGER PRIMARY KEY, product_id INTEGER NOT NULL, status VARCHAR(20) NOT NULL)")
+            connection.exec_driver_sql("CREATE TABLE IF NOT EXISTS inventory (inventory_id INTEGER PRIMARY KEY AUTOINCREMENT, branch_id INTEGER NOT NULL, variant_id INTEGER NOT NULL, quantity INTEGER NOT NULL)")
             connection.exec_driver_sql("""
                 CREATE TABLE IF NOT EXISTS sales_orders (
                     sales_order_id INTEGER PRIMARY KEY, order_code VARCHAR(50) NOT NULL,

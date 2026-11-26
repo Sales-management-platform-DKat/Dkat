@@ -57,6 +57,7 @@ def user_info(user: User) -> dict:
         "shop_id": user.shop_id,
         "username": user.username,
         "email": user.email,
+        "phone": user.phone,
         "full_name": user.full_name,
         "role": {value: key for key, value in STORAGE_ROLES.items()}[user.role],
         "shop_name": user.shop.name,

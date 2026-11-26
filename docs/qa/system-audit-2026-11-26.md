@@ -108,3 +108,25 @@ Chạy lại integration MySQL: `powershell -ExecutionPolicy Bypass -File backen
 2. Backend: cài lại `pip install -r requirements.txt` (develop đã thêm `httpx`), khởi động lại Uvicorn. Đảm bảo `DKAT_ADMIN_TOKEN` (≥ 32 ký tự) có trong môi trường production — nếu thiếu, trang quản trị sẽ báo "Máy chủ chưa cấu hình mã quản trị".
 3. Frontend: `npm ci && npm run build`.
 4. Sau deploy, 3 chủ cửa hàng đang chưa có chi nhánh sẽ được tạo "Chi nhánh chính" ở lần đăng nhập/refresh kế tiếp; nhắc họ bổ sung địa chỉ trong mục Chi nhánh (trường địa chỉ đang để trống và bắt buộc khi sửa).
+
+## 9. Bổ sung: mục Cài đặt (commit sau)
+
+**Lỗi gốc:** trang Cài đặt cũ là form demo lưu vào localStorage (`s.store`). Với tài khoản thật, bấm "Lưu cấu hình" vẫn báo thành công nhưng không gửi gì lên server. Module `backend/app/modules/stores/` chỉ có file rỗng.
+
+**API mới** (không đổi schema; lỗi dùng 400/409 kèm `{code, message}`, không dùng 401 để không làm frontend tự đăng xuất):
+
+| Endpoint | Quyền | Ghi chú |
+|---|---|---|
+| `GET /stores/me` | mọi vai trò | tên, gói, trạng thái/hạn gói, số chi nhánh, số nhân sự, `canEdit` |
+| `PUT /stores/me` | OWNER | đổi tên cửa hàng (2–150 ký tự) |
+| `PUT /auth/me` | mọi vai trò | họ tên, email (không trùng → `EMAIL_TAKEN`), số điện thoại |
+| `POST /auth/change-password` | mọi vai trò | kiểm tra mật khẩu cũ (`CURRENT_PASSWORD_INVALID`), khác mật khẩu cũ (`PASSWORD_UNCHANGED`), ≥ 12 ký tự; đăng xuất mọi thiết bị khác, giữ thiết bị hiện tại |
+| `GET /auth/sessions`, `POST /auth/sessions/revoke-others` | mọi vai trò | số phiên đang hoạt động; đăng xuất thiết bị khác |
+
+`UserInfo` có thêm `phone` (tùy chọn).
+
+**Giao diện:** 4 tab (Cửa hàng, Tài khoản, Bảo mật, Giao diện). Các tab giữ nguyên dữ liệu đang nhập khi chuyển qua lại. Có kiểm tra dữ liệu ngay trên form, nút Lưu chỉ bật khi có thay đổi, nút Hoàn tác, cảnh báo khi rời trang mà chưa lưu, thanh đo độ mạnh mật khẩu, cảnh báo gói sắp hết hạn (≤ 30 ngày), chọn ngôn ngữ/nền sáng-tối/chi nhánh làm việc. Mọi vai trò đều mở được Cài đặt để tự đổi mật khẩu và hồ sơ; thông tin cửa hàng chỉ đọc với Quản lý/Nhân viên. Bản demo vẫn đổi được tên cửa hàng demo; tab Tài khoản và Bảo mật báo "chỉ có ở tài khoản thật".
+
+**Kiểm thử:** backend 62/62 (thêm 8 test `test_settings_api.py`); frontend 46/46; i18n 0 thiếu; E2E trình duyệt Cài đặt 20/20 trên môi trường cô lập, gồm: đổi tên lưu vào DB và cập nhật ngay trên menu; bắt email sai và mật khẩu xác nhận không khớp ngay trên form; sai mật khẩu cũ báo rõ và không bị đăng xuất; đổi mật khẩu đăng xuất thiết bị khác; "Đăng xuất thiết bị khác"; chỉ hiện đúng một tab; giao diện tiếng Anh không lộ tiếng Việt; nhân viên chỉ xem; màn hình 390px không tràn ngang.
+
+**Chưa có:** giới hạn số lần thử mật khẩu cũ (chống dò mật khẩu) ở `/auth/change-password`; danh sách chi tiết từng phiên (thiết bị, thời điểm), vì bảng `auth_sessions` không lưu các thông tin này.

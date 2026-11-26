@@ -67,6 +67,7 @@ class UserInfo(BaseModel):
     shop_id: int
     username: str
     email: str | None
+    phone: str | None = None
     full_name: str
     role: Literal["owner", "manager", "staff"]
     shop_name: str
