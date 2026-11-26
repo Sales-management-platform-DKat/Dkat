@@ -2,62 +2,66 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-DKat is a multi-branch store management platform (inventory, POS, pre-orders) built by a student team. Specs live in DKat_SRS.docx / DKat_CSDL.docx (not in the repo); code comments cite requirement ids like FR-01.4, BR-10, NFR-02. The team writes docs, commit messages and API error messages in Vietnamese; code identifiers and code comments are in English.
+DKat is a multi-branch store management platform (inventory, POS, sales orders, pre-orders with FIFO allocation) built by a student team. Specs live in DKat_SRS.docx / DKat_CSDL.docx (not in the repo); code and READMEs cite requirement ids (FR-01.4, BR-10) and backlog items (PBI 99, PBI 129...). Docs, commit messages and API error messages are in Vietnamese; code identifiers and comments are in English.
 
 ## Repository and branches
 
-- Remote: https://github.com/Sales-management-platform-DKat/Dkat. The local `Dkat` folder may **not** be a git checkout; if `git status` fails, clone the remote elsewhere, copy the changed files in, then commit and push from the clone.
-- Branch naming: `<member>/<feature>` (e.g. `tuan/backend`, `tuan/rbac-middleware`, `tuan/branches-api`, `tuiladien/pbi-66`). Feature branches are stacked: `tuan/backend` → `tuan/rbac-middleware` → `tuan/branches-api`.
-- `master` and the `tuiladien/*` branches contain an **older/different backend** (sync `Connection`-based services, `dkat.db`, `admin` module). The async architecture described below exists on the `tuan/*` branches. Expect conflicts in `products/` and `inventory/` when merging the two lines.
+- Remote: https://github.com/Sales-management-platform-DKat/Dkat. `master` is the integration branch; work happens on `feature/task-*`, `<member>/<feature>` (e.g. `tuan/*`, `tuiladien/pbi-*`) and `ngtrongkhanq`. Commit messages use conventional prefixes (`feat:`, `fix:`, `test:`, `merge:`).
+- There are **two backend lines**. `master` and its descendants (this tree) run the **sync** backend described below. The `tuan/*` branches have an **async** SQLAlchemy/aiomysql backend (`AsyncSession`, `ok()` envelope, `CamelModel`, `require_role`). It was partly ported into `master` ("port compatible features into current backend"), so some async files remain here as **dead code** that nothing imports: `app/api/v1/router.py`, `app/modules/health/`, the `AsyncSession` functions in `auth/repository.py`, `branches/repository.py`/`service.py`, `users/` repository/service, `scripts/check_rbac.py`, `scripts/seed_auth.py` and `backend/postman/`. Don't follow their patterns, and don't expect them to run on this line.
 
-## Backend (`backend/`): FastAPI + SQLAlchemy 2 async + MySQL (aiomysql)
+## Backend (`backend/`): FastAPI + SQLAlchemy 2 (sync) + PyMySQL / SQLite
 
-### Commands (run from `backend/`, venv at `backend/.venv`)
+### Commands (run from `backend/`)
 
 ```powershell
-.venv\Scripts\activate
-pip install -r requirements.txt
-copy .env.example .env               # set DB_* and JWT_SECRET
-uvicorn app.main:app --reload        # http://127.0.0.1:8000, Swagger at /docs (disabled in production)
-python -m scripts.seed_auth          # idempotent seed: store, branches CN01-CN03, users, sample product/variants, pre-order
-python -m scripts.check_rbac         # in-process RBAC regression check (3 roles x 5 routes); exit code 1 on failure
-npx newman@6.2.1 run postman/DKat_Branches.postman_collection.json   # needs the server running (also DKat_Users, DKat_Auth)
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload            # Swagger at http://127.0.0.1:8000/docs
+.\.venv\Scripts\python.exe -m unittest discover -s tests -t . -v      # unit tests, in-memory SQLite
+.\.venv\Scripts\python.exe -m unittest tests.test_auth_flow.AuthFlowTests.test_name   # single test
+.\.venv\Scripts\python.exe -m app.workers.preorder_expiry              # one pre-order expiry sweep
 ```
 
-- No pytest/lint setup in this tree. Verification is `scripts/check_rbac.py` (uses `httpx.ASGITransport`, no server needed, real MySQL) and the Postman collections in `backend/postman/`. Collections run in order and depend on seed data (all seeded passwords: `Dkat@1234`; accounts `owner01`, `manager01` → CN01+CN02, `staff01` → CN01, `locked01`).
-- The DB schema (18 tables) is created outside this repo (`Dkat-Database/` is empty locally). There are no migrations; SQLAlchemy models mirror existing tables. `GET /api/v1/health/db` (OWNER only) reports missing tables.
+- Unit tests (`tests/`) use `fastapi.testclient.TestClient` against SQLite. `SELECT ... FOR UPDATE` is faked there, so locking and concurrency are only exercised by the MySQL tests below.
+- `integration_tests/*_mysql.py` are skipped unless a gate env var is set (e.g. `DKAT_PAYMENT_TEST_DB=1`). They refuse to run unless the DB is a local, disposable schema (e.g. `dkat_pbi99_test`). Run them through `scripts/test_pbi<N>_mysql.ps1`, which sets that up. Never point them at team data.
+- Postman collections for each PBI are in `backend/samples/`. Set `accessToken` from a login.
+
+### Configuration and database
+
+- `app/core/config.py` reads `backend/.env` (template: `.env.example`). If any `DB_HOST/DB_PORT/DB_NAME/DB_USER` is set → MySQL/TiDB through `mysql+pymysql` with TLS verification. Otherwise → `DKAT_DATABASE_URL` or `sqlite:///./dkat.db`. When `DKAT_ENV=production`, startup **fails** on SQLite or incomplete DB config (see `DEPLOYMENT_DATABASE.md`).
+- Other env vars: `DKAT_AUTH_SECRET_KEY` (≥32 chars), `DKAT_ADMIN_TOKEN` (≥32 chars, `X-Admin-Token` for `/api/v1/admin/accounts` to create store + subscription + OWNER), `DKAT_COOKIE_SECURE`, `DKAT_CORS_ORIGINS`, `PREORDER_READY_DAYS`, `ALLOW_EMPLOYEE_STOCK`, `DKAT_PRODUCT_IMAGE_DIR` (default `backend/uploads/products`, git-ignored).
+- There are no migrations. The schema is `database/01_schema.sql` plus the numbered incremental scripts `database/02_*.sql`…`08_*.sql` and `samples/02_auth_schema.sql` (auth_sessions, store_subscriptions). The app's `create_all()` at startup only creates **missing** tables and never alters existing ones; an old `dkat.db` with a stale schema stays stale. `GET /health` checks `users.user_id` to detect this. MySQL and SQLite are separate databases with separate data.
 
 ### Architecture
 
-- Each feature is `app/modules/<module>/{router,schemas,service,repository,models}.py`. Flow is strictly `router → service → repository → DB`: routers never write SQL, repositories hold no business rules. Many modules are still empty placeholder files. Register every new router in `app/api/v1/router.py` (mounted at `/api/v1`).
-- **Responses:** routes return `ok(data)` → `{"success": true, "data": ...}` and declare `response_model=SuccessResponse[X], response_model_by_alias=True`. Errors: raise `AppError(status, CODE, message, details)` or its helpers (`AppError.not_found(...)`, `.forbidden`, `.conflict`, `.validation`). `core/exceptions.py` turns everything (validation, IntegrityError 1062/1451/1452, DB down) into `{"success": false, "error": {code, message, details}}`.
-- **JSON is camelCase:** schemas extend `CamelModel` from `app/modules/auth/schemas.py` (alias generator), while Python attributes stay snake_case.
-- **Transactions:** `get_db()` gives one `AsyncSession` per request. Wrap writes in `async with transaction(db):` (it uses a SAVEPOINT plus commit when the session already auto-began, which is always the case after `require_auth` ran). Outside requests use `standalone_transaction()`. Use `with_for_update()` when a check-then-write must not race (see `branches.service.change_status`).
-- **Auth / RBAC (`app/core/permissions.py`):**
-  - `require_auth` verifies the JWT, then **reloads the user and their branch ids from the DB on every request** (token claims are never trusted for role/branches). Locked users get 403 `ACCOUNT_LOCKED`.
-  - `require_role(ROLE_OWNER, ...)` gives 403 `FORBIDDEN`.
-  - `require_branch_access()` reads `branch_id`/`branchId` from the path, query **and** JSON body; values that disagree → 400. OWNER may access every branch of their store (any status). MANAGER/EMPLOYEE may access only ACTIVE branches assigned in `user_branches`; anything else is 403, never 404.
-  - For list endpoints, filter with `get_accessible_branch_ids(user)` (an empty list means return nothing, not "no filter"). For branch ids taken from loaded records, call `ensure_branch_access(db, user, branch_id)`.
-  - Put role checks in the route's `dependencies=[...]` so they run before branch checks and before body validation; that way a wrong role gets 403, not 422.
-- Account management (`/users`): OWNER manages every account of the store. A MANAGER manages only EMPLOYEE accounts whose ACTIVE branches all lie within the manager's branches (`users.service._in_manager_scope`; the paged list repeats this rule in SQL in `users.repository.list_users_page`, so keep the two in sync). Accounts are never deleted, only LOCKED. `UserOut` deliberately has no password field.
-- Roles: `OWNER`, `MANAGER`, `EMPLOYEE`. Branches are never deleted: they are set INACTIVE, which is refused while pre-orders are `WAITING_STOCK`/`READY`/`NOTIFIED`. Creating or reactivating a branch inserts `inventory` rows with quantity 0 for the store's ACTIVE variants. The effective permission table is in `docs/rbac-matrix.md`.
+- `app/main.py` mounts every module router under `/api/v1` directly. Register new routers **there**, not in `app/api/v1/router.py`. A FastAPI lifespan runs `create_all`. `app/workers/` holds the hourly pre-order expiry job (READY/NOTIFIED past `expires_at` → EXPIRED) and notification work.
+- Modules live in `app/modules/<module>/` (router/schemas/service/repository/models), but layering is loose: some routers (e.g. `branches/router.py`) run raw `text()` SQL directly. Larger domains are split up: `preorders/services/{creation,allocation,payment,fulfillment,cancellation,lifecycle,...}.py`, `preorders/public_router.py` (unauthenticated tracking/creation, with `rate_limit.py`), and `products/` (categories, variants, CSV import, image storage).
+- DB access is a sync `Session` from `app/db/session.get_db()` (SQLite gets `PRAGMA foreign_keys=ON`), or `engine.begin()` for raw-SQL blocks. Stock and pre-order writes take `FOR UPDATE` locks. Work that must happen after commit (FIFO allocation after stock import, notifications) runs once the transaction has committed; `ready_preorder_ids` is passed out of it for that.
+- **Errors:** the `AppError`/envelope handlers in `core/exceptions.py` are **not registered** in `main.py`. Endpoints raise `HTTPException` with either a Vietnamese string or a dict like `{"code": "ORDER_NOT_PENDING", ...}`, so clients receive FastAPI's `{"detail": ...}`. JSON fields are mostly snake_case; some newer endpoints accept camelCase (e.g. `dryRun`).
+- **Auth (`core/security.py`, `core/permissions.py`, `modules/auth`):** 15-min HS256 access tokens carry a session id (`sid`). Each request loads the `auth_sessions` row and the user, and rejects revoked or expired sessions, non-ACTIVE users and stores whose subscription has lapsed. Refresh tokens rotate and are stored hashed, in an HttpOnly cookie (30 days with "remember me", otherwise 12 h). Passwords are PBKDF2.
+- **Roles:** the DB stores `OWNER`/`MANAGER`/`EMPLOYEE`; `require_roles()` maps them to `owner`/`manager`/`staff`. Login picks the role by username suffix: `name` = owner, `name:manager`, `name:staff`. Dependencies: `require_auth` / `require_owner` / `require_owner_or_manager` → `Actor(store_id, role, user_id)`. Branch scoping: `get_accessible_branch_ids(db, actor)` (OWNER = all store branches, others = their `user_branches`), and `require_branch_access(db, actor, branch_id)` returns 403. `docs/rbac-matrix.md` documents the intended matrix.
 
-### Gotchas
-
-- On Windows the console is cp1252: `print()` of Vietnamese text in scripts raises `UnicodeEncodeError` (and rolls back a seed transaction). Keep script output ASCII, or call `sys.stdout.reconfigure(encoding="utf-8")` / set `PYTHONIOENCODING=utf-8`.
-- In Postman test scripts, don't declare a variable named `data` (it is a sandbox global).
-
-## Frontend (`frontend/`): React 19 + Vite 7, plain JS demo (Node >= 22.12)
+## Frontend (`frontend/`): React 19 + Vite 7, plain JS (Node >= 22.12)
 
 ```powershell
 npm ci
-npm run dev        # vite on 127.0.0.1
-npm run build      # base './'; do not open dist/index.html via file://
+npm run dev        # 127.0.0.1:5173; proxies /api and /health to 127.0.0.1:8000
+npm run build      # base './'; don't open dist/index.html via file://
 npm test           # node --test tests/*.test.js
-node --test --test-name-pattern "<name>" tests/domain.test.js   # single test
+node --test --test-name-pattern "<name>" tests/live-api-flows.test.js   # single test
 ```
 
-- The running app is `index.html` → `src/main.jsx` (all screens/dialogs in one file, hash routes like `/#/admin/...`). It is a **browser-only demo**: business logic is mocked in `src/domain.js` with data from `src/seed.js` persisted in localStorage key `dkat-demo-v1`. It does not call the backend yet.
-- The `.ts/.tsx` files (`src/main.tsx`, `src/app/`, `src/features/*/api.ts|types.ts`, `src/layouts/`, `src/lib/`) are empty placeholders for a planned TypeScript feature-folder structure.
-- `src/api.js` is the future HTTP adapter (`VITE_API_BASE_URL`, default `http://127.0.0.1:8000/api/v1`, Bearer token). It currently reads `data.detail` for error messages, but the backend returns `error.message`; fix this when wiring it up.
-- Root `Install-to-D.ps1` / `Start-DKat.ps1` install to `D:\Dkat` and launch the frontend dev server only.
+- Entry: `index.html` → `src/main.jsx`, with hash routes: `/` landing, `#/login`, `#/platform-admin`, `#/track/<token>` (public pre-order tracking), `#/catalog`, `#/demo`, `#/admin/<screen>`.
+- The app is half migrated from demo to API:
+  - **API-backed screens** are in `src/features/<feature>/*Page.jsx` with a `api.js` per feature. They call `apiRequest` from `src/auth-client.js`, which handles the bearer token and silent refresh, and parses errors from `detail`.
+  - **Legacy demo screens** use `src/domain.js` + `src/seed.js` and persist to localStorage key `dkat-demo-v1`.
+  - `src/api.js` is an older unused adapter.
+  - `src/mocks/api.js` (`mockApiRequest`) is a browser mock of the API used by `tests/live-api-flows.test.js`. The README mentions `VITE_USE_MOCK`, but nothing in `src/` reads that variable.
+- The `.ts/.tsx` files (`src/main.tsx`, `src/app/`, `src/lib/`, `features/*/api.ts|types.ts`) are empty placeholders for a planned TypeScript migration.
+- Shared UI: `src/components/ui.jsx` and `src/components/overlay/` (`Dialog`, `pushToast`, `confirmAction`). Use dialogs and toasts, not `window.confirm`.
+- i18n: `src/i18n/` + `src/locales/{vi,en}.json`. `vite.config.js` uses the classic `React.createElement` JSX factory on purpose: the i18n layer hooks `createElement` to translate literal JSX text in the legacy screens. Don't switch to the automatic JSX runtime.
+
+## QA and gotchas
+
+- Test cases and the execution report are in `docs/qa/`; the system audit is in `docs/SYSTEM_AUDIT_2026-11-24.md`. Sample CSVs for product and stock import are in `data/`.
+- On Windows the console is cp1252: `print()` of Vietnamese text in scripts raises `UnicodeEncodeError`. Keep script output ASCII, or set `PYTHONIOENCODING=utf-8`.
+- Root `Install-to-D.ps1` / `Start-DKat.ps1` install to `D:\Dkat` and start only the frontend dev server.

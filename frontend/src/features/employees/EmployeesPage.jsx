@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { errorMessage, useLanguage } from '../../i18n/index.js';
 import { listBranches } from '../branches/api.js';
 import { assignEmployeeBranches, createEmployee, listEmployees, resetEmployeePassword, setEmployeeStatus, updateEmployee } from './api.js';
+import { Dialog } from '../../components/overlay/index.js';
 
 const blankEmployee = { username: '', full_name: '', email: '', phone: '', role: 'staff', password: '', branch_ids: [] };
 
 function EmployeeDialog({ initial, branches, busy, onCancel, onSubmit, onBranchToggle, t }) {
   const create = !initial?.id;
-  return <div className="overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onCancel()}>
-    <form className="dialog employee-dialog" onSubmit={onSubmit} aria-labelledby="employee-form-title">
+  return <Dialog open title={create ? t('Thêm nhân viên') : t('Cập nhật nhân viên')} busy={busy} onClose={onCancel} className="employee-dialog">
+    <form className="dk-form" onSubmit={onSubmit}>
       <div className="section-title"><h2 id="employee-form-title">{create ? t('Thêm nhân viên') : t('Cập nhật nhân viên')}</h2><button className="link" type="button" onClick={onCancel} aria-label={t('Đóng')}>×</button></div>
       {create && <label className="field">{t('Tên đăng nhập')}<input name="username" required minLength={3} maxLength={32} pattern="[A-Za-z0-9._\-]+" value={initial.username} onChange={(event) => onBranchToggle('username', event.target.value)} autoComplete="off" /></label>}
       <label className="field">{t('Họ tên')}<input name="full_name" required maxLength={150} value={initial.full_name} onChange={(event) => onBranchToggle('full_name', event.target.value)} autoFocus /></label>
@@ -19,18 +20,18 @@ function EmployeeDialog({ initial, branches, busy, onCancel, onSubmit, onBranchT
       <fieldset className="employee-branches"><legend>{t('Chi nhánh được phân công')}</legend>{branches.length ? branches.map((branch) => { const checked=initial.branch_ids.includes(branch.id); const inactive=branch.status!=='ACTIVE'; return <label key={branch.id} className="employee-branch-option"><input type="checkbox" checked={checked} disabled={inactive&&!checked} onChange={() => onBranchToggle('branch_ids', branch.id)} /><span>{branch.name}</span><small>{branch.branchCode || branch.branch_code}</small></label>; }) : <p className="muted">{t('Chưa có chi nhánh đang hoạt động.')}</p>}</fieldset>
       <div className="actions"><button className="btn primary" disabled={busy || initial.branch_ids.length === 0}>{busy ? t('Đang lưu…') : t('Lưu thay đổi')}</button><button className="btn outline" type="button" onClick={onCancel}>{t('Hủy')}</button></div>
     </form>
-  </div>;
+  </Dialog>;
 }
 
 function PasswordDialog({ busy, onCancel, onSubmit, t }) {
-  return <div className="overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onCancel()}>
-    <form className="dialog employee-dialog" onSubmit={onSubmit} aria-labelledby="employee-password-title">
+  return <Dialog open title={t('Đặt lại mật khẩu')} size="sm" busy={busy} onClose={onCancel} className="employee-dialog">
+    <form className="dk-form" onSubmit={onSubmit}>
       <div className="section-title"><h2 id="employee-password-title">{t('Đặt lại mật khẩu')}</h2><button className="link" type="button" onClick={onCancel} aria-label={t('Đóng')}>×</button></div>
       <label className="field">{t('Mật khẩu mới')}<input name="new_password" type="password" minLength={12} maxLength={128} required autoComplete="new-password" autoFocus /></label>
       <p className="muted small">{t('Các phiên đăng nhập hiện tại của nhân viên sẽ bị thu hồi.')}</p>
       <div className="actions"><button className="btn primary" disabled={busy}>{busy ? t('Đang lưu…') : t('Đặt lại')}</button><button className="btn outline" type="button" onClick={onCancel}>{t('Hủy')}</button></div>
     </form>
-  </div>;
+  </Dialog>;
 }
 
 export default function EmployeesPage() {

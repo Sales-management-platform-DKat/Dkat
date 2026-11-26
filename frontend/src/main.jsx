@@ -12,6 +12,7 @@ import { ProductCatalog } from './ProductCatalog';
 import BusinessAnalytics from './BusinessAnalytics';
 import { Button, Checkbox, SegmentedControl, Select } from './components/ui';
 import './styles/ui-system.css';
+import './components/overlay/overlay.css';
 import {apiRequest,refreshSession,setAccessToken} from './auth-client';
 import {demoVariantLabel,errorMessage,LanguageProvider,LanguageSwitcher,useLanguage} from './i18n';
 import CustomersPage from './features/customers/CustomersPage.jsx';
