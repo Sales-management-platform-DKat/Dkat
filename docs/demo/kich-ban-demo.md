@@ -4,7 +4,7 @@ Câu chuyện: chuỗi **DKat Fashion** có 3 chi nhánh. Một khách hỏi chi
 
 Thứ tự 9 bước: đăng nhập OWNER → tạo sản phẩm → bán hàng POS → khách đặt trước trên website → nhập kho → FIFO → SMS/email → xác nhận nhận hàng → dashboard.
 
-**Đã chạy thử trọn kịch bản ngày 25/11/2026, không phải sửa dữ liệu bằng tay:**
+**Đã chạy thử trọn kịch bản ngày 25/11/2026 và chạy lại ngày 26/11/2026 sau khi đổi trang website (tìm kiếm, lọc, trang chi tiết), không phải sửa dữ liệu bằng tay:**
 - Bằng API: `scripts/demo_dry_run.py`, đạt 10/10 bước.
 - Bằng giao diện thật trên Edge: đạt 8/8 thao tác chính. Ảnh trong tài liệu này lấy từ lần chạy đó.
 
@@ -116,15 +116,20 @@ Ngoài ra có 74 đơn đã thanh toán trong 29 ngày gần nhất để dashbo
 ![Xác nhận thanh toán POS](img/03b_pos_thanh_toan.jpg)
 
 ### Bước 4. Khách đặt trước trên website (4:30-6:00) · Cửa sổ A, tab 2
-1. Trang **Danh mục sản phẩm**, chi nhánh **DKat Quận 1**. Ô tìm gõ `khoác`.
-2. Thẻ **Áo khoác gió DKat · Đen / M** ghi **Hết hàng**, bấm **Đặt trước**.
-3. Họ tên `Khách Demo`, **SĐT và email thật của người dẫn**, địa chỉ `1 Lê Duẩn, Quận 1`. Bấm **Gửi đặt trước**.
+1. Trang **Danh mục sản phẩm**, chi nhánh **DKat Quận 1**. Ô tìm gõ `khoác`. Còn lại 1 thẻ: **Áo khoác gió DKat**, 599.000 đ, nhãn **Còn hàng** (vì bản Đen / L vẫn còn).
+2. Bấm **Xem chi tiết**. Hộp chi tiết hiện tình trạng tại DKat Quận 1:
+   - **Đen / M: Hết hàng**, có nút Đặt trước.
+   - Đen / L: Còn hàng, không có nút Đặt trước.
+
+   Có thể chỉ thêm các bộ lọc **Danh mục** và **Tình trạng** trên thanh lọc.
+3. Ở dòng **Đen / M**, bấm **Đặt trước**. Họ tên `Khách Demo`, **SĐT và email thật của người dẫn**, địa chỉ `1 Lê Duẩn, Quận 1`. Bấm **Gửi đặt trước**.
 4. Màn hình "Đặt trước thành công" kèm mã đơn `PD-...`, trạng thái Chờ hàng về.
 
 > "Website chỉ cho khách biết còn hay hết, không lộ số lượng tồn hay giá vốn. Khách không cần tài khoản."
 
-![Website: sản phẩm hết hàng](img/04a_website_het_hang.jpg)
-![Đặt trước thành công](img/04c_website_thanh_cong.jpg)
+![Website: tìm sản phẩm](img/04a_website_tim_kiem.jpg)
+![Website: chi tiết, Đen / M hết hàng](img/04b_website_chi_tiet.jpg)
+![Đặt trước thành công](img/04d_website_thanh_cong.jpg)
 
 ### Bước 5. Nhập kho (6:00-7:00) · Cửa sổ A, tab 1
 1. **Kho hàng** → **Nhập kho**: biến thể **Áo khoác gió DKat Đen / M**, số lượng **`1`**, ghi chú `Hàng về đợt 1`. Bấm **Xác nhận**.

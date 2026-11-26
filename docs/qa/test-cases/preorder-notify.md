@@ -44,7 +44,7 @@ Tồn / đơn có sẵn ở CN01: Áo khoác gió DKat Đen / M (AK-GIO-DEN-M, v
 |---|---|
 | **Điều kiện** | Đã làm Chuẩn bị chung, server CẤU HÌNH A. Không cần đăng nhập. |
 | **Dữ liệu đầu vào (seed)** | Sản phẩm: Áo khoác gió DKat Đen / M (hết hàng) \| Họ tên: (để trống) \| SĐT 0912000001 \| Địa chỉ 2 Lê Lợi, Quận 1 |
-| **Các bước (giao diện)** | 1. Mở http://127.0.0.1:5173/#/catalog, chi nhánh DKat Quận 1, ô tìm gõ khoác<br>2. Thẻ Áo khoác gió DKat · Đen / M (Hết hàng) -> Đặt trước<br>3. Để trống Họ tên, nhập SĐT và địa chỉ như dữ liệu -> Gửi đặt trước |
+| **Các bước (giao diện)** | 1. Mở http://127.0.0.1:5173/#/catalog, chi nhánh DKat Quận 1, ô tìm gõ khoác<br>2. Thẻ Áo khoác gió DKat -> Xem chi tiết -> dòng Đen / M (Hết hàng tại DKat Quận 1) -> Đặt trước<br>3. Để trống Họ tên, nhập SĐT và địa chỉ như dữ liệu -> Gửi đặt trước |
 | **Kiểm tra nhanh qua API** | POST /api/v1/preorders {"branchId":1,"customer":{"fullName":"","phone":"0912000001","address":"2 Lê Lợi, Quận 1"},"items":[{"variantId":8,"quantity":1}]} |
 | **Kết quả mong đợi** | Form không gửi, dưới ô Họ tên hiện 'Vui lòng nhập họ tên.' API: 422, code INVALID_PREORDER, details[0].field = customer.fullName. Không tạo đơn. |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API); thông báo trên form: đúng theo code LiveCatalog.jsx |
@@ -72,9 +72,9 @@ Tồn / đơn có sẵn ở CN01: Áo khoác gió DKat Đen / M (AK-GIO-DEN-M, v
 |---|---|
 | **Điều kiện** | Như TC-PN-01. |
 | **Dữ liệu đầu vào (seed)** | Lần 1: Khách B, 0912000001, địa chỉ để trống, Đen / M \| Lần 2: Khách B, 0912000001, 2 Lê Lợi, sản phẩm Áo khoác gió Đen / L (còn 6) |
-| **Các bước (giao diện)** | 1. Form đặt trước Đen / M, để trống Địa chỉ -> Gửi đặt trước<br>2. Trên danh mục, xem thẻ Áo khoác gió DKat · Đen / L |
+| **Các bước (giao diện)** | 1. Form đặt trước Đen / M, để trống Địa chỉ -> Gửi đặt trước<br>2. Trong hộp chi tiết Áo khoác gió DKat, xem dòng Đen / L |
 | **Kiểm tra nhanh qua API** | POST /api/v1/preorders thiếu customer.address; rồi đủ thông tin nhưng items[0].variantId = 9 (Đen / L) |
-| **Kết quả mong đợi** | Lần 1: dưới ô Địa chỉ hiện 'Vui lòng nhập địa chỉ.'; API 422, details[0].field = customer.address. Lần 2: thẻ Đen / L ghi Còn hàng, KHÔNG có nút Đặt trước; API 409 VARIANT_IN_STOCK ('Hàng còn đủ; vui lòng mua trực tiếp tại cửa hàng'). Tổng số đơn đặt trước vẫn 1 (chỉ đơn của chị Lan). |
+| **Kết quả mong đợi** | Lần 1: dưới ô Địa chỉ hiện 'Vui lòng nhập địa chỉ.'; API 422, details[0].field = customer.address. Lần 2: dòng Đen / L ghi Còn hàng, KHÔNG có nút Đặt trước; API 409 VARIANT_IN_STOCK ('Hàng còn đủ; vui lòng mua trực tiếp tại cửa hàng'). Tổng số đơn đặt trước vẫn 1 (chỉ đơn của chị Lan). |
 | **Chạy thử chuẩn bị 25/11** | Đạt (API); thông báo trên form: đúng theo code LiveCatalog.jsx |
 | **Kết quả vòng 2 (25/11/2026)** | **Pass**: thiếu địa chỉ -> 422 customer.address; Đen / L còn 6 -> 409 VARIANT_IN_STOCK; số đơn vẫn 1 |
 

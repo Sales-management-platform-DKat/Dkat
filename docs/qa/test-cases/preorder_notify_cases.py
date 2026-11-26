@@ -41,7 +41,7 @@ CASES = [
     ("TC-PN-01", "Đặt trước", "Thiếu họ tên bị từ chối",
      "Đã làm Chuẩn bị chung, server CẤU HÌNH A. Không cần đăng nhập.",
      "Sản phẩm: Áo khoác gió DKat Đen / M (hết hàng) | Họ tên: (để trống) | SĐT 0912000001 | Địa chỉ 2 Lê Lợi, Quận 1",
-     "1. Mở http://127.0.0.1:5173/#/catalog, chi nhánh DKat Quận 1, ô tìm gõ khoác\n2. Thẻ Áo khoác gió DKat · Đen / M (Hết hàng) -> Đặt trước\n"
+     "1. Mở http://127.0.0.1:5173/#/catalog, chi nhánh DKat Quận 1, ô tìm gõ khoác\n2. Thẻ Áo khoác gió DKat -> Xem chi tiết -> dòng Đen / M (Hết hàng tại DKat Quận 1) -> Đặt trước\n"
      "3. Để trống Họ tên, nhập SĐT và địa chỉ như dữ liệu -> Gửi đặt trước",
      "POST /api/v1/preorders {\"branchId\":1,\"customer\":{\"fullName\":\"\",\"phone\":\"0912000001\",\"address\":\"2 Lê Lợi, Quận 1\"},\"items\":[{\"variantId\":8,\"quantity\":1}]}",
      "Form không gửi, dưới ô Họ tên hiện 'Vui lòng nhập họ tên.' API: 422, code INVALID_PREORDER, details[0].field = customer.fullName. Không tạo đơn.",
@@ -57,10 +57,10 @@ CASES = [
     ("TC-PN-03", "Đặt trước", "Thiếu địa chỉ bị từ chối; hàng còn thì không cho đặt trước",
      "Như TC-PN-01.",
      "Lần 1: Khách B, 0912000001, địa chỉ để trống, Đen / M | Lần 2: Khách B, 0912000001, 2 Lê Lợi, sản phẩm Áo khoác gió Đen / L (còn 6)",
-     "1. Form đặt trước Đen / M, để trống Địa chỉ -> Gửi đặt trước\n2. Trên danh mục, xem thẻ Áo khoác gió DKat · Đen / L",
+     "1. Form đặt trước Đen / M, để trống Địa chỉ -> Gửi đặt trước\n2. Trong hộp chi tiết Áo khoác gió DKat, xem dòng Đen / L",
      "POST /api/v1/preorders thiếu customer.address; rồi đủ thông tin nhưng items[0].variantId = 9 (Đen / L)",
      "Lần 1: dưới ô Địa chỉ hiện 'Vui lòng nhập địa chỉ.'; API 422, details[0].field = customer.address. "
-     "Lần 2: thẻ Đen / L ghi Còn hàng, KHÔNG có nút Đặt trước; API 409 VARIANT_IN_STOCK ('Hàng còn đủ; vui lòng mua trực tiếp tại cửa hàng'). Tổng số đơn đặt trước vẫn 1 (chỉ đơn của chị Lan).",
+     "Lần 2: dòng Đen / L ghi Còn hàng, KHÔNG có nút Đặt trước; API 409 VARIANT_IN_STOCK ('Hàng còn đủ; vui lòng mua trực tiếp tại cửa hàng'). Tổng số đơn đặt trước vẫn 1 (chỉ đơn của chị Lan).",
      ["preorder"]),
     ("TC-PN-04", "Đặt trước", "Đặt trước thành công không trừ kho",
      "CHẠY LẠI python -m scripts.demo_reset trước TC này (các lần gửi lỗi ở TC-PN-01..03 cũng tính vào giới hạn 5 lần / 10 phút / IP). Server CẤU HÌNH A.",

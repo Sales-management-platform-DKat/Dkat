@@ -120,10 +120,12 @@ def _():
 
 @step("4. Website: khách đặt trước Áo khoác gió Đen/M (đang hết hàng)")
 def _():
-    products = client.get(API + "/public/products", params={"storeId": STORE_ID}).json()
-    hero = next(v for p in products for v in p["variants"] if v["sku"] == HERO_SKU)
-    S["hero"] = hero["variantId"]
-    status = next(x["status"] for x in hero["stock"] if x["branchId"] == S["cn01"])
+    # same calls as the website: search "khoác" -> product detail -> variant Đen / M at DKat Quận 1
+    found = client.get(API + "/public/products", params={"storeId": STORE_ID, "keyword": "khoác"}).json()["items"]
+    detail = client.get(API + f"/public/products/{found[0]['id']}").json()
+    hero = next(v for v in detail["variants"] if v["sku"] == HERO_SKU)
+    S["hero"] = hero["id"]
+    status = next(x["availability"] for x in hero["branches"] if x["branchId"] == S["cn01"])
     customer = {"fullName": "Khách Demo", "phone": PHONE, "address": "1 Lê Duẩn, Quận 1"}
     if EMAIL:
         customer["email"] = EMAIL
