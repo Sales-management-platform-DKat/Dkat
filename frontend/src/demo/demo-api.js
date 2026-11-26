@@ -201,11 +201,51 @@ function parseCsv(text) {
   return rows;
 }
 
-const HEADER_ALIASES = { sku: 'sku', 'ma sku': 'sku', 'ma hang': 'sku', quantity: 'quantity', 'so luong': 'quantity', qty: 'quantity', note: 'note', 'ghi chu': 'note' };
+const HEADER_ALIASES = {
+  sku: 'sku', 'ma sku': 'sku', 'ma hang': 'sku', quantity: 'quantity', 'so luong': 'quantity', qty: 'quantity', note: 'note', 'ghi chu': 'note',
+  'product name': 'product_name', 'ten san pham': 'product_name', 'san pham': 'product_name', 'variant name': 'variant_name', 'ten bien the': 'variant_name',
+  'bien the': 'variant_name', category: 'category', 'danh muc': 'category', price: 'price', 'gia ban': 'price', gia: 'price', 'don gia': 'price',
+};
+const DEFAULT_CATEGORY = 'Chưa phân loại';
 
 async function readFileText(file) {
   if (typeof file?.text === 'function') return file.text();
   return String(file || '');
+}
+
+function parsePrice(raw) {
+  let value = String(raw || '').replace(/[\s₫đ]/g, '');
+  if (!value) return null;
+  if (/^\d{1,3}(\.\d{3})+$/.test(value)) value = value.replaceAll('.', '');
+  const price = Number(value);
+  return Number.isFinite(price) && price >= 0 ? price : NaN;
+}
+
+// Creates the product/variant for a NEW SKU row (same rules as the backend).
+function createVariantForImport(s, actor, row) {
+  let category = s.categories.find((item) => fold(item.name).trim() === fold(row.category).trim());
+  if (!category) {
+    category = { categoryId: s.next.category++, parentCategoryId: null, name: row.category, description: null, status: 'ACTIVE' };
+    s.categories.push(category);
+  }
+  let product = s.products.find((item) => item.status === 'ACTIVE' && fold(item.name) === fold(row.productName) && item.categoryId === category.categoryId);
+  if (!product) {
+    const productId = s.next.product++;
+    const prefix = fold(category.name).replace(/[^a-z]/g, '').slice(0, 3).toUpperCase() || 'SP';
+    product = { productId, productCode: `${prefix}-${String(productId).padStart(4, '0')}`, categoryId: category.categoryId, name: row.productName, description: null, imageUrl: null, status: 'ACTIVE', createdBy: actor.id, variants: [] };
+    s.products.push(product);
+  }
+  const variant = { variant_id: s.next.variant++, sku: row.sku, variant_name: row.variantName, price: String(row.price), cost_price: null, barcode: null, status: 'ACTIVE', attributes: [] };
+  product.variants.push(variant);
+  for (const branch of s.branches.filter((item) => item.status === 'ACTIVE')) stockRow(s, branch.id, variant.variant_id, true);
+  return { sku: variant.sku, productId: product.productId, variantId: variant.variant_id, productName: product.name, variantName: variant.variant_name, category: category.name, price: variant.price };
+}
+
+function quantityError(raw) {
+  if (raw.startsWith('-')) return 'Số lượng không được âm';
+  if (!raw) return 'Thiếu số lượng';
+  if (Number(raw) === 0) return 'Số lượng phải lớn hơn 0';
+  return 'Số lượng phải là số nguyên dương';
 }
 
 function demoStockImport(s, actor, branchId, text, dryRun, allowDuplicate) {
@@ -213,9 +253,11 @@ function demoStockImport(s, actor, branchId, text, dryRun, allowDuplicate) {
   const errors = [];
   const warnings = [];
   const header = (rows[0] || []).map((cell) => HEADER_ALIASES[fold(cell).replace(/[_-]/g, ' ').trim()] || null);
+  const base = { dryRun, newSkus: 0, existingSkus: 0, warnings, fileType: 'csv', duplicateOfImportAt: null, created: [], items: [] };
   if (!header.includes('sku') || !header.includes('quantity')) {
-    return { dryRun, valid: false, totalRows: 0, validRows: 0, rows: [], errors: [{ line: 1, field: 'header', code: 'INVALID_HEADER', message: 'Dòng tiêu đề cần các cột: sku, quantity (tùy chọn: note)' }], warnings, fileType: 'csv', duplicateOfImportAt: null, items: [] };
+    return { ...base, valid: false, totalRows: 0, validRows: 0, rows: [], errors: [{ line: 1, field: 'header', code: 'INVALID_HEADER', message: 'Dòng tiêu đề cần các cột: sku, quantity (tùy chọn: note, product_name, variant_name, category, price)' }] };
   }
+  const canCreate = actor.role === 'OWNER' || actor.role === 'MANAGER';
   const valid = [];
   const seen = new Map();
   let total = 0;
@@ -223,32 +265,69 @@ function demoStockImport(s, actor, branchId, text, dryRun, allowDuplicate) {
     if (!cells.some((cell) => cell.trim())) return;
     total++;
     const line = index + 2;
-    const value = (name) => (cells[header.indexOf(name)] || '').trim();
+    const value = (name) => (header.includes(name) ? cells[header.indexOf(name)] || '' : '').trim();
     const sku = value('sku');
     const rawQuantity = value('quantity').replace(/\s/g, '');
     if (!sku) { errors.push({ line, field: 'sku', code: 'INVALID_VALUE', message: 'Thiếu SKU' }); return; }
-    if (!/^\d+$/.test(rawQuantity) || Number(rawQuantity) < 1) {
-      errors.push({ line, field: 'quantity', code: 'INVALID_VALUE', message: rawQuantity.startsWith('-') ? 'Số lượng không được âm' : !rawQuantity ? 'Thiếu số lượng' : Number(rawQuantity) === 0 ? 'Số lượng phải lớn hơn 0' : 'Số lượng phải là số nguyên dương' });
+    if (!/^\d+$/.test(rawQuantity) || Number(rawQuantity) < 1) { errors.push({ line, field: 'quantity', code: 'INVALID_VALUE', message: quantityError(rawQuantity) }); return; }
+    const quantity = Number(rawQuantity);
+    const note = value('note') || null;
+    const key = sku.toLowerCase();
+    const entry = variantsOf(s).find((item) => item.variant.sku.toLowerCase() === key);
+    if (entry) {
+      if (entry.variant.status !== 'ACTIVE' || entry.product.status !== 'ACTIVE') { errors.push({ line, field: 'sku', code: 'SKU_INACTIVE', message: `SKU "${entry.variant.sku}" đang ngừng kinh doanh` }); return; }
+      if (seen.has(key)) warnings.push({ line, field: 'sku', code: 'DUPLICATE_SKU_ROW', message: `SKU "${entry.variant.sku}" đã có ở dòng ${seen.get(key).line}; số lượng sẽ được cộng dồn` });
+      else seen.set(key, { line });
+      valid.push({ line, status: 'EXISTING', variantId: entry.variant.variant_id, sku: entry.variant.sku, quantity, note, productName: entry.product.name, variantName: entry.variant.variant_name, quantityBefore: stockRow(s, branchId, entry.variant.variant_id)?.quantity || 0 });
       return;
     }
-    const entry = variantsOf(s).find((item) => item.variant.sku.toLowerCase() === sku.toLowerCase());
-    if (!entry) { errors.push({ line, field: 'sku', code: 'SKU_NOT_FOUND', message: `SKU "${sku}" không tồn tại trong cửa hàng` }); return; }
-    if (entry.variant.status !== 'ACTIVE' || entry.product.status !== 'ACTIVE') { errors.push({ line, field: 'sku', code: 'SKU_INACTIVE', message: `SKU "${entry.variant.sku}" đang ngừng kinh doanh` }); return; }
-    if (seen.has(entry.variant.variant_id)) warnings.push({ line, field: 'sku', code: 'DUPLICATE_SKU_ROW', message: `SKU "${entry.variant.sku}" đã có ở dòng ${seen.get(entry.variant.variant_id)}; số lượng sẽ được cộng dồn` });
-    else seen.set(entry.variant.variant_id, line);
-    valid.push({ line, variantId: entry.variant.variant_id, sku: entry.variant.sku, quantity: Number(rawQuantity), note: value('note') || null, productName: entry.product.name, variantName: entry.variant.variant_name, quantityBefore: stockRow(s, branchId, entry.variant.variant_id)?.quantity || 0 });
+    if (!canCreate) { errors.push({ line, field: 'sku', code: 'SKU_NOT_FOUND', message: `SKU "${sku}" chưa có trong cửa hàng; chỉ chủ cửa hàng hoặc quản lý được tạo sản phẩm mới` }); return; }
+    const productName = value('product_name');
+    const price = parsePrice(value('price'));
+    if (Number.isNaN(price)) { errors.push({ line, field: 'price', code: 'INVALID_VALUE', message: 'Giá bán phải là số' }); return; }
+    const missing = [!productName && 'product_name', price === null && 'price'].filter(Boolean);
+    if (missing.length) { errors.push({ line, field: 'sku', code: 'SKU_NOT_FOUND', message: `SKU "${sku}" chưa có trong cửa hàng. Điền cột ${missing.join(' và ')} để tạo sản phẩm mới` }); return; }
+    const category = value('category') || DEFAULT_CATEGORY;
+    const existingCategory = s.categories.find((item) => fold(item.name).trim() === fold(category).trim());
+    if (existingCategory && existingCategory.status !== 'ACTIVE') { errors.push({ line, field: 'category', code: 'CATEGORY_INACTIVE', message: `Danh mục "${existingCategory.name}" đang ngừng hoạt động` }); return; }
+    const candidate = { line, status: 'NEW', variantId: null, sku, quantity, note, productName, variantName: value('variant_name') || 'Mặc định', category: existingCategory?.name || category, price, quantityBefore: 0 };
+    const first = seen.get(key);
+    if (first) {
+      if (fold(first.productName) !== fold(productName) || first.price !== price || fold(first.category) !== fold(candidate.category)) {
+        errors.push({ line, field: 'sku', code: 'SKU_CONFLICT', message: `SKU "${sku}" ở dòng ${first.line} có tên, giá hoặc danh mục khác` });
+        return;
+      }
+      warnings.push({ line, field: 'sku', code: 'DUPLICATE_SKU_ROW', message: `SKU "${sku}" đã có ở dòng ${first.line}; số lượng sẽ được cộng dồn` });
+    } else seen.set(key, candidate);
+    valid.push(candidate);
   });
   if (!total && !errors.length) errors.push({ line: 1, field: 'file', code: 'EMPTY_FILE', message: 'File không có dòng dữ liệu' });
   const totals = new Map();
-  for (const row of valid) totals.set(row.variantId, (totals.get(row.variantId) || 0) + row.quantity);
-  const fingerprint = `${branchId}|${[...totals].sort((a, b) => a[0] - b[0]).map(([id, qty]) => `${id}:${qty}`).join(';')}`;
+  for (const row of valid) totals.set(row.sku.toLowerCase(), (totals.get(row.sku.toLowerCase()) || 0) + row.quantity);
+  const fingerprint = `${branchId}|${[...totals].sort((a, b) => a[0].localeCompare(b[0])).map(([sku, qty]) => `${sku}:${qty}`).join(';')}`;
   const recent = s.movements.find((item) => item.referenceType === 'STOCK_FILE' && item.referenceId === fingerprint && Date.now() - new Date(item.createdAt).getTime() < 86400000);
-  const result = { dryRun, valid: !errors.length, totalRows: total, validRows: valid.length, rows: valid, errors, warnings, fileType: 'csv', duplicateOfImportAt: recent?.createdAt || null, items: [] };
+  const newSkus = new Set(valid.filter((row) => row.status === 'NEW').map((row) => row.sku.toLowerCase())).size;
+  const result = { ...base, valid: !errors.length, totalRows: total, validRows: valid.length, newSkus, existingSkus: totals.size - newSkus, rows: valid, errors, duplicateOfImportAt: recent?.createdAt || null };
   if (dryRun) return result;
   if (errors.length) fail(422, 'File nhập kho còn dòng lỗi.', null, 'INVALID_STOCK_CSV');
   if (recent && !allowDuplicate) fail(409, 'Dữ liệu này đã được nhập vào chi nhánh trong 24 giờ qua. Xác nhận lại nếu đây là lô hàng mới.', null, 'DUPLICATE_STOCK_IMPORT');
-  result.items = [...totals].map(([variantId, quantity]) => move(s, actor, branchId, variantId, quantity, 'IMPORT', valid.filter((row) => row.variantId === variantId).map((row) => row.note).filter(Boolean).join(' | ') || null, { referenceType: 'STOCK_FILE', referenceId: fingerprint }));
-  allocate(s, Number(branchId), [...totals.keys()]);
+  const variantBySku = new Map(valid.filter((row) => row.status === 'EXISTING').map((row) => [row.sku.toLowerCase(), row.variantId]));
+  for (const row of valid) {
+    const key = row.sku.toLowerCase();
+    if (row.status === 'NEW' && !variantBySku.has(key)) {
+      const created = createVariantForImport(s, actor, row);
+      result.created.push(created);
+      variantBySku.set(key, created.variantId);
+    }
+    row.variantId = variantBySku.get(key);
+  }
+  result.items = [...totals].map(([key, quantity]) => {
+    const lines = valid.filter((row) => row.sku.toLowerCase() === key);
+    const note = lines.map((row) => row.note).filter(Boolean).join(' | ') || null;
+    const label = lines[0].status === 'NEW' ? (note ? `SKU mới: ${note}` : 'SKU mới tạo khi nhập kho') : note;
+    return move(s, actor, branchId, variantBySku.get(key), quantity, 'IMPORT', label, { referenceType: 'STOCK_FILE', referenceId: fingerprint });
+  });
+  allocate(s, Number(branchId), result.items.map((item) => item.variantId));
   return result;
 }
 

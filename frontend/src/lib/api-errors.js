@@ -45,14 +45,14 @@ const CODE_MESSAGES = {
   DUPLICATE_STOCK_IMPORT: 'Dữ liệu này đã được nhập trong 24 giờ qua.',
   CSV_FILE_TOO_LARGE: 'File quá lớn (tối đa 5 MB).',
   ORDER_NOT_PENDING: 'Đơn hàng không còn ở trạng thái chờ thanh toán.',
-  DUPLICATE_SKU: 'SKU đã tồn tại trong cửa hàng.',
+  DUPLICATE_SKU: 'SKU đã được sử dụng, hãy chọn SKU khác.',
   RATE_LIMITED: 'Bạn thao tác quá nhanh. Vui lòng thử lại sau ít phút.',
 };
 
 // Known English messages from older endpoints.
 const TEXT_MESSAGES = [
   [/product code already exists/i, 'Mã sản phẩm đã tồn tại trong cửa hàng.'],
-  [/duplicate_sku|sku already exists/i, 'SKU đã tồn tại trong cửa hàng.'],
+  [/duplicate_sku|sku already exists/i, 'SKU đã được sử dụng, hãy chọn SKU khác.'],
   [/category not found/i, 'Không tìm thấy danh mục.'],
   [/product not found/i, 'Không tìm thấy sản phẩm.'],
   [/attribute not found/i, 'Không tìm thấy thuộc tính.'],

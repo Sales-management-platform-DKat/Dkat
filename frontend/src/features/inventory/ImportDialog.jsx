@@ -84,7 +84,7 @@ export default function ImportDialog({ branch, onClose, onImported, t }) {
       const data = await importInventoryCsv({ branchId: branch.id, file, dryRun: false, allowDuplicate: confirmDuplicate });
       setResult(data);
       setStep(2);
-      notify.success(`${t('Nhập kho thành công')}: ${data.items.length} SKU, +${totalQuantity} ${t('sản phẩm')}.`);
+      notify.success(`${t('Nhập kho thành công')}: ${data.items.length} SKU, +${totalQuantity} ${t('sản phẩm')}${data.created?.length ? ` (${data.created.length} ${t('SKU mới')})` : ''}.`);
       onImported?.();
     } catch (error) {
       if (error.code === 'INVALID_STOCK_CSV' && error.detail?.errors) {
@@ -129,11 +129,15 @@ export default function ImportDialog({ branch, onClose, onImported, t }) {
       <div className="import-guide">
         <h3>{t('Định dạng dữ liệu')}</h3>
         <table className="guide-table"><thead><tr><th>{t('Cột')}</th><th>{t('Bắt buộc')}</th><th>{t('Mô tả')}</th></tr></thead><tbody>
-          <tr><td><code>sku</code></td><td>✓</td><td>{t('SKU biến thể đã có trong cửa hàng. Hệ thống không tự tạo sản phẩm mới.')}</td></tr>
+          <tr><td><code>sku</code></td><td>✓</td><td>{t('SKU của biến thể. SKU đã có sẽ được cộng thêm tồn; SKU mới sẽ được tạo thành sản phẩm mới.')}</td></tr>
           <tr><td><code>quantity</code></td><td>✓</td><td>{t('Số lượng nhập, số nguyên lớn hơn 0.')}</td></tr>
           <tr><td><code>note</code></td><td></td><td>{t('Ghi chú (tối đa 255 ký tự).')}</td></tr>
+          <tr><td><code>product_name</code></td><td>{t('SKU mới')}</td><td>{t('Tên sản phẩm. Các SKU mới cùng tên được gộp thành một sản phẩm.')}</td></tr>
+          <tr><td><code>price</code></td><td>{t('SKU mới')}</td><td>{t('Giá bán, ví dụ 199000 hoặc 199.000.')}</td></tr>
+          <tr><td><code>variant_name</code></td><td></td><td>{t('Tên biến thể, ví dụ Đen / M (mặc định: Mặc định).')}</td></tr>
+          <tr><td><code>category</code></td><td></td><td>{t('Danh mục; chưa có sẽ được tạo (mặc định: Chưa phân loại).')}</td></tr>
         </tbody></table>
-        <p className="muted small">{t('Tiêu đề tiếng Việt như "Mã SKU", "Số lượng", "Ghi chú" cũng được chấp nhận; các cột khác (ví dụ tên sản phẩm) được bỏ qua. SKU lặp lại sẽ được cộng dồn.')}</p>
+        <p className="muted small">{t('Tiêu đề tiếng Việt như "Mã SKU", "Số lượng", "Tên sản phẩm", "Giá bán", "Danh mục" cũng được chấp nhận; các cột khác được bỏ qua. SKU lặp lại sẽ được cộng dồn. Các cột sản phẩm chỉ cần cho SKU mới.')}</p>
         <div className="actions"><a className="btn outline" href={`${TEMPLATE_BASE}mau-nhap-kho.csv`} download>{t('Tải file mẫu CSV')}</a><a className="btn outline" href={`${TEMPLATE_BASE}mau-nhap-kho.xlsx`} download>{t('Tải file mẫu Excel')}</a></div>
       </div>
     </div>}
@@ -143,19 +147,21 @@ export default function ImportDialog({ branch, onClose, onImported, t }) {
         <div><small>{t('File')}</small><b>{file?.name}</b></div>
         <div><small>{t('Tổng dòng')}</small><b>{preview.totalRows}</b></div>
         <div className="ok"><small>{t('Hợp lệ')}</small><b>{preview.validRows}</b></div>
+        <div><small>{t('SKU mới / đã có')}</small><b>{preview.newSkus || 0} / {preview.existingSkus || 0}</b></div>
         <div className={preview.errors.length ? 'bad' : ''}><small>{t('Lỗi')}</small><b>{preview.errors.length}</b></div>
         <div><small>{t('Tổng số lượng nhập')}</small><b>+{totalQuantity}</b></div>
       </div>
-      {preview.valid ? <div className="notice success-state">{t('File hợp lệ. Kiểm tra bảng bên dưới rồi bấm "Xác nhận nhập" để ghi vào kho.')}</div>
+      {preview.valid ? <div className="notice success-state">{t('File hợp lệ. Kiểm tra bảng bên dưới rồi bấm "Xác nhận nhập" để ghi vào kho.')}{preview.newSkus > 0 && <> {t('Sẽ tạo')} <b>{preview.newSkus}</b> {t('SKU mới cùng sản phẩm tương ứng.')}</>}</div>
         : <div className="notice error-state" role="alert">{t('File còn lỗi nên chưa thể nhập. Sửa các dòng tô đỏ (hoặc tải báo cáo lỗi), lưu file và chọn lại. Hệ thống không nhập một phần dữ liệu.')}</div>}
       {preview.duplicateOfImportAt && <label className="notice warning-state duplicate-confirm"><input type="checkbox" checked={confirmDuplicate} onChange={(event) => setConfirmDuplicate(event.target.checked)} />
         <span>{t('Dữ liệu giống hệt đã được nhập vào chi nhánh lúc')} <b>{new Date(preview.duplicateOfImportAt).toLocaleString('vi-VN')}</b>. {t('Đánh dấu nếu đây là một lô hàng mới và bạn muốn nhập thêm lần nữa.')}</span></label>}
       {fileLevelErrors.map((issue) => <p key={issue.code + issue.line} className="dk-field-error" role="alert">{issue.message}</p>)}
-      {lines.length > 0 && <div className="table-wrap import-table"><table><thead><tr><th>{t('Dòng')}</th><th>SKU</th><th>{t('Sản phẩm')}</th><th>{t('Tồn hiện tại')}</th><th>{t('Nhập')}</th><th>{t('Tồn sau nhập')}</th><th>{t('Ghi chú / Lỗi')}</th></tr></thead><tbody>
+      {lines.length > 0 && <div className="table-wrap import-table"><table><thead><tr><th>{t('Dòng')}</th><th>SKU</th><th>{t('Trạng thái')}</th><th>{t('Sản phẩm')}</th><th>{t('Tồn hiện tại')}</th><th>{t('Nhập')}</th><th>{t('Tồn sau nhập')}</th><th>{t('Ghi chú / Lỗi')}</th></tr></thead><tbody>
         {lines.map((entry) => <tr key={entry.line} className={entry.errors.length ? 'row-error' : entry.warnings.length ? 'row-warning' : ''}>
           <td>{entry.line}</td>
           <td>{entry.row?.sku || '—'}</td>
-          <td>{entry.row ? <>{entry.row.productName}<small className="block muted">{entry.row.variantName}</small></> : '—'}</td>
+          <td>{!entry.row ? <span className="badge red">{t('Lỗi')}</span> : entry.row.status === 'NEW' ? <span className="badge amber" title={t('SKU chưa có: sẽ tạo sản phẩm và biến thể mới')}>{t('SKU mới · tạo mới')}</span> : <span className="badge green" title={t('SKU đã tồn tại: cộng thêm vào tồn kho')}>{t('Đã tồn tại · cộng tồn')}</span>}</td>
+          <td>{entry.row ? <>{entry.row.productName}<small className="block muted">{entry.row.variantName}{entry.row.status === 'NEW' && ` · ${entry.row.category} · ${Number(entry.row.price).toLocaleString('vi-VN')} ₫`}</small></> : '—'}</td>
           <td>{entry.row?.quantityBefore ?? '—'}</td>
           <td>{entry.row ? `+${entry.row.quantity}` : '—'}</td>
           <td>{entry.row ? entry.row.quantityBefore + entry.row.quantity : '—'}</td>
@@ -168,8 +174,9 @@ export default function ImportDialog({ branch, onClose, onImported, t }) {
       <span className="import-result-icon" aria-hidden="true">✓</span>
       <h3>{t('Đã nhập kho thành công')}</h3>
       <p className="muted">{result.items.length} SKU · +{totalQuantity} {t('sản phẩm')} · {branch.name}. {t('Mọi thay đổi đã được ghi vào lịch sử biến động kho.')}</p>
-      <div className="table-wrap"><table><thead><tr><th>SKU</th><th>{t('Trước')}</th><th>{t('Thay đổi')}</th><th>{t('Sau')}</th></tr></thead><tbody>
-        {result.items.map((item) => { const row = result.rows.find((line) => line.variantId === item.variantId); return <tr key={item.variantId}><td>{row?.sku || item.variantId}</td><td>{item.quantityBefore}</td><td>+{item.quantityChange}</td><td><b>{item.quantityAfter}</b></td></tr>; })}
+      {result.created?.length > 0 && <div className="notice warning-state import-created"><b>{t('Đã tạo')} {result.created.length} {t('SKU mới')}:</b> {result.created.map((item) => `${item.sku} (${item.productName} · ${item.variantName})`).join(', ')}</div>}
+      <div className="table-wrap"><table><thead><tr><th>SKU</th><th>{t('Trạng thái')}</th><th>{t('Trước')}</th><th>{t('Thay đổi')}</th><th>{t('Sau')}</th></tr></thead><tbody>
+        {result.items.map((item) => { const row = result.rows.find((line) => line.variantId === item.variantId) || result.created?.find((line) => line.variantId === item.variantId); const isNew = result.created?.some((line) => line.variantId === item.variantId); return <tr key={item.variantId}><td>{row?.sku || item.variantId}</td><td>{isNew ? <span className="badge amber">{t('SKU mới')}</span> : <span className="badge green">{t('Đã tồn tại')}</span>}</td><td>{item.quantityBefore}</td><td>+{item.quantityChange}</td><td><b>{item.quantityAfter}</b></td></tr>; })}
       </tbody></table></div>
     </div>}
   </Dialog>;

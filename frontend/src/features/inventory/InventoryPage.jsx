@@ -4,6 +4,7 @@ import { FormDialog, FormField, notify } from '../../components/overlay/index.js
 import { EmptyState, ErrorState, LoadingState } from '../../components/states.jsx';
 import { changeInventory, listInventory, listInventoryMovements } from './api.js';
 import ImportDialog from './ImportDialog.jsx';
+import ReceiveStockForm from './ReceiveStockForm.jsx';
 
 const ACTIONS = {
   import: { title: 'Nhập kho', submit: 'Xác nhận nhập kho', done: 'Nhập kho thành công', quantity: 'Số lượng nhập' },
@@ -123,7 +124,8 @@ export default function InventoryPage({ branchId, branch, canWrite }) {
         {movements.map((movement) => <tr key={movement.movementId}><td>{formatDateTime(new Date(movement.createdAt))}</td><td>{movement.sku}</td><td>{t(MOVEMENT_LABELS[movement.movementType] || movement.movementType)}{movement.referenceType === 'STOCK_FILE' && <small className="block muted">{t('từ file')}</small>}</td><td className={movement.quantityChange > 0 ? 'text-positive' : 'text-negative'}>{movement.quantityChange > 0 ? '+' : ''}{movement.quantityChange}</td><td>{movement.createdByName || '—'}</td><td>{movement.note || '—'}</td></tr>)}
       </tbody></table></div>}
     </section>
-    {action && <StockForm action={action.kind} initialVariant={action.variantId} items={items} branch={branch} t={t} onClose={() => setAction(null)} onSaved={() => { setAction(null); reload(); }} />}
+    {action?.kind === 'import' && <ReceiveStockForm initialVariant={action.variantId} items={items} branch={branch} t={t} onClose={() => setAction(null)} onSaved={() => { setAction(null); reload(); }} />}
+    {action && action.kind !== 'import' && <StockForm action={action.kind} initialVariant={action.variantId} items={items} branch={branch} t={t} onClose={() => setAction(null)} onSaved={() => { setAction(null); reload(); }} />}
     {importing && <ImportDialog branch={branch} t={t} onClose={() => setImporting(false)} onImported={() => reload()} />}
   </>;
 }

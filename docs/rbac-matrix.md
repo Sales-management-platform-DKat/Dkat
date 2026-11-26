@@ -16,6 +16,7 @@ Phạm vi chi nhánh: OWNER thấy mọi chi nhánh của cửa hàng mình. MAN
 | Ngừng bán / mở bán sản phẩm, biến thể, danh mục | `PATCH …/status` | ✓ | ✗ 403 | ✗ 403 |
 | Giá vốn (cost price) | xem/ghi | ✓ | Ẩn; khi Manager sửa biến thể, giá vốn cũ được giữ nguyên | Ẩn |
 | Nhập / xuất / kiểm kê kho, nhập kho từ file CSV/XLSX | `POST /inventory/import|export|stocktake|import-csv` | ✓ | ✓ (chi nhánh của mình) | ✗ 403 (trừ khi `ALLOW_EMPLOYEE_STOCK=true`) |
+| Tạo SKU mới khi nhập kho (form hoặc file) | `POST /products/full`, `/inventory/import-csv` | ✓ | ✓ | ✗ (kể cả khi `ALLOW_EMPLOYEE_STOCK=true`) |
 | Lịch sử biến động kho | `GET /inventory/movements` | ✓ | ✓ (phạm vi) | ✓ (phạm vi) |
 | Tạo đơn bán, thanh toán, hủy đơn chờ | `POST /sales-orders…` | ✓ | ✓ (phạm vi) | ✓ (phạm vi) |
 | Xem danh sách đơn bán | `GET /sales-orders` | Tất cả chi nhánh | Chi nhánh của mình | Chỉ đơn do chính mình tạo |
