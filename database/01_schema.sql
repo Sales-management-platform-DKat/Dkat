@@ -109,6 +109,7 @@ CREATE TABLE attributes (
     name VARCHAR(100) NOT NULL,
     data_type ENUM('TEXT', 'NUMBER', 'BOOLEAN') NOT NULL,
     status ENUM('ACTIVE', 'INACTIVE') NOT NULL,
+    KEY ix_attributes_name_status (name, status),
     CONSTRAINT fk_attributes_store_id FOREIGN KEY (store_id) REFERENCES stores (store_id) ON DELETE RESTRICT ON UPDATE RESTRICT
 ) ENGINE=InnoDB;
 

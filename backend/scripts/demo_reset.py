@@ -7,7 +7,7 @@ What it does (about 20 seconds):
    start with "dkat_demo", so it can never wipe a real database.
 2. Seeds everything through the real API, in-process (same validation as the UI):
    store "DKat Fashion", branches CN01-CN03, owner01 / manager01 / staff01, 3 categories,
-   4 products, stock, 30 days of paid sales for the dashboard, and customer "Chị Lan" who
+   attributes Màu / Size, 4 products, stock, 30 days of paid sales for the dashboard, and customer "Chị Lan" who
    pre-ordered the out-of-stock jacket yesterday (queue position 1 for the FIFO step).
 3. Prints the demo accounts and ids.
 
@@ -119,14 +119,20 @@ def main() -> int:
                                            "branch_ids": [branch[c] for c in codes]})
 
         categories, variants, prices = {}, {}, {}
+        # attributes for the public catalog filter (attr=Màu:Đen&attr=Size:M): "Trắng / S" -> Màu Trắng, Size S
+        attribute = {n: call("POST", "/attributes", owner, {"name": n, "dataType": "TEXT"})["attributeId"] for n in ("Màu", "Size")}
         for cat_name, product_name, lines in CATALOG:
             if cat_name not in categories:
                 categories[cat_name] = call("POST", "/categories", owner, {"name": cat_name})["categoryId"]
             product = call("POST", "/products", owner, {"categoryId": categories[cat_name], "name": product_name,
                                                         "description": f"{product_name} - hàng mẫu cho buổi demo"})["productId"]
             for sku, name, price, cost, *_ in lines:
+                parts = [x.strip() for x in name.split("/")]
+                attrs = [{"attributeId": attribute["Màu"], "value": parts[0]}]
+                if len(parts) > 1:
+                    attrs.append({"attributeId": attribute["Size"], "value": parts[1]})
                 variants[sku] = call("POST", f"/products/{product}/variants", owner, {
-                    "sku": sku, "variantName": name, "price": str(price), "costPrice": str(cost)})["variant_id"]
+                    "sku": sku, "variantName": name, "price": str(price), "costPrice": str(cost), "attributes": attrs})["variant_id"]
                 prices[sku] = price
         for idx, code in ((4, "CN01"), (5, "CN02")):
             items = [{"variantId": variants[line[0]], "quantity": line[idx]} for _, _, lines in CATALOG for line in lines if line[idx] > 0]

@@ -146,4 +146,6 @@ settings = SimpleNamespace(
     NOTIFY_RETRY_INTERVAL_SECONDS=_env_float("NOTIFY_RETRY_INTERVAL_SECONDS", 300.0),
     NOTIFY_MAX_RETRIES=int(_env_float("NOTIFY_MAX_RETRIES", 3)),
     NOTIFY_RETRY_BATCH=int(_env_float("NOTIFY_RETRY_BATCH", 50)),
+    # Public catalog (FR-07): requests per minute per IP, shared by every /public route
+    PUBLIC_RATE_LIMIT_PER_MINUTE=int(_env_float("PUBLIC_RATE_LIMIT_PER_MINUTE", 60)),
 )

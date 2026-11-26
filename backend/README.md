@@ -286,3 +286,28 @@ Khi nhập kho làm một đơn đặt trước chuyển sang READY, `notify_rea
 - API: `GET /api/v1/preorders/{id}/notifications` (lịch sử gửi, người nhận đã che) và `POST /api/v1/notifications/{id}/resend` (gửi lại ngay một thông báo `FAILED`).
 - Database đã tạo trước ngày 26/11/2026: chạy `database/09_notification_retry.sql`. Database mới tạo từ `01_schema.sql` đã có sẵn các cột này.
 - Integration test: tạo DB `dkat_notify_test` từ `01_schema.sql`, rồi chạy `DKAT_NOTIFY_TEST_DB=1 DB_NAME=dkat_notify_test python -m unittest -v integration_tests.test_notifications_mysql`.
+
+## Tra cứu công khai FR-07 (website khách, không cần đăng nhập)
+
+| API | Trả về |
+|---|---|
+| `GET /api/v1/public/products?keyword&categoryId&attr&inStock&page&size&storeId` | Trang sản phẩm: `items[]` gồm `id`, `name`, `imageUrl`, `category {id, name}`, `priceMin`, `priceMax` (giá thấp/cao nhất của các biến thể ACTIVE), `inStock`; kèm `page`, `size`, `total`, `totalPages` |
+| `GET /api/v1/public/products/{id}` | Chi tiết cho form đặt trước: các biến thể ACTIVE (`id`, `sku`, `name`, `price`, `attributes`) và với mỗi chi nhánh ACTIVE chỉ `IN_STOCK` / `OUT_OF_STOCK` |
+| `GET /api/v1/public/categories?storeId` | Cây danh mục ACTIVE (`id`, `name`, `children`) |
+| `GET /api/v1/public/branches?storeId` | Chi nhánh ACTIVE (`branchId`, `name`, `address`, `phone`) |
+
+Quy tắc hiển thị và tham số:
+
+- **Sản phẩm được liệt kê** khi sản phẩm ACTIVE, có ít nhất một biến thể ACTIVE, và danh mục cùng mọi danh mục cha đều ACTIVE. Danh mục INACTIVE ẩn cả nhánh con.
+- **`inStock`** là `true` khi ít nhất một chi nhánh ACTIVE có tồn khả dụng > 0. Tồn khả dụng = tồn thực − hàng đang giữ cho đơn đặt trước.
+- **`categoryId`** gồm cả danh mục con.
+- **`attr`** có dạng `attr=Màu:Đen&attr=Size:M`. Có thể lặp tối đa 5 lần, cùng một biến thể phải thỏa mọi điều kiện, không phân biệt hoa thường.
+- **`keyword`** tìm trong tên sản phẩm.
+- **`size`** tối đa 50.
+- **`storeId`** chỉ bắt buộc khi hệ thống có nhiều cửa hàng; thiếu thì trả 422.
+- **Bảo mật dữ liệu (FR-07.5):** schema là danh sách trường được phép (`app/modules/catalog/schemas.py`). Không bao giờ trả giá vốn, số lượng tồn, mã sản phẩm, store id hay trạng thái.
+- **Giới hạn tốc độ:** `PUBLIC_RATE_LIMIT_PER_MINUTE` request/phút/IP, mặc định 60, dùng chung cho cả 4 route và đếm riêng trong từng process. Vượt giới hạn trả 429 `RATE_LIMIT_EXCEEDED` kèm `Retry-After`. Mọi response có header `X-RateLimit-Limit` và `X-RateLimit-Remaining`.
+- **Index:** database cũ cần chạy `database/10_public_catalog_indexes.sql` (thêm index tên thuộc tính cho bộ lọc `attr`).
+- **Kiểm tra:**
+  - `python -m scripts.check_public_catalog`: chạy trên seed demo, gồm kiểm tra không lộ trường nội bộ, các bộ lọc, giới hạn tốc độ và EXPLAIN dùng index.
+  - `integration_tests/test_public_catalog_mysql.py`: 8 test trên DB `dkat_catalog_test`.

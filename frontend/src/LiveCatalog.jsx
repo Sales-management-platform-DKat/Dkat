@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Button, Select } from './components/ui.jsx';
 import { money } from './domain.js';
 import './product-catalog.css';
 
-// Public website backed by the real API (FR-07): GET /public/branches, GET /public/products, POST /preorders.
+// Public website backed by the real API (FR-07): GET /public/branches, /public/categories, /public/products (search),
+// /public/products/{id} (detail with per-branch availability), POST /preorders.
 // Enabled when VITE_PUBLIC_STORE_ID is set; otherwise main.jsx keeps the browser-only demo catalog.
 const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '/api/v1').replace(/\/$/, '');
 export const PUBLIC_STORE_ID = Number(import.meta.env.VITE_PUBLIC_STORE_ID) || null;
@@ -117,45 +118,93 @@ function PreorderDialog({ item, branch, onClose, onCreated }) {
   );
 }
 
+function flattenCategories(nodes, depth = 0) {
+  return nodes.flatMap((n) => [{ id: n.id, name: n.name, depth }, ...flattenCategories(n.children || [], depth + 1)]);
+}
+
+function priceRange(min, max) {
+  return min === max ? money(min) : `${money(min)} – ${money(max)}`;
+}
+
+// Detail of one product: variants with availability at the chosen branch (never a quantity), pre-order buttons.
+function ProductDetail({ productId, branch, onClose, onPreorder }) {
+  const [detail, setDetail] = useState(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let active = true;
+    publicRequest(`/public/products/${productId}`).then((d) => active && setDetail(d)).catch((e) => active && setError(e.message));
+    return () => { active = false; };
+  }, [productId]);
+  useEffect(() => { const esc = (e) => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', esc); return () => window.removeEventListener('keydown', esc); }, [onClose]);
+  return (
+    <div className="catalog-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <section className="catalog-dialog product-detail-dialog" role="dialog" aria-modal="true" aria-labelledby="live-detail-title">
+        <button className="catalog-close" type="button" aria-label="Đóng" onClick={onClose}>×</button>
+        {error ? <p className="field-error" role="alert">{error}</p> : !detail ? <p>Đang tải…</p> : <>
+          <div className="catalog-detail-art">{detail.imageUrl ? <img src={detail.imageUrl} alt={detail.name} /> : <span aria-hidden="true">◇</span>}</div>
+          <div className="catalog-detail-copy">
+            <span className="catalog-category">{detail.category.name}</span>
+            <h2 id="live-detail-title">{detail.name}</h2>
+            <strong className="catalog-detail-price">{priceRange(detail.priceMin, detail.priceMax)}</strong>
+            {detail.description && <p className="catalog-detail-description">{detail.description}</p>}
+            <p className="catalog-results-count">Tình trạng tại {branch?.name}:</p>
+            <ul className="catalog-variant-list" aria-label="Biến thể">
+              {detail.variants.map((v) => {
+                const inStock = v.branches.find((b) => b.branchId === branch?.branchId)?.availability === 'IN_STOCK';
+                return <li key={v.id} className="catalog-variant-row">
+                  <div className="catalog-variant-name"><b>{v.name}</b><small className="catalog-sku">SKU {v.sku}{v.attributes.length ? ` · ${v.attributes.map((a) => `${a.name} ${a.value}`).join(', ')}` : ''}</small></div>
+                  <span>{money(v.price)}</span>
+                  <span className={`catalog-stock ${inStock ? 'is-available' : 'is-out'}`}>{inStock ? 'Còn hàng' : 'Hết hàng'}</span>
+                  {!inStock && branch ? <Button onClick={() => onPreorder({ product: detail, variant: { variantId: v.id, sku: v.sku, variantName: v.name, price: v.price } })}>Đặt trước</Button> : <span />}
+                </li>;
+              })}
+            </ul>
+          </div>
+        </>}
+      </section>
+    </div>
+  );
+}
+
 export function LiveCatalog() {
   const [branches, setBranches] = useState([]);
   const [branchId, setBranchId] = useState(null);
-  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  const [keyword, setKeyword] = useState('');
+  const [categoryId, setCategoryId] = useState('');
   const [stock, setStock] = useState('all');
   const [page, setPage] = useState(1);
+  const [open, setOpen] = useState(null);
   const [preorder, setPreorder] = useState(null);
+  const [version, setVersion] = useState(0);
 
-  const load = useCallback(async () => {
-    setError('');
-    try {
-      const [b, p] = await Promise.all([
-        publicRequest(`/public/branches?storeId=${PUBLIC_STORE_ID}`),
-        publicRequest(`/public/products?storeId=${PUBLIC_STORE_ID}`),
-      ]);
-      setBranches(b);
-      setProducts(p);
-      setBranchId((current) => (b.some((x) => x.branchId === current) ? current : b[0]?.branchId ?? null));
-    } catch (e) {
-      setError(e.message || 'Không tải được danh mục.');
-    } finally {
-      setLoading(false);
-    }
+  useEffect(() => {
+    Promise.all([publicRequest(`/public/branches?storeId=${PUBLIC_STORE_ID}`), publicRequest(`/public/categories?storeId=${PUBLIC_STORE_ID}`)])
+      .then(([b, c]) => { setBranches(b); setCategories(flattenCategories(c)); setBranchId((cur) => (b.some((x) => x.branchId === cur) ? cur : b[0]?.branchId ?? null)); })
+      .catch((e) => setError(e.message || 'Không tải được danh mục.'));
   }, []);
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { const t = setTimeout(() => setKeyword(query.trim()), 300); return () => clearTimeout(t); }, [query]);
+  useEffect(() => setPage(1), [keyword, categoryId, stock]);
+  useEffect(() => {
+    const params = new URLSearchParams({ storeId: String(PUBLIC_STORE_ID), page: String(page), size: String(PAGE_SIZE) });
+    if (keyword) params.set('keyword', keyword);
+    if (categoryId) params.set('categoryId', categoryId);
+    if (stock !== 'all') params.set('inStock', stock === 'available' ? 'true' : 'false');
+    let active = true;
+    setLoading(true);
+    publicRequest(`/public/products?${params}`)
+      .then((r) => { if (active) { setResult(r); setError(''); } })
+      .catch((e) => active && setError(e.message || 'Không tải được danh mục.'))
+      .finally(() => active && setLoading(false));
+    return () => { active = false; };
+  }, [keyword, categoryId, stock, page, version]);
 
   const branch = branches.find((b) => b.branchId === branchId);
-  const items = useMemo(() => products.flatMap((product) => product.variants.map((variant) => ({
-    product, variant, inStock: variant.stock.find((s) => s.branchId === branchId)?.status === 'IN_STOCK',
-  }))), [products, branchId]);
-  const q = query.trim().toLocaleLowerCase('vi');
-  const filtered = items.filter((i) => (!q || `${i.product.name} ${i.variant.variantName} ${i.variant.sku}`.toLocaleLowerCase('vi').includes(q))
-    && (stock === 'all' || (stock === 'available' ? i.inStock : !i.inStock)));
-  useEffect(() => setPage(1), [query, stock, branchId]);
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const visible = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const reload = useCallback(() => setVersion((v) => v + 1), []);
 
   return (
     <main className="catalog-page">
@@ -163,26 +212,28 @@ export function LiveCatalog() {
         <label className="catalog-branch">Chi nhánh<Select value={branchId ?? ''} onChange={(e) => setBranchId(Number(e.target.value))}>{branches.map((b) => <option key={b.branchId} value={b.branchId}>{b.name}</option>)}</Select></label></div>
       {branch && <p className="catalog-results-count">{branch.address}{branch.phone ? ` · ${branch.phone}` : ''}</p>}
       <section className="catalog-filters" aria-label="Tìm và lọc sản phẩm">
-        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm theo tên hoặc SKU" aria-label="Tìm sản phẩm" />
+        <input type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm theo tên sản phẩm" aria-label="Tìm sản phẩm" />
+        <Select aria-label="Danh mục" value={categoryId} onChange={(e) => setCategoryId(e.target.value)}><option value="">Tất cả danh mục</option>{categories.map((c) => <option key={c.id} value={c.id}>{`${'— '.repeat(c.depth)}${c.name}`}</option>)}</Select>
         <Select aria-label="Tình trạng" value={stock} onChange={(e) => setStock(e.target.value)}><option value="all">Mọi tình trạng</option><option value="available">Còn hàng</option><option value="out">Hết hàng</option></Select>
-        <Button variant="outline" type="button" onClick={load}>Làm mới</Button>
+        <Button variant="outline" type="button" onClick={reload}>Làm mới</Button>
       </section>
-      {loading ? <div className="catalog-empty"><p>Đang tải danh mục…</p></div>
-        : error ? <div className="catalog-empty" role="alert"><h2>Không tải được danh mục</h2><p>{error}</p><Button variant="outline" onClick={load}>Thử lại</Button></div>
-          : visible.length ? <>
-            <div className="catalog-results-count">{filtered.length} sản phẩm</div>
+      {error ? <div className="catalog-empty" role="alert"><h2>Không tải được danh mục</h2><p>{error}</p><Button variant="outline" onClick={reload}>Thử lại</Button></div>
+        : !result ? <div className="catalog-empty"><p>Đang tải danh mục…</p></div>
+          : result.items.length ? <>
+            <div className="catalog-results-count">{result.total} sản phẩm{loading ? ' · đang tải…' : ''}</div>
             <section className="catalog-grid" aria-label="Danh sách sản phẩm">
-              {visible.map((i) => <article className="catalog-product-card" key={i.variant.variantId}>
-                <div className="catalog-product-art">{i.product.imageUrl ? <img src={i.product.imageUrl} alt={i.product.name} /> : <span aria-hidden="true">◇</span>}</div>
-                <div className="catalog-product-info"><span className="catalog-category">{i.product.categoryName}</span><h2>{i.product.name}</h2>
-                  <span className="catalog-sku">{i.variant.variantName} · SKU {i.variant.sku}</span><strong>{money(Number(i.variant.price))}</strong>
-                  <span className={`catalog-stock ${i.inStock ? 'is-available' : 'is-out'}`}>{i.inStock ? 'Còn hàng' : 'Hết hàng'}</span>
-                  <div className="catalog-card-actions">{!i.inStock && branch && <Button onClick={() => setPreorder(i)}>Đặt trước</Button>}</div></div>
+              {result.items.map((p) => <article className="catalog-product-card" key={p.id}>
+                <div className="catalog-product-art">{p.imageUrl ? <img src={p.imageUrl} alt={p.name} /> : <span aria-hidden="true">◇</span>}</div>
+                <div className="catalog-product-info"><span className="catalog-category">{p.category.name}</span><h2>{p.name}</h2>
+                  <strong>{priceRange(p.priceMin, p.priceMax)}</strong>
+                  <span className={`catalog-stock ${p.inStock ? 'is-available' : 'is-out'}`}>{p.inStock ? 'Còn hàng' : 'Hết hàng'}</span>
+                  <div className="catalog-card-actions"><Button variant="outline" onClick={() => setOpen(p.id)}>Xem chi tiết</Button></div></div>
               </article>)}
             </section>
-            {pageCount > 1 && <nav className="catalog-pagination" aria-label="Phân trang"><Button variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>Trước</Button><span>Trang {page} / {pageCount}</span><Button variant="outline" disabled={page >= pageCount} onClick={() => setPage(page + 1)}>Tiếp</Button></nav>}
+            {result.totalPages > 1 && <nav className="catalog-pagination" aria-label="Phân trang"><Button variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>Trước</Button><span>Trang {page} / {result.totalPages}</span><Button variant="outline" disabled={page >= result.totalPages} onClick={() => setPage(page + 1)}>Tiếp</Button></nav>}
           </> : <div className="catalog-empty"><h2>Không tìm thấy sản phẩm</h2><p>Thử đổi từ khóa hoặc bộ lọc.</p></div>}
-      {preorder && branch && <PreorderDialog item={preorder} branch={branch} onClose={() => setPreorder(null)} onCreated={load} />}
+      {open && !preorder && <ProductDetail productId={open} branch={branch} onClose={() => setOpen(null)} onPreorder={setPreorder} />}
+      {preorder && branch && <PreorderDialog item={preorder} branch={branch} onClose={() => setPreorder(null)} onCreated={reload} />}
     </main>
   );
 }
