@@ -68,7 +68,7 @@ export default function PreorderDialog({ branch, options, initialVariantId, onCl
   }
 
   if (created) {
-    return <Dialog open size="sm" title={t('Đặt trước thành công')} onClose={onClose}
+    return <Dialog open size="md" title={t('Đặt trước thành công')} onClose={onClose} className="preorder-success-dialog"
       footer={<><button className="btn outline" type="button" onClick={() => navigator.clipboard?.writeText(created.preorderCode).then(() => notify.info(t('Đã sao chép mã đơn.')))}>{t('Sao chép mã')}</button><button className="btn primary" type="button" onClick={onClose}>{t('Hoàn tất')}</button></>}>
       <div className="preorder-success">
         <span className="import-result-icon" aria-hidden="true">✓</span>

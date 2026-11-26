@@ -41,6 +41,7 @@
 .dk-dialog-md { width: min(100%, 560px); }
 .dk-dialog-lg { width: min(100%, 760px); }
 .dk-dialog-xl { width: min(100%, 960px); }
+.dk-dialog.preorder-success-dialog { width: min(680px, calc(100vw - 32px)); }
 
 .dk-dialog-header,
 .dk-dialog-footer {
