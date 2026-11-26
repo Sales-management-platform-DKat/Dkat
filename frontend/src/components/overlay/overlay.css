@@ -1,0 +1,413 @@
+.dk-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 160;
+  display: grid;
+  place-items: center;
+  padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: rgba(15, 23, 42, .46);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  overscroll-behavior: contain;
+  transition: opacity .18s ease;
+}
+
+.dk-overlay[data-phase="open"] {
+  opacity: 1;
+}
+
+.dk-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 560px);
+  max-height: min(640px, calc(100dvh - 32px));
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 18px 48px rgba(23, 33, 56, .14);
+  outline: none;
+  transform: translateY(8px) scale(.985);
+  transition: transform .18s ease;
+}
+
+.dk-overlay[data-phase="open"] .dk-dialog {
+  transform: none;
+}
+
+.dk-dialog-sm { width: min(100%, 440px); }
+.dk-dialog-md { width: min(100%, 560px); }
+.dk-dialog-lg { width: min(100%, 760px); }
+.dk-dialog-xl { width: min(100%, 960px); }
+
+.dk-dialog-header,
+.dk-dialog-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+}
+
+.dk-dialog-header {
+  border-bottom: 1px solid var(--line);
+}
+
+.dk-dialog-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 750;
+  letter-spacing: -.03em;
+  line-height: 1.35;
+}
+
+.dk-dialog-header p,
+.dk-section header p {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.dk-eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.dk-close {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.dk-close svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+.dk-close:hover:not(:disabled) {
+  background: var(--soft);
+  color: var(--text);
+}
+
+.dk-dialog-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 18px 6px;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.dk-dialog-footer {
+  justify-content: flex-end;
+  align-items: center;
+  border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--soft) 55%, var(--surface));
+}
+
+.dk-dialog-footer .btn {
+  min-width: 96px;
+  margin: 0;
+}
+
+.dk-form {
+  display: grid;
+  gap: 16px;
+}
+
+.dk-section {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 4px;
+}
+
+.dk-section + .dk-section {
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.dk-section h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.dk-section-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 14px;
+}
+
+.dk-section-grid .dk-span-2,
+.dk-section-grid .dk-field:has(textarea) {
+  grid-column: 1 / -1;
+}
+
+.dk-field {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.dk-field-label {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.dk-field-label i {
+  color: var(--danger);
+  font-style: normal;
+}
+
+.dk-dialog .field,
+.dk-drawer .field {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.dk-field input,
+.dk-field select,
+.dk-field textarea,
+.dk-dialog .field input,
+.dk-dialog .field select,
+.dk-dialog .field textarea,
+.dk-dialog .select-control,
+.dk-dialog .select-control select {
+  width: 100%;
+  min-height: 40px;
+  margin: 0;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+}
+
+.dk-field textarea,
+.dk-dialog .field textarea {
+  min-height: 84px;
+  resize: vertical;
+}
+
+.dk-field input::placeholder,
+.dk-field textarea::placeholder {
+  color: color-mix(in srgb, var(--muted) 82%, transparent);
+}
+
+.dk-field.is-invalid input,
+.dk-field.is-invalid select,
+.dk-field.is-invalid textarea,
+.dk-field input[aria-invalid="true"],
+.dk-field select[aria-invalid="true"],
+.dk-field textarea[aria-invalid="true"] {
+  border-color: var(--danger);
+  background: color-mix(in srgb, var(--danger-soft) 65%, var(--surface));
+}
+
+.dk-field-hint,
+.dk-dialog .field small,
+.dk-dialog .muted.small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.dk-field-error {
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.dk-form-error {
+  margin: 0 0 4px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 28%, var(--line));
+  border-radius: 9px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.dk-confirm {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.dk-confirm-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+}
+
+.dk-confirm-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dk-confirm-danger .dk-confirm-icon { background: var(--danger-soft); color: var(--danger); }
+.dk-confirm-warning .dk-confirm-icon { background: var(--amber-bg); color: var(--amber); }
+.dk-confirm-info .dk-confirm-icon { background: var(--primary-soft); color: var(--primary); }
+
+.dk-confirm .dk-field { margin-top: 12px; }
+
+.dk-confirm-dialog .dk-dialog-body { padding-top: 14px; }
+.dk-confirm-dialog .dk-dialog-header p { max-width: 34em; }
+
+.dk-overlay:has(.dk-drawer) {
+  place-items: stretch end;
+  padding: 0;
+}
+
+.dk-drawer {
+  width: min(100%, 480px);
+  height: 100dvh;
+  max-height: 100dvh;
+  border-radius: 0;
+  border-top: 0;
+  border-bottom: 0;
+  border-right: 0;
+  transform: translateX(24px);
+}
+
+.dk-drawer-sm { width: min(100%, 400px); }
+.dk-drawer-lg { width: min(100%, 640px); }
+.dk-overlay[data-phase="open"] .dk-drawer { transform: none; }
+
+.dk-drawer .dk-dialog-body { padding-bottom: 16px; }
+
+.dk-toaster {
+  position: fixed;
+  z-index: 280;
+  right: 16px;
+  bottom: 16px;
+  display: grid;
+  gap: 8px;
+  width: min(380px, calc(100vw - 32px));
+  pointer-events: none;
+}
+
+.dk-toast {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: 0 12px 32px rgba(23, 33, 56, .14);
+  pointer-events: auto;
+  animation: dk-toast-in .18s ease;
+}
+
+.dk-toast.is-leaving { animation: dk-toast-out .16s ease forwards; }
+
+.dk-toast strong { display: block; font-size: 13px; font-weight: 750; }
+.dk-toast p { margin: 2px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+
+.dk-toast-mark {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--green-bg);
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.dk-toast-error .dk-toast-mark { background: var(--danger-soft); color: var(--danger); }
+.dk-toast-warning .dk-toast-mark { background: var(--amber-bg); color: var(--amber); }
+.dk-toast-info .dk-toast-mark { background: var(--primary-soft); color: var(--primary); }
+.dk-toast-error { border-color: color-mix(in srgb, var(--danger) 30%, var(--line)); }
+
+.dk-toast button {
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 18px;
+  line-height: 1;
+}
+
+.dk-toast button:hover { background: var(--soft); color: var(--text); }
+
+.dk-dialog .table-wrap { margin: 0 0 12px; }
+.dk-dialog .actions { margin-top: 8px; }
+.dk-meta-list { display: grid; gap: 6px; margin: 0; font-size: 13px; }
+.dk-meta-list div { display: flex; justify-content: space-between; gap: 12px; }
+.dk-meta-list span { color: var(--muted); }
+
+@keyframes dk-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes dk-toast-out { to { opacity: 0; transform: translateY(6px); } }
+
+@media (max-width: 720px) {
+  .dk-overlay { padding: 0; align-items: end; }
+  .dk-dialog,
+  .dk-dialog-sm,
+  .dk-dialog-md,
+  .dk-dialog-lg,
+  .dk-dialog-xl {
+    width: 100%;
+    max-height: min(92dvh, 100%);
+    border-right: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 16px 16px 0 0;
+  }
+  .dk-section-grid { grid-template-columns: 1fr; }
+  .dk-drawer,
+  .dk-drawer-sm,
+  .dk-drawer-lg { width: 100%; }
+  .dk-dialog-footer { padding-bottom: max(12px, env(safe-area-inset-bottom)); }
+  .dk-dialog-footer .btn { flex: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dk-overlay,
+  .dk-dialog,
+  .dk-toast { transition: none; animation: none; }
+}
+
+[data-theme="dark"] .dk-overlay { background: rgba(4, 10, 18, .62); }
+[data-theme="dark"] .dk-dialog { box-shadow: 0 18px 50px rgba(0, 0, 0, .45); }
