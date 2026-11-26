@@ -152,3 +152,23 @@ test('demo data stays in the browser store', async () => {
   await as('OWNER')('/branches', 'POST', { name: 'Chỉ trên trình duyệt', address: 'x' });
   assert.ok(localStorage.getItem(DEMO_STORE_KEY).includes('Chỉ trên trình duyệt'));
 });
+
+test('demo: stock import creates new SKUs and adds stock to existing ones', async () => {
+  const owner = as('OWNER');
+  const [existing] = await owner('/inventory?branchId=1');
+  const body = `sku,quantity,product_name,variant_name,category,price\n${existing.sku},2,,,,\nNEW-01,5,Quần short,Đen / M,Quần mới,199.000\nNEW-02,3,Quần short,Đen / L,Quần mới,199000\n`;
+  const preview = await owner('/inventory/import-csv?branchId=1&dryRun=true', 'POST', csvFile(body));
+  assert.equal(preview.valid, true);
+  assert.deepEqual([preview.newSkus, preview.existingSkus], [2, 1]);
+  assert.deepEqual(preview.rows.map((row) => row.status), ['EXISTING', 'NEW', 'NEW']);
+  const result = await owner('/inventory/import-csv?branchId=1&dryRun=false', 'POST', csvFile(body));
+  assert.deepEqual(result.created.map((item) => item.sku).sort(), ['NEW-01', 'NEW-02']);
+  const products = await owner(`/products?keyword=${encodeURIComponent('Quần short')}`);
+  assert.equal(products.length, 1);
+  const stock = Object.fromEntries((await owner('/inventory?branchId=1')).map((row) => [row.sku, row.quantity]));
+  assert.deepEqual([stock['NEW-01'], stock['NEW-02'], stock[existing.sku]], [5, 3, existing.quantity + 2]);
+  const missing = await owner('/inventory/import-csv?branchId=1&dryRun=true', 'POST', csvFile('sku,quantity\nNEW-99,1\n'));
+  assert.equal(missing.errors[0].code, 'SKU_NOT_FOUND');
+  const employee = await as('EMPLOYEE')('/inventory/import-csv?branchId=1&dryRun=true', 'POST', csvFile('sku,quantity,product_name,price\nNEW-98,1,A,1000\n')).catch((error) => error);
+  assert.equal(employee.status, 403);
+});

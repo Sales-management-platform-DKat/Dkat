@@ -233,9 +233,66 @@ class SystemAuditMySQLTests(unittest.TestCase):
         with engine.connect() as db:
             files = db.execute(text("""
                 SELECT COUNT(*) FROM inventory_movements m JOIN inventory i ON i.inventory_id=m.inventory_id
-                WHERE i.branch_id=:b AND m.reference_type='STOCK_FILE'
-            """), {"b": self.b1["id"]}).scalar_one()
+                JOIN product_variants v ON v.variant_id=i.variant_id
+                WHERE i.branch_id=:b AND m.reference_type='STOCK_FILE' AND v.sku=:sku
+            """), {"b": self.b1["id"], "sku": sku}).scalar_one()
         self.assertEqual(files, 2)
+
+    def test_stock_import_creates_new_skus_and_reports_existing(self):
+        existing = "OLD-" + self.suffix
+        self.product(self.owner, existing)
+        new_a, new_b = "NEWA-" + self.suffix, "NEWB-" + self.suffix
+        body = (
+            "sku,quantity,product_name,variant_name,category,price,note\n"
+            f"{existing},2,,,,,Lô cũ\n"
+            f"{new_a},5,Quần short {self.suffix},Đen / M,Quần mới {self.suffix},199.000,Lô mới\n"
+            f"{new_b},3,Quần short {self.suffix},Đen / L,Quần mới {self.suffix},199000,\n"
+            f"{new_a},1,Quần short {self.suffix},Đen / M,Quần mới {self.suffix},199000,\n"
+        ).encode()
+        preview = self.upload(self.manager, "moi.csv", body)
+        self.assertTrue(preview["valid"], preview)
+        self.assertEqual((preview["newSkus"], preview["existingSkus"]), (2, 1))
+        self.assertEqual([row["status"] for row in preview["rows"]], ["EXISTING", "NEW", "NEW", "NEW"])
+        self.assertEqual([w["code"] for w in preview["warnings"]], ["DUPLICATE_SKU_ROW"])
+        self.assertEqual(self.call("GET", f"/api/v1/products?keyword={new_a}", self.owner), [])  # dry run writes nothing
+
+        result = self.upload(self.manager, "moi.csv", body, dry_run=False, expected=201)
+        self.assertEqual(sorted(c["sku"] for c in result["created"]), sorted([new_a, new_b]))
+        products = self.call("GET", f"/api/v1/products?keyword=Quần short {self.suffix}", self.owner)
+        self.assertEqual(len(products), 1)  # both SKUs became variants of one product
+        self.assertEqual(sorted(v["sku"] for v in products[0]["variants"]), sorted([new_a, new_b]))
+        stock = {row["sku"]: row["quantity"] for row in self.call("GET", f"/api/v1/inventory?branchId={self.b1['id']}&keyword={self.suffix}", self.owner)}
+        self.assertEqual((stock[new_a], stock[new_b], stock[existing]), (6, 3, 2))
+        categories = [c["name"] for c in self.call("GET", "/api/v1/categories", self.owner)]
+        self.assertIn(f"Quần mới {self.suffix}", categories)
+        # A later file adds a new SKU to the same product instead of a duplicate product.
+        self.upload(self.manager, "them.csv", (
+            "sku,quantity,product_name,variant_name,category,price\n"
+            f"NEWE-{self.suffix},1,quần SHORT {self.suffix},Đen / XL,Quần mới {self.suffix},199000\n").encode(),
+            dry_run=False, expected=201)
+        products = self.call("GET", f"/api/v1/products?keyword=Quần short {self.suffix}", self.owner)
+        self.assertEqual(len(products), 1)
+        self.assertEqual(len(products[0]["variants"]), 3)
+
+        missing = self.upload(self.manager, "x.csv", f"sku,quantity\nNEWC-{self.suffix},1\n".encode())
+        self.assertEqual(missing["errors"][0]["code"], "SKU_NOT_FOUND")
+        self.assertIn("product_name", missing["errors"][0]["message"])
+        conflict = self.upload(self.manager, "x.csv", (
+            "sku,quantity,product_name,price\n"
+            f"NEWD-{self.suffix},1,A,1000\nNEWD-{self.suffix},1,B,1000\n").encode())
+        self.assertEqual(conflict["errors"][0]["code"], "SKU_CONFLICT")
+        # A SKU of another store is never reused or revealed.
+        other = self.client.post("/api/v1/admin/accounts", headers={"X-Admin-Token": config.ADMIN_TOKEN}, json={
+            "shop_name": "Other " + self.suffix, "plan": "basic", "subscription_months": 1,
+            "owner_username": "oth" + self.suffix, "owner_email": f"oth{self.suffix}@example.test",
+            "owner_full_name": "Other", "owner_password": PASSWORD,
+        })
+        self.assertEqual(other.status_code, 201, other.text)
+        taken = self.upload(self.login("oth" + self.suffix), "x.csv",
+                            f"sku,quantity,product_name,price\n{new_a},1,X,1000\n".encode(),
+                            branch=self.call("POST", "/api/v1/branches", self.login("oth" + self.suffix),
+                                             {"name": "Kho " + self.suffix, "address": "x"}, 201)["id"])
+        self.assertEqual(taken["errors"][0]["code"], "SKU_TAKEN")
 
     # --- Pre-orders -----------------------------------------------------
     def test_public_preorder_only_for_out_of_stock(self):

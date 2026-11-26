@@ -191,3 +191,15 @@ Trong lúc làm việc, `master` đã có thêm 30 commit (thông báo SMS/email
 - Bổ sung 375 bản dịch tiếng Anh vào `src/locales/en.json` để đạt kiểm tra i18n của `master`; dữ liệu mẫu demo tách sang `src/demo/demo-seed.js`.
 
 Kết quả sau merge: backend unit 62/62, frontend `npm test` 56/56, `npm run check:i18n` 0 lỗi, `eslint` 0 lỗi (15 cảnh báo), build thành công. MySQL: kiểm thử audit 8/8; PBI 99/110/111/121/122 đạt, PBI 129 đạt 35/36 (bài migration cần script riêng); default branch 3/3, notifications 4/4. `test_public_catalog_mysql` lỗi 2/5 **giống hệt trên `master` gốc** (đã kiểm tra trên worktree sạch): chi nhánh mặc định tự tạo khiến test thấy thêm một chi nhánh. Lỗi có sẵn trên `master`, cần nhóm sửa test hoặc tính năng.
+
+## 15. Cập nhật: nhập kho với SKU mới (2026-11-27)
+
+Theo yêu cầu, nhập kho không còn từ chối SKU chưa có:
+
+- **Form "Nhập kho"**: thay danh sách chọn bằng ô gõ SKU (có gợi ý). SKU đã có → hiện "Đã tồn tại · sẽ cộng thêm" kèm tồn hiện tại, rồi cộng tồn. SKU mới → hiện thêm Tên sản phẩm, Tên biến thể, Danh mục (gõ tên mới sẽ tự tạo), Giá bán; lưu sản phẩm + biến thể + tồn cùng lúc. Xuất kho và kiểm kê vẫn chỉ chọn SKU có sẵn.
+- **Nhập từ file CSV/Excel**: thêm cột tùy chọn `product_name`, `variant_name`, `category`, `price` (nhận cả tiêu đề tiếng Việt). Mỗi dòng có trạng thái **Đã tồn tại · cộng tồn** hoặc **SKU mới · tạo mới**; kết quả liệt kê các SKU đã tạo; lịch sử kho ghi "SKU mới tạo khi nhập kho". SKU mới thiếu tên hoặc giá → báo lỗi dòng (`SKU_NOT_FOUND`); cùng SKU nhưng khác tên/giá/danh mục → `SKU_CONFLICT`; SKU đã dùng ở cửa hàng khác → `SKU_TAKEN` (không tiết lộ cửa hàng đó).
+- SKU mới cùng tên + danh mục với sản phẩm đang bán được gắn thành biến thể của sản phẩm đó. Danh mục để trống dùng "Chưa phân loại".
+- Chỉ Owner/Manager được tạo SKU mới; Employee (khi bật `ALLOW_EMPLOYEE_STOCK`) chỉ nhập được SKU có sẵn. Toàn bộ file vẫn được ghi trong một transaction.
+- File mẫu `public/templates/mau-nhap-kho.{csv,xlsx}` đã có các cột mới.
+
+Kiểm thử: MySQL audit 9/9 (bài mới: tạo SKU từ file, gộp sản phẩm, danh mục mới, thiếu cột, SKU trùng cửa hàng khác, SKU mâu thuẫn); các bộ PBI 99/110/111/121/122 đạt, PBI 129 35/36 như trước; frontend 57/57; i18n 0 lỗi; build OK; kiểm tra trên trình duyệt 6/6 (form với SKU có sẵn và SKU mới, file trộn SKU có sẵn/mới/lỗi).

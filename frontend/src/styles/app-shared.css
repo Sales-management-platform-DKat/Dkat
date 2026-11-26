@@ -61,7 +61,7 @@ tr.clickable:hover td { background: var(--soft); }
 .import-guide h3 { margin: 0 0 8px; font-size: 14px; }
 .guide-table { width: 100%; font-size: 13px; }
 .guide-table code { padding: 1px 6px; border-radius: 6px; background: var(--soft); }
-.import-summary { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
+.import-summary { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin-bottom: 12px; }
 .import-summary div { display: grid; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
 .import-summary small { color: var(--muted); font-size: 11px; }
 .import-summary b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -118,3 +118,5 @@ tr.clickable:hover td { background: var(--soft); }
 footer.dk-dialog-footer { max-width: none; margin: 0; padding: 14px 18px; gap: 10px; flex-wrap: wrap; font-size: inherit; color: inherit; }
 footer.dk-dialog-footer small { margin-left: 0; }
 footer.cd-footer { display: block; max-width: none; margin: 0; padding: 10px; font-size: 13px; }
+.import-created { margin: 0 0 10px; }
+.badge.red { background: var(--danger-soft, #fde8e8); color: var(--danger, #dc2626); }
