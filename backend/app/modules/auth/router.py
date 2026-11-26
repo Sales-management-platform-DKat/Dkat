@@ -13,6 +13,7 @@ from app.core.security import decode_access_token, hash_access_token
 from app.db.session import get_db
 from app.modules.auth.models import AuthSession, User
 from app.modules.auth.schemas import LoginRequest, LoginResponse, UserInfo
+from app.modules.branches.defaults import ensure_owner_default_branch
 from app.modules.auth.service import (
     authenticate,
     rotate_refresh_session,
@@ -65,13 +66,20 @@ def _clear_refresh_cookie(response: Response, request: Request) -> None:
     )
 
 
-def _public_session(result: dict) -> dict:
+def _public_session(result: dict, branch: tuple[int | None, str] = (None, "not_applicable")) -> dict:
     return {
         "access_token": result["access_token"],
         "token_type": "bearer",
         "expires_at": result["expires_at"],
         "user": result["user"],
+        "default_branch_id": branch[0],
+        "branch_setup": branch[1],
     }
+
+
+def _request_locale(request: Request) -> str:
+    header = request.headers.get("accept-language", "")
+    return "en" if header[:2].lower() == "en" else "vi"
 
 
 @router.post("/login", response_model=LoginResponse)
@@ -82,9 +90,12 @@ def login(payload: LoginRequest, request: Request, response: Response, db: Sessi
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Tên đăng nhập hoặc mật khẩu không chính xác, hoặc tài khoản đã hết hạn.",
         )
+    user_id = user.id
+    branch = ensure_owner_default_branch(db, user, payload.locale or _request_locale(request))
+    user = db.get(User, user_id)
     result = start_session(db, user, payload.remember_me)
     _set_refresh_cookie(response, request, result)
-    return _public_session(result)
+    return _public_session(result, branch)
 
 
 @router.post("/refresh", response_model=LoginResponse)
@@ -107,7 +118,9 @@ def refresh(request: Request, db: Session = Depends(get_db)):
         _clear_refresh_cookie(response, request)
         return response
 
-    response = JSONResponse(jsonable_encoder(_public_session(result)))
+    user = db.get(User, result["user"]["id"])
+    branch = ensure_owner_default_branch(db, user, _request_locale(request)) if user else (None, "not_applicable")
+    response = JSONResponse(jsonable_encoder(_public_session(result, branch)))
     _set_refresh_cookie(response, request, result)
     return response
 

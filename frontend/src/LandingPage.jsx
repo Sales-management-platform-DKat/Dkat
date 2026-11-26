@@ -64,7 +64,7 @@ function ProductDashboard({ BrandLogo }) {
       </div>
       <div className="lp-product-kicker"><span><i />{' ' + t('BẢN XEM TRƯỚC')}</span><span>{t('Hôm nay · 08:00–20:00')}</span></div>
       <div className="lp-metrics">
-        <Metric label={t('Doanh thu hôm nay')} value="12,8 triệu" change={t('↑ 12,4% so với hôm qua')} icon="chart" />
+        <Metric label={t('Doanh thu hôm nay')} value={formatCurrency(12800000, { notation: 'compact', maximumFractionDigits: 1 })} change={t('↑ 12,4% so với hôm qua')} icon="chart" />
         <Metric label={t('Đơn hoàn tất')} value="186" change={t('24 đơn trong giờ gần nhất')} icon="receipt" />
         <Metric label={t('Sắp hết hàng')} value="08 SKU" change={t('Tại 3 chi nhánh')} icon="layers" />
       </div>
@@ -88,9 +88,9 @@ function ProductDashboard({ BrandLogo }) {
         </section>
         <section className="lp-orders-card">
           <div className="lp-card-heading"><div><strong>{t('Đơn hàng gần đây')}</strong><small>{t('Danh sách giao dịch mẫu')}</small></div><span className="lp-live">{t('Demo')}</span></div>
-          <div className="lp-order-row"><span className="lp-order-code">#DH-2048</span><span>Áo thun Basic</span><b>{formatCurrency(420000)}</b><i className="lp-order-status">{t('Hoàn tất')}</i></div>
-          <div className="lp-order-row"><span className="lp-order-code">#DH-2047</span><span>Túi Canvas</span><b>{formatCurrency(280000)}</b><i className="lp-order-status">{t('Đang xử lý')}</i></div>
-          <div className="lp-order-row"><span className="lp-order-code">#DH-2046</span><span>Combo mùa hè</span><b>{formatCurrency(650000)}</b><i className="lp-order-status">{t('Hoàn tất')}</i></div>
+          <div className="lp-order-row"><span className="lp-order-code">#DH-2048</span><span>{t('Áo thun Basic')}</span><b>{formatCurrency(420000)}</b><i className="lp-order-status">{t('Hoàn tất')}</i></div>
+          <div className="lp-order-row"><span className="lp-order-code">#DH-2047</span><span>{t('Túi Canvas')}</span><b>{formatCurrency(280000)}</b><i className="lp-order-status">{t('Đang xử lý')}</i></div>
+          <div className="lp-order-row"><span className="lp-order-code">#DH-2046</span><span>{t('Combo mùa hè')}</span><b>{formatCurrency(650000)}</b><i className="lp-order-status">{t('Hoàn tất')}</i></div>
         </section>
       </div>
     </div>
@@ -120,7 +120,7 @@ function FeatureIllustration({ id }) {
       ['lp-swatch-mint', 'Nón Daily', 'Navy · một cỡ', 190000],
     ].map(([swatch, name, variant, price]) => <div className="lp-catalog-row" key={name}>
       <i className={`lp-catalog-swatch ${swatch}`} />
-      <span><b>{name}</b><small>{t(variant)}</small></span>
+      <span><b>{t(name)}</b><small>{t(variant)}</small></span>
       <strong>{formatCurrency(price)}</strong>
     </div>)}
   </div>;
@@ -134,8 +134,8 @@ function FeatureIllustration({ id }) {
 
   if (id === 'pos') return <div className="lp-feature-illustration lp-illustration-pos" aria-hidden="true">
     <div className="lp-illustration-heading"><span>{t('Đơn hàng') + ' '}<b>#DH-2084</b></span><Icon name="receipt" size={14} /></div>
-    <div className="lp-receipt-row"><span>Áo thun Basic <small>× 2</small></span><b>{formatCurrency(640000)}</b></div>
-    <div className="lp-receipt-row"><span>Túi Canvas <small>× 1</small></span><b>{formatCurrency(280000)}</b></div>
+    <div className="lp-receipt-row"><span>{t('Áo thun Basic')} <small>× 2</small></span><b>{formatCurrency(640000)}</b></div>
+    <div className="lp-receipt-row"><span>{t('Túi Canvas')} <small>× 1</small></span><b>{formatCurrency(280000)}</b></div>
     <div className="lp-receipt-total"><span>{t('Tổng cộng')}</span><strong>{formatCurrency(920000)}</strong></div>
     <span className="lp-pay-button"><Icon name="check" size={13} />{' ' + t('Đã thanh toán')}</span>
   </div>;
@@ -168,8 +168,8 @@ function FeatureIllustration({ id }) {
   </div>;
 
   if (id === 'combos') return <div className="lp-feature-illustration lp-illustration-combo" aria-hidden="true">
-    <div className="lp-illustration-heading"><span>Combo cuối tuần</span><b className="lp-save-badge">{t('Tiết kiệm 15%')}</b></div>
-    <div className="lp-combo-items"><span><i className="lp-combo-thumb lp-swatch-blue" />Áo Basic</span><b>+</b><span><i className="lp-combo-thumb lp-swatch-orange" />Túi Canvas</span></div>
+    <div className="lp-illustration-heading"><span>{t('Combo cuối tuần')}</span><b className="lp-save-badge">{t('Tiết kiệm 15%')}</b></div>
+    <div className="lp-combo-items"><span><i className="lp-combo-thumb lp-swatch-blue" />{t('Áo Basic')}</span><b>+</b><span><i className="lp-combo-thumb lp-swatch-orange" />{t('Túi Canvas')}</span></div>
     <div className="lp-combo-price"><s>{formatCurrency(600000)}</s><strong>{formatCurrency(510000)}</strong></div>
   </div>;
 

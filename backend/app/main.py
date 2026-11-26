@@ -14,6 +14,8 @@ from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
 from app.modules.branches.router import router as branches_router
 from app.modules.catalog.router import router as catalog_router
+from app.modules.auth.account import router as account_router
+from app.modules.stores.router import router as stores_router
 from app.modules.customers.router import router as customers_router
 from app.modules.inventory.router import router as inventory_router
 from app.modules.notifications.retry import run_retry_loop
@@ -72,6 +74,8 @@ app.include_router(public_preorders_router, prefix="/api/v1")
 app.include_router(preorders_router, prefix="/api/v1")
 app.include_router(notifications_router, prefix="/api/v1")
 app.include_router(catalog_router, prefix="/api/v1")  # /public: no login, rate limited
+app.include_router(account_router, prefix="/api/v1")  # /auth/me (PUT), password, sessions
+app.include_router(stores_router, prefix="/api/v1")
 
 
 @app.get("/health")

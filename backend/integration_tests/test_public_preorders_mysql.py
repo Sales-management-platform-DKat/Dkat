@@ -88,7 +88,7 @@ class PublicPreorderMySQLTests(unittest.TestCase):
 
     def submit(self, expected=201, body=None, ip=None, headers=None):
         with TestClient(app, client=(ip or self.ip, 50000)) as client:
-            response = client.post("/preorders", json=self.body if body is None else body, headers=headers)
+            response = client.post("/api/v1/preorders", json=self.body if body is None else body, headers=headers)
         self.assertEqual(response.status_code, expected, response.text)
         return response
 
@@ -152,7 +152,7 @@ class PublicPreorderMySQLTests(unittest.TestCase):
             body = {**self.body, "items": items}
             self.submit(422, body, ip=f"2001:db8::{next(self.ips):x}")
         with TestClient(app, client=(self.ip, 50000)) as client:
-            response = client.post("/preorders", content="{", headers={"Content-Type": "application/json"})
+            response = client.post("/api/v1/preorders", content="{", headers={"Content-Type": "application/json"})
         self.assertEqual((response.status_code, response.json()["code"]), (422, "INVALID_PREORDER"))
         self.assertEqual(self.snapshot(), before)
 
@@ -267,7 +267,7 @@ class PublicPreorderMySQLTests(unittest.TestCase):
         def invoke():
             barrier.wait(timeout=10)
             with TestClient(app, client=(self.ip, 50000)) as client:
-                return client.post("/preorders", json=self.body).status_code
+                return client.post("/api/v1/preorders", json=self.body).status_code
         with ThreadPoolExecutor(max_workers=8) as pool:
             futures = [pool.submit(invoke) for _ in range(8)]
             results = [future.result(timeout=30) for future in futures]
@@ -276,9 +276,9 @@ class PublicPreorderMySQLTests(unittest.TestCase):
     def test_malformed_json_requests_are_also_rate_limited(self):
         with TestClient(app, client=(self.ip, 50000)) as client:
             for _ in range(5):
-                response = client.post("/preorders", content="{", headers={"Content-Type": "application/json"})
+                response = client.post("/api/v1/preorders", content="{", headers={"Content-Type": "application/json"})
                 self.assertEqual(response.status_code, 422)
-            response = client.post("/preorders", content="{", headers={"Content-Type": "application/json"})
+            response = client.post("/api/v1/preorders", content="{", headers={"Content-Type": "application/json"})
         self.assertEqual(response.status_code, 429)
 
     def test_concurrent_creations_same_phone_reuse_one_profile(self):
@@ -287,7 +287,7 @@ class PublicPreorderMySQLTests(unittest.TestCase):
             barrier.wait(timeout=10)
             body = {**self.body, "items": [{"variantId": self.concurrent_variants[i], "quantity": 1}]}
             with TestClient(app, client=(f"2001:db8:2::{i}", 50000)) as client:
-                response = client.post("/preorders", json=body)
+                response = client.post("/api/v1/preorders", json=body)
             self.assertEqual(response.status_code, 201, response.text)
             return response.json()["customerId"]
         with engine.begin() as db:

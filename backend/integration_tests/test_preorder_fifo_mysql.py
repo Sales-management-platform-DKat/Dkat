@@ -33,7 +33,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
         suffix = uuid4().hex[:10]
         with TestClient(app) as client:
             r = client.post("/api/v1/admin/accounts", headers={"X-Admin-Token": config.ADMIN_TOKEN}, json={
-                "shop_name": "FIFO129", "plan": "pro", "subscription_months": 12,
+                "shop_name": "FIFO129", "plan": "basic", "subscription_months": 12, "owner_email": f"fifo{suffix}@example.test",
                 "owner_username": "fifo" + suffix, "owner_full_name": "FIFO129", "owner_password": "fifo129-password-123",
             })
             assert r.status_code == 201, r.text
@@ -339,9 +339,9 @@ class PreorderFifoMySQLTests(unittest.TestCase):
         with TestClient(app) as client:
             with patch.dict("sys.modules", {"app.modules.notifications.service": None}):
                 with self.assertLogs("app.modules.preorders.services.notifications", level="WARNING"):
-                    response = client.post('/inventory/import',headers=self.owner,json={'branchId':self.branch,'items':[{'variantId':self.variant,'quantity':6}]})
+                    response = client.post('/api/v1/inventory/import',headers=self.owner,json={'branchId':self.branch,'items':[{'variantId':self.variant,'quantity':6}]})
             self.assertEqual(response.status_code,201,response.text)
-            detail = client.get(f'/preorders/{a}',headers=self.owner)
+            detail = client.get(f'/api/v1/preorders/{a}',headers=self.owner)
         self.assertEqual(detail.status_code,200,detail.text)
         self.assertEqual(detail.json()['status'],'READY')
         self.assertTrue(detail.json()['expiresAt'].endswith('Z'))
@@ -359,7 +359,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
         try:
             with self.assertLogs('app.modules.inventory.post_import',level='ERROR'):
                 with TestClient(app) as client:
-                    response = client.post('/inventory/import',headers=self.owner,json={'branchId':self.branch,'items':[{'variantId':self.variant,'quantity':6}]})
+                    response = client.post('/api/v1/inventory/import',headers=self.owner,json={'branchId':self.branch,'items':[{'variantId':self.variant,'quantity':6}]})
             self.assertEqual(response.status_code,201,response.text)
             self.assertEqual(self.state(order)[1][0].allocated_quantity,0)
             self.assertEqual(self.state(order)[0].status,'WAITING_STOCK')
@@ -400,7 +400,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
             service.notifyPreorder.side_effect = notify
             payload = {"branchId": self.branch, "items": [{"variantId": self.variant, "quantity": 5}]}
             with self.assertLogs("app.modules.preorders.services.notifications", level="WARNING") as logs:
-                response = client.post("/inventory/import", headers=self.owner, json=payload)
+                response = client.post("/api/v1/inventory/import", headers=self.owner, json=payload)
             self.assertEqual(response.status_code, 201, response.text)
             self.assertEqual(len(logs.records), 2)
             expected = {
@@ -411,7 +411,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
                 waiting: ("WAITING_STOCK", {}),
             }
             for preorder_id, (status, notifications) in expected.items():
-                detail = client.get(f"/preorders/{preorder_id}", headers=self.owner)
+                detail = client.get(f"/api/v1/preorders/{preorder_id}", headers=self.owner)
                 self.assertEqual(detail.status_code, 200, detail.text)
                 body = detail.json()
                 self.assertEqual(body["status"], status)
@@ -420,7 +420,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
                     self.assertTrue(body["expiresAt"].endswith("Z"))
 
             payload["items"][0]["quantity"] = 1
-            response = client.post("/inventory/import", headers=self.owner, json=payload)
+            response = client.post("/api/v1/inventory/import", headers=self.owner, json=payload)
             self.assertEqual(response.status_code, 201, response.text)
             self.assertEqual(service.notifyPreorder.call_count, 4)
 
@@ -442,13 +442,13 @@ class PreorderFifoMySQLTests(unittest.TestCase):
             "app.modules.notifications.service.NotificationService", create=True,
         ) as service:
             service.notifyPreorder.side_effect = notify
-            response = client.post("/inventory/import", headers=self.owner, json={
+            response = client.post("/api/v1/inventory/import", headers=self.owner, json={
                 "branchId": self.branch, "items": [{"variantId": self.variant, "quantity": 2}],
             })
             self.assertEqual(response.status_code, 201, response.text)
             self.assertEqual(service.notifyPreorder.call_count, 2)
             for preorder_id, status in orders.items():
-                detail = client.get(f"/preorders/{preorder_id}", headers=self.owner)
+                detail = client.get(f"/api/v1/preorders/{preorder_id}", headers=self.owner)
                 self.assertEqual(detail.status_code, 200, detail.text)
                 self.assertEqual(detail.json()["status"], status)
                 self.assertEqual(detail.json()["notifications"][0]["status"], "SENT")
@@ -463,11 +463,11 @@ class PreorderFifoMySQLTests(unittest.TestCase):
 
     def cancel_order(self, order, reason="Khách không nhận"):
         with TestClient(app) as client:
-            return client.post(f"/preorders/{order}/cancel", headers=self.owner, json={"reason": reason})
+            return client.post(f"/api/v1/preorders/{order}/cancel", headers=self.owner, json={"reason": reason})
 
     def pay_order(self, order, amount):
         with TestClient(app) as client:
-            response = client.post(f"/preorders/{order}/confirm-payment", headers=self.owner,
+            response = client.post(f"/api/v1/preorders/{order}/confirm-payment", headers=self.owner,
                                    json={"paymentMethod": "CASH", "amount": amount})
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()["payments"][0]
@@ -537,7 +537,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
         self.assertEqual([self.state(order)[1][0].allocated_quantity for order in (due, notified_due, legacy, future, successor)],
                          [0, 0, 1, 1, 2])
         with TestClient(app) as client:
-            detail = client.get(f"/preorders/{notified_due}", headers=self.owner).json()
+            detail = client.get(f"/api/v1/preorders/{notified_due}", headers=self.owner).json()
         self.assertEqual((detail["paymentStatus"], detail["payments"], detail["cancelledAt"]),
                          ("PAID", [original_payment], None))
         refunded = self.cancel_order(notified_due)
@@ -564,7 +564,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
                 self.assertEqual(preorder_expiry.expire_due_preorders(), 0)
             self.assertEqual([self.state(order) for order in (first, successor)], before)
             with TestClient(app) as client:
-                detail = client.get(f"/preorders/{first}", headers=self.owner).json()
+                detail = client.get(f"/api/v1/preorders/{first}", headers=self.owner).json()
             self.assertEqual((detail["payments"], detail["cancelReason"]), ([original_payment], None))
         finally:
             with engine.begin() as db:
@@ -609,14 +609,14 @@ class PreorderFifoMySQLTests(unittest.TestCase):
 
     def import_csv(self, content, *, dry_run=True):
         with TestClient(app) as client:
-            return client.post("/inventory/import-csv", headers=self.owner,
+            return client.post("/api/v1/inventory/import-csv", headers=self.owner,
                                params={"branchId": self.branch, "dryRun": dry_run},
                                files={"file": ("stock.csv", content, "text/csv")})
 
     def test_stock_csv_sample_twenty_lines_preview_and_import(self):
         data_dir = Path(__file__).resolve().parents[2] / "data"
         with TestClient(app) as client:
-            seeded = client.post("/products/import-csv", headers=self.owner, params={"dryRun": False}, files={
+            seeded = client.post("/api/v1/products/import-csv", headers=self.owner, params={"dryRun": False}, files={
                 "file": ("sample-products.csv", (data_dir / "sample-products.csv").read_bytes(), "text/csv"),
             })
         self.assertEqual(seeded.status_code, 201, seeded.text)

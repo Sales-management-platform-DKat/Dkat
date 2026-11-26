@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { errorMessage, useLanguage } from '../../i18n/index.js';
+import { confirmAction } from '../../components/confirm.jsx';
 import { cancelSalesOrder, confirmSalesOrderPayment, getSalesOrder, listSalesOrders, refundSalesOrder } from './api.js';
 
 const stateText = { PENDING: 'Chờ thanh toán', PAID: 'Đã thanh toán', CANCELLED: 'Đã hủy', REFUNDED: 'Đã hoàn tiền' };
@@ -12,7 +13,17 @@ export default function SalesOrdersPage({ branchId, canRefund = false }) {
   async function open(order) { setError(''); try { setSelected(await getSalesOrder(order.salesOrderId)); } catch (e) { setError(errorMessage(e, 'Không tải được chi tiết đơn.')); } }
   async function act(action) {
     if (!selected) return; let reason = '';
-    if (action === 'cancel' || action === 'refund') { reason = window.prompt(t(action === 'refund' ? 'Nhập lý do hoàn tiền' : 'Nhập lý do hủy')); if (!reason?.trim()) return; }
+    if (action === 'cancel' || action === 'refund') {
+      const answer = await confirmAction({
+        tone: 'danger', requireReason: true,
+        title: { key: action === 'refund' ? 'order.refund.title' : 'order.cancel.title', values: { code: selected.orderCode } },
+        description: action === 'refund' ? 'order.refund.description' : 'order.cancel.description',
+        confirmLabel: action === 'refund' ? 'Hoàn tiền' : 'Hủy đơn', cancelLabel: 'Quay lại',
+        reasonLabel: action === 'refund' ? 'Nhập lý do hoàn tiền' : 'Nhập lý do hủy',
+      });
+      if (!answer) return;
+      reason = answer.reason;
+    }
     setBusy(true); setError('');
     try {
       let result;
