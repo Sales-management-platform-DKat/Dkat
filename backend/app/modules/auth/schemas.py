@@ -27,6 +27,8 @@ class LoginRequest(BaseModel):
     )
     password: str = Field(min_length=1, max_length=256)
     remember_me: bool = False
+    # UI language at login; only used to name an auto-created default branch.
+    locale: Literal["vi", "en"] | None = None
 
 
 EmailAddress = Annotated[
@@ -77,3 +79,6 @@ class LoginResponse(BaseModel):
     token_type: Literal["bearer"] = "bearer"
     expires_at: datetime
     user: UserInfo
+    # Branch the UI should select when it has no saved choice (owners get one auto-created).
+    default_branch_id: int | None = None
+    branch_setup: Literal["existing", "created", "inactive", "failed", "not_applicable"] = "not_applicable"

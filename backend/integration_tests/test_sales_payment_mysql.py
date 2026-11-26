@@ -73,7 +73,7 @@ class SalesPaymentMySQLTests(unittest.TestCase):
         username = label + cls.suffix
         shop = cls.request("POST", "/api/v1/admin/accounts", 201,
                            {"X-Admin-Token": config.ADMIN_TOKEN}, {
-            "shop_name": username, "plan": "pro", "subscription_months": 12,
+            "shop_name": username, "plan": "basic", "subscription_months": 12, "owner_email": f"{username}@example.test",
             "owner_username": username, "owner_full_name": username, "owner_password": cls.password,
         })
         login = cls.request("POST", "/api/v1/auth/login", 200, body={
@@ -100,17 +100,17 @@ class SalesPaymentMySQLTests(unittest.TestCase):
                                    {"b": self.branch}).scalars())
 
     def order(self, quantities=(2, 3), branch=None, discount="0.00"):
-        return self.request("POST", "/sales-orders", 201, self.owner, {
+        return self.request("POST", "/api/v1/sales-orders", 201, self.owner, {
             "branchId": self.branch if branch is None else branch, "discountAmount": discount,
             "items": [{"variantId": v, "quantity": q} for v, q in zip(self.variants, quantities) if q],
         })
 
     def pay(self, order, status=200, method="CASH", auth=None, amount=None):
-        return self.request("POST", f"/sales-orders/{order['salesOrderId']}/confirm-payment", status,
+        return self.request("POST", f"/api/v1/sales-orders/{order['salesOrderId']}/confirm-payment", status,
                             auth or self.owner, {"paymentMethod": method, "amount": order["totalAmount"] if amount is None else amount})
 
     def unchanged(self, order, quantities):
-        detail = self.request("GET", f"/sales-orders/{order['salesOrderId']}", 200, self.owner)
+        detail = self.request("GET", f"/api/v1/sales-orders/{order['salesOrderId']}", 200, self.owner)
         self.assertEqual((detail["status"], detail["paidAt"], detail["payments"]), ("PENDING", None, []))
         self.assertEqual(self.quantities(), quantities)
         with engine.connect() as db:
@@ -143,7 +143,7 @@ class SalesPaymentMySQLTests(unittest.TestCase):
 
     def raw_pay(self, order):
         with TestClient(app) as client:
-            return client.post(f"/sales-orders/{order['salesOrderId']}/confirm-payment", headers=self.owner,
+            return client.post(f"/api/v1/sales-orders/{order['salesOrderId']}/confirm-payment", headers=self.owner,
                                json={"paymentMethod": "CASH", "amount": order["totalAmount"]}).status_code
 
     def test_all_methods_snapshots_ledger_and_exactly_once(self):
@@ -179,7 +179,7 @@ class SalesPaymentMySQLTests(unittest.TestCase):
                      {"paymentMethod": "CASH", "amount": "NaN"},
                      {"paymentMethod": "CASH", "amount": "10000000000.00"},
                      {"paymentMethod": "CASH", "amount": "46.75", "confirmedBy": self.owner_id}):
-            self.request("POST", f"/sales-orders/{order['salesOrderId']}/confirm-payment", 422, self.owner, body)
+            self.request("POST", f"/api/v1/sales-orders/{order['salesOrderId']}/confirm-payment", 422, self.owner, body)
         self.unchanged(order, [100, 100])
 
     def test_zero_total_can_be_paid(self):
@@ -201,9 +201,9 @@ class SalesPaymentMySQLTests(unittest.TestCase):
 
     def test_stock_endpoints_still_work_without_order_references(self):
         data = {"branchId": self.branch, "items": [{"variantId": self.variants[0], "quantity": 1}]}
-        imported = self.request("POST", "/inventory/import", 201, self.owner, data)
-        exported = self.request("POST", "/inventory/export", 201, self.owner, {**data, "reason": "KHAC"})
-        counted = self.request("POST", "/inventory/stocktake", 201, self.owner, {
+        imported = self.request("POST", "/api/v1/inventory/import", 201, self.owner, data)
+        exported = self.request("POST", "/api/v1/inventory/export", 201, self.owner, {**data, "reason": "KHAC"})
+        counted = self.request("POST", "/api/v1/inventory/stocktake", 201, self.owner, {
             "branchId": self.branch, "note": "QA99", "items": [{"variantId": self.variants[0], "countedQuantity": 99}],
         })
         self.assertEqual(self.quantities(), [99, 100])
@@ -255,12 +255,12 @@ class SalesPaymentMySQLTests(unittest.TestCase):
 
     def test_auth_branch_and_store_scope(self):
         order = self.order()
-        path = f"/sales-orders/{order['salesOrderId']}/confirm-payment"
+        path = f"/api/v1/sales-orders/{order['salesOrderId']}/confirm-payment"
         body = {"paymentMethod": "CASH", "amount": order["totalAmount"]}
         self.request("POST", path, 401, body=body)
         self.request("POST", path, 401, {"Authorization": "Bearer invalid"}, body)
         self.pay(order, 404, auth=self.other_owner)
-        self.request("POST", "/sales-orders/9223372036854775807/confirm-payment", 404, self.owner, body)
+        self.request("POST", "/api/v1/sales-orders/9223372036854775807/confirm-payment", 404, self.owner, body)
         self.unchanged(order, [100, 100])
         outside = self.order(branch=self.unassigned)
         for auth, _ in self.roles.values():
@@ -271,7 +271,7 @@ class SalesPaymentMySQLTests(unittest.TestCase):
 
     def test_cancelled_order_cannot_be_paid(self):
         order = self.order()
-        self.request("POST", f"/sales-orders/{order['salesOrderId']}/cancel", 200, self.owner, {"reason": "QA"})
+        self.request("POST", f"/api/v1/sales-orders/{order['salesOrderId']}/cancel", 200, self.owner, {"reason": "QA"})
         self.assertEqual(self.pay(order, 409)["detail"]["code"], "ORDER_NOT_PENDING")
         self.assertEqual(self.quantities(), [100, 100])
 
@@ -279,7 +279,7 @@ class SalesPaymentMySQLTests(unittest.TestCase):
         order = self.order()
         self.assertEqual(sorted(self.concurrent([lambda: self.raw_pay(order)] * 2)), [200, 409])
         self.assertEqual(self.quantities(), [98, 97])
-        detail = self.request("GET", f"/sales-orders/{order['salesOrderId']}", 200, self.owner)
+        detail = self.request("GET", f"/api/v1/sales-orders/{order['salesOrderId']}", 200, self.owner)
         self.assertEqual(len(detail["payments"]), 1)
 
     def test_two_orders_compete_for_last_item(self):
@@ -290,7 +290,7 @@ class SalesPaymentMySQLTests(unittest.TestCase):
 
     def test_reverse_line_order_uses_consistent_inventory_lock_order(self):
         first = self.order()
-        second = self.request("POST", "/sales-orders", 201, self.owner, {
+        second = self.request("POST", "/api/v1/sales-orders", 201, self.owner, {
             "branchId": self.branch,
             "items": [{"variantId": self.variants[1], "quantity": 3},
                       {"variantId": self.variants[0], "quantity": 2}],
@@ -302,10 +302,10 @@ class SalesPaymentMySQLTests(unittest.TestCase):
         order = self.order()
         def cancel():
             with TestClient(app) as client:
-                return client.post(f"/sales-orders/{order['salesOrderId']}/cancel", headers=self.owner,
+                return client.post(f"/api/v1/sales-orders/{order['salesOrderId']}/cancel", headers=self.owner,
                                    json={"reason": "QA race"}).status_code
         self.assertEqual(sorted(self.concurrent([lambda: self.raw_pay(order), cancel])), [200, 409])
-        detail = self.request("GET", f"/sales-orders/{order['salesOrderId']}", 200, self.owner)
+        detail = self.request("GET", f"/api/v1/sales-orders/{order['salesOrderId']}", 200, self.owner)
         self.assertEqual(self.quantities(), [98, 97] if detail["status"] == "PAID" else [100, 100])
         self.assertEqual(len(detail["payments"]), 1 if detail["status"] == "PAID" else 0)
 

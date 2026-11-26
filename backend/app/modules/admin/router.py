@@ -63,7 +63,9 @@ def require_admin_token(x_admin_token: str | None = Header(default=None)) -> Non
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Mã quản trị cần được cấu hình với ít nhất 32 ký tự.",
         )
-    if x_admin_token is None or not secrets.compare_digest(x_admin_token, config.ADMIN_TOKEN):
+    # Copy/paste of the token often carries a trailing newline or spaces.
+    supplied = (x_admin_token or "").strip()
+    if not supplied or not secrets.compare_digest(supplied.encode(), config.ADMIN_TOKEN.strip().encode()):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Mã quản trị không hợp lệ.")
 
 
