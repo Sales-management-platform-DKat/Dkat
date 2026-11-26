@@ -1,0 +1,281 @@
+[
+  {
+    "id": "TC-DEV-AUTH-01",
+    "func": "Xác thực",
+    "cond": "Môi trường develop sạch, seed qua API (owner01, manager01 CN01+CN02, staff01 CN01)",
+    "steps": "1. POST /auth/login {username: owner01, password đúng}",
+    "expected": "200, có access_token và user.role = owner",
+    "actual": "200, role=owner, token=có",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-AUTH-02",
+    "func": "Xác thực",
+    "cond": "Môi trường develop sạch, seed qua API (owner01, manager01 CN01+CN02, staff01 CN01)",
+    "steps": "1. POST /auth/login với mật khẩu sai",
+    "expected": "401, không có token",
+    "actual": "401 {\"detail\":\"Tên đăng nhập hoặc mật khẩu không chính xác, hoặc tài khoản đã hết hạn.\"}",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-AUTH-03",
+    "func": "Xác thực",
+    "cond": "Môi trường develop sạch, seed qua API (owner01, manager01 CN01+CN02, staff01 CN01)",
+    "steps": "1. POST /auth/login username = manager01:manager\n2. POST /auth/login username = staff01:staff",
+    "expected": "Cả hai 200, role lần lượt manager / staff",
+    "actual": "200 role=manager; 200 role=staff",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-AUTH-04",
+    "func": "Xác thực",
+    "cond": "Môi trường develop sạch, seed qua API (owner01, manager01 CN01+CN02, staff01 CN01); locked01 đã bị khóa (LOCKED)",
+    "steps": "1. POST /auth/login username = locked01:staff",
+    "expected": "Bị từ chối (401/403), không có token",
+    "actual": "401 {\"detail\":\"Tên đăng nhập hoặc mật khẩu không chính xác, hoặc tài khoản đã hết hạn.\"}",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-AUTH-05",
+    "func": "Xác thực",
+    "cond": "Môi trường develop sạch, seed qua API (owner01, manager01 CN01+CN02, staff01 CN01)",
+    "steps": "1. GET /auth/me không gửi token",
+    "expected": "401",
+    "actual": "401 {\"detail\":\"Vui lòng đăng nhập.\"}",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-AUTH-06",
+    "func": "Xác thực",
+    "cond": "Môi trường develop sạch, seed qua API (owner01, manager01 CN01+CN02, staff01 CN01)",
+    "steps": "1. Đăng nhập owner01 lấy token T\n2. POST /auth/logout với T\n3. GET /auth/me với T",
+    "expected": "Bước 3 trả 401 (phiên đã thu hồi)",
+    "actual": "logout 204; /auth/me sau logout 401",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-AUTH-07",
+    "func": "Phân quyền",
+    "cond": "Môi trường develop sạch, seed qua API (owner01, manager01 CN01+CN02, staff01 CN01)",
+    "steps": "1. staff01 POST /products với body hợp lệ",
+    "expected": "403",
+    "actual": "403 {\"detail\":\"Bạn không có quyền thực hiện thao tác này.\"}",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-AUTH-08",
+    "func": "Phân quyền",
+    "cond": "Môi trường develop sạch, seed qua API (owner01, manager01 CN01+CN02, staff01 CN01)",
+    "steps": "1. staff01 (chỉ CN01) GET /sales-orders?branchId=<CN02>",
+    "expected": "403",
+    "actual": "403 {\"detail\":\"Bạn không có quyền truy cập chi nhánh này.\"}",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-AUTH-09",
+    "func": "Phân quyền",
+    "cond": "Môi trường develop sạch, seed qua API (owner01, manager01 CN01+CN02, staff01 CN01)",
+    "steps": "1. manager01 (CN01, CN02) GET /inventory?branchId=<CN03>",
+    "expected": "403",
+    "actual": "403 {\"detail\":\"Bạn không có quyền truy cập chi nhánh này.\"}",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-POS-01",
+    "func": "POS / Đơn bán",
+    "cond": "Môi trường develop sạch, seed qua API (owner01, manager01 CN01+CN02, staff01 CN01); Size S tồn 10 tại CN01, giá 150.000",
+    "steps": "1. staff01 POST /sales-orders {branchId: CN01, discountAmount: 10000, items: [Size S x2]}",
+    "expected": "201, trạng thái PENDING, tổng = 2 x 150.000 - 10.000 = 290.000",
+    "actual": "201, status=PENDING, total=290000.00",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-POS-02",
+    "func": "POS / Đơn bán",
+    "cond": "Có đơn PENDING từ TC-DEV-POS-01",
+    "steps": "1. staff01 POST /sales-orders/{id}/confirm-payment {CASH, amount: 200000}",
+    "expected": "Bị từ chối (4xx) vì số tiền khác tổng đơn; đơn vẫn PENDING",
+    "actual": "422 {\"detail\":{\"code\":\"PAYMENT_AMOUNT_MISMATCH\",\"expectedAmount\":\"290000.00\"}}; đơn PENDING",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-POS-03",
+    "func": "POS / Đơn bán",
+    "cond": "Có đơn PENDING từ TC-DEV-POS-01; tồn Size S tại CN01 = 10",
+    "steps": "1. staff01 POST /sales-orders/{id}/confirm-payment {CASH, amount: 290000}\n2. GET /inventory/{CN01}/{Size S}",
+    "expected": "200, đơn PAID; tồn Size S giảm còn 8",
+    "actual": "200, status=PAID, tồn Size S=8",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-POS-04",
+    "func": "POS / Đơn bán",
+    "cond": "Tồn Size M tại CN01 = 10",
+    "steps": "1. staff01 POST /sales-orders {CN01, Size M x11}",
+    "expected": "409, không tạo đơn (vượt tồn khả dụng)",
+    "actual": "409 {\"detail\":{\"code\":\"OUT_OF_STOCK\",\"items\":[{\"variantId\":2,\"available\":10}]}}",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-POS-05",
+    "func": "POS / Đơn bán",
+    "cond": "Tồn Size M tại CN01 = 10",
+    "steps": "1. Tạo đơn PENDING Size M x1\n2. POST /sales-orders/{id}/cancel {reason}\n3. GET tồn Size M",
+    "expected": "Đơn CANCELLED; tồn Size M vẫn 10",
+    "actual": "200, status=CANCELLED, tồn Size M=10",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-POS-06",
+    "func": "POS / Đơn bán",
+    "cond": "Đơn PAID từ TC-DEV-POS-03; tồn Size S = 8",
+    "steps": "1. owner01 POST /sales-orders/{id}/refund {reason}\n2. GET tồn Size S",
+    "expected": "200, đơn CANCELLED và payment REFUNDED (thiết kế PBI 122); tồn Size S hoàn lại 10",
+    "actual": "200, status=CANCELLED, payments=['REFUNDED'], tồn Size S=10",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-POS-09",
+    "func": "POS / Đơn bán",
+    "cond": "Đơn tạo và thanh toán trong cùng 1 giây (TC-DEV-POS-01, 03); MySQL local chạy giờ +07",
+    "steps": "1. Lấy createdAt và paidAt của đơn (response refund / GET /sales-orders/{id})\n2. So sánh (cả hai có hậu tố Z = UTC)",
+    "expected": "createdAt và paidAt cùng là UTC, chênh nhau vài giây",
+    "actual": "createdAt=2026-11-25T02:13:45Z, paidAt=2026-11-24T19:13:45Z, lệch 7.0 giờ",
+    "result": "Fail"
+  },
+  {
+    "id": "TC-DEV-POS-07",
+    "func": "POS / Đơn bán",
+    "cond": "Môi trường develop sạch, seed qua API (owner01, manager01 CN01+CN02, staff01 CN01)",
+    "steps": "1. staff01 (chỉ CN01) POST /sales-orders {branchId: CN02, Size S x1}",
+    "expected": "403",
+    "actual": "403 {\"detail\":\"Bạn không có quyền truy cập chi nhánh này.\"}",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-POS-08",
+    "func": "POS / Đơn bán",
+    "cond": "Môi trường develop sạch, seed qua API (owner01, manager01 CN01+CN02, staff01 CN01)",
+    "steps": "1. staff01 POST /customers {fullName, phone 0901234567}\n2. GET /customers/quick-search?q=0901\n3. Tạo đơn POS với customerId",
+    "expected": "Tạo khách 201; tìm nhanh thấy khách; đơn 201 gắn đúng customerId",
+    "actual": "khách 201 id=1; quick-search 200 thấy=True; đơn 201 customerId=1",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-PRE-01",
+    "func": "Đặt trước",
+    "cond": "Môi trường develop sạch, seed qua API (owner01, manager01 CN01+CN02, staff01 CN01); Size L hết hàng ở mọi chi nhánh",
+    "steps": "1. Không đăng nhập: POST /preorders {branchId: CN01, customer, items: [Size L x2]}",
+    "expected": "201, đơn WAITING_STOCK, có mã đơn",
+    "actual": "201, status=WAITING_STOCK, mã=PD-261125-720B8441517D4173AEC75D266457FA97",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-PRE-02",
+    "func": "Đặt trước",
+    "cond": "Size S còn hàng tại CN01",
+    "steps": "1. Không đăng nhập: POST /preorders với Size S",
+    "expected": "409 VARIANT_IN_STOCK (hàng còn thì mua trực tiếp)",
+    "actual": "409 {\"code\":\"VARIANT_IN_STOCK\",\"message\":\"Hàng còn đủ; vui lòng mua trực tiếp tại cửa hàng\",\"details\":[{\"field\":\"items.0.quantity\",\"reason\":\"Biến thể 1 cò",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-PRE-03",
+    "func": "Đặt trước",
+    "cond": "Đăng nhập staff01; màn hình POS (frontend/src/LivePos.jsx) mở form Đặt trước tại quầy",
+    "steps": "1. Gửi đúng body mà LivePos.jsx gửi: {branchId, customerName, phone, address, email, items: [Size L x1]}",
+    "expected": "201, tạo được đơn đặt trước từ màn hình POS",
+    "actual": "422 {\"code\":\"INVALID_PREORDER\",\"message\":\"Đơn đặt trước không hợp lệ\",\"details\":[{\"field\":\"customer\",\"reason\":\"Field required\"},{\"field\":\"customerName\",\"reason\":\"Extra inputs are not permitted\"},{\"field\":",
+    "result": "Fail"
+  },
+  {
+    "id": "TC-DEV-PRE-04",
+    "func": "Đặt trước",
+    "cond": "Có đơn từ TC-DEV-PRE-01 tại CN01",
+    "steps": "1. staff01 GET /preorders\n2. manager01 GET /preorders?branchId=<CN03>",
+    "expected": "staff01 thấy đơn CN01; manager01 xem CN03 bị 403",
+    "actual": "staff 200 thấy đơn=True; manager CN03 403",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-PRE-05",
+    "func": "Đặt trước",
+    "cond": "Đơn A (Size L x2) WAITING_STOCK tại CN01",
+    "steps": "1. owner01 POST /inventory/import {CN01, Size L x5}\n2. GET /preorders/{A}",
+    "expected": "Đơn A được phân bổ đủ hàng: READY (hoặc NOTIFIED nếu đã gửi thông báo), có expiresAt",
+    "actual": "import 201; đơn READY, expiresAt=2026-12-01T19:13:46Z",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-NOTI-01",
+    "func": "Thông báo",
+    "cond": "Đơn A vừa chuyển READY ở TC-DEV-PRE-05 (khách có SĐT và email)",
+    "steps": "1. GET /preorders/{A}: xem danh sách notifications và trạng thái\n2. Kiểm tra bảng notifications trong DB",
+    "expected": "Có ít nhất 1 bản ghi thông báo PREORDER_READY (SMS hoặc email); đơn chuyển NOTIFIED khi gửi thành công",
+    "actual": "đơn READY; notifications trong API=[]; trong DB=0 dòng",
+    "result": "Fail"
+  },
+  {
+    "id": "TC-DEV-NOTI-02",
+    "func": "Thông báo",
+    "cond": "Log server develop sau TC-DEV-PRE-05",
+    "steps": "1. Tìm trong log server cảnh báo của preorders.services.notifications",
+    "expected": "Không có cảnh báo 'NotificationService unavailable'",
+    "actual": "Có 1 dòng: NotificationService unavailable for 1 ready preorders (ImportError)",
+    "result": "Fail"
+  },
+  {
+    "id": "TC-DEV-NOTI-03",
+    "func": "Thông báo",
+    "cond": "Theo docs/api-contract.md (FR-09.5): API xem và gửi lại thông báo",
+    "steps": "1. GET /preorders/{A}/notifications\n2. POST /notifications/1/resend",
+    "expected": "Hai API tồn tại (200 hoặc 404 nghiệp vụ có mã lỗi), không phải 404 route không tồn tại",
+    "actual": "404 {\"detail\":\"Not Found\"}; 404 {\"detail\":\"Not Found\"}",
+    "result": "Fail"
+  },
+  {
+    "id": "TC-DEV-PRE-06",
+    "func": "Đặt trước",
+    "cond": "Đơn A đã READY (TC-DEV-PRE-05)",
+    "steps": "1. owner01 POST /preorders/{A}/confirm-payment {CASH, amount = tổng đơn}",
+    "expected": "200, paymentStatus = PAID",
+    "actual": "200, paymentStatus=PAID ",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-PRE-07",
+    "func": "Đặt trước",
+    "cond": "Đơn A READY, đã thanh toán; tồn Size L tại CN01 = 5",
+    "steps": "1. PUT /preorders/{A}/fulfillment {method: PICKUP}\n2. POST /preorders/{A}/fulfill\n3. GET tồn Size L",
+    "expected": "Đơn FULFILLED; tồn Size L giảm còn 3",
+    "actual": "fulfillment 200; fulfill 200 status=FULFILLED; tồn Size L=3",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-PRE-08",
+    "func": "Đặt trước",
+    "cond": "Size L ở CN02 hết hàng",
+    "steps": "1. Tạo đơn đặt trước Size L x1 tại CN02 (WAITING_STOCK)\n2. manager01 POST /preorders/{id}/cancel {reason}",
+    "expected": "200, đơn CANCELLED",
+    "actual": "tạo 201; hủy 200 status=CANCELLED",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-PRE-09",
+    "func": "Đặt trước",
+    "cond": "Cùng một IP gửi liên tục (giới hạn 5 đơn / 10 phút / IP)",
+    "steps": "1. Gửi 6 lần POST /preorders hợp lệ từ cùng IP",
+    "expected": "5 lần đầu 201, lần 6 trả 429",
+    "actual": "mã trả về: [201, 201, 201, 201, 201, 429]",
+    "result": "Pass"
+  },
+  {
+    "id": "TC-DEV-PRE-10",
+    "func": "Đặt trước",
+    "cond": "Có đơn READY quá hạn giữ hàng (expires_at đã qua); server develop đang chạy",
+    "steps": "1. Kiểm tra app.main lifespan có khởi động run_preorder_expiry\n2. Chạy integration test test_api_lifespan_runs_scheduled_expiry",
+    "expected": "Server tự hủy đơn quá hạn theo lịch (job chạy trong lifespan)",
+    "actual": "Job không được khởi động: lifespan chỉ gọi create_all; test lifespan FAIL (completed.wait timeout)",
+    "result": "Fail"
+  }
+]

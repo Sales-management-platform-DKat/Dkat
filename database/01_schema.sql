@@ -293,8 +293,12 @@ CREATE TABLE notifications (
     error_message TEXT,
     sent_at DATETIME,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    retry_count INT NOT NULL DEFAULT 0,
+    event_type VARCHAR(40),
+    last_attempt_at DATETIME,
     KEY ix_notifications_preorder_status (preorder_id, status),
     KEY ix_notifications_queue (status, created_at, notification_id),
+    KEY ix_notifications_retry (status, retry_count, notification_id),
     CONSTRAINT fk_notifications_preorder_id FOREIGN KEY (preorder_id) REFERENCES preorders (preorder_id) ON DELETE RESTRICT ON UPDATE RESTRICT
 ) ENGINE=InnoDB;
 

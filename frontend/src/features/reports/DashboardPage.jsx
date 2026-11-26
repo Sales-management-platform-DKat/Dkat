@@ -54,10 +54,10 @@ export default function DashboardPage({ branchId }) {
     return /^\d{4}-\d{2}-\d{2}$/.test(point.period) ? dateLabel(point.period) : point.period;
   };
   const metricCards = data ? [
-    [t('Tổng doanh thu'), formatCurrency(data.revenue?.value || 0), data.revenue?.change_percent, 'revenue'],
-    [t('Tổng số đơn'), formatNumber(data.order_count?.value || 0), data.order_count?.change_percent, 'orders'],
-    [t('Giá trị đơn trung bình'), formatCurrency(data.average_order_value?.value || 0), data.average_order_value?.change_percent, 'average'],
-    [t('Doanh thu bán tại quầy'), formatCurrency(data.sales_revenue || 0), null, 'sales'],
+    [t('Tổng doanh thu'), formatCurrency(data.revenue?.value || 0), data.revenue?.changePercent ?? data.revenue?.change_percent, 'revenue'],
+    [t('Tổng số đơn'), formatNumber((data.orderCount ?? data.order_count)?.value || 0), (data.orderCount ?? data.order_count)?.changePercent ?? data.order_count?.change_percent, 'orders'],
+    [t('Giá trị đơn trung bình'), formatCurrency((data.averageOrderValue ?? data.average_order_value)?.value || 0), (data.averageOrderValue ?? data.average_order_value)?.changePercent ?? data.average_order_value?.change_percent, 'average'],
+    [t('Doanh thu bán tại quầy'), formatCurrency(data.salesRevenue ?? data.sales_revenue ?? 0), null, 'sales'],
   ] : [];
 
   return <div className="live-dashboard">

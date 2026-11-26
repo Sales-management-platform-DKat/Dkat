@@ -1,0 +1,33 @@
+PASS  EMPLOYEE: Tạo sản phẩm  -> 403 
+PASS  EMPLOYEE: Tạo danh mục  -> 403 
+PASS  EMPLOYEE: Sửa giá biến thể  -> 403 
+PASS  EMPLOYEE: Nhập kho  -> 403 
+PASS  EMPLOYEE: Xuất kho  -> 403 
+PASS  EMPLOYEE: Kiểm kê  -> 403 
+PASS  EMPLOYEE: Hoàn đơn đã thanh toán  -> 403 
+PASS  EMPLOYEE: Xem báo cáo doanh thu  -> 403 
+PASS  EMPLOYEE: Xuất CSV doanh thu  -> 403 
+PASS  EMPLOYEE: Xem danh sách nhân viên  -> 403 
+PASS  EMPLOYEE: Tạo tài khoản  -> 403 
+PASS  EMPLOYEE: Tạo chi nhánh  -> 403 
+PASS  EMPLOYEE: Bán ở chi nhánh khác (CN02)  -> 403 
+PASS  EMPLOYEE: Xem tồn kho CN02  -> 403 
+PASS  EMPLOYEE: Xem đặt trước CN02  -> 403 
+PASS  MANAGER: Tạo chi nhánh  -> 403 
+PASS  MANAGER: Ngừng hoạt động chi nhánh  -> 403 
+PASS  MANAGER: Tạo sản phẩm  -> 403 
+PASS  MANAGER: Ngừng bán sản phẩm  -> 403 
+PASS  MANAGER: Xem / quản lý nhân viên  -> 403 
+PASS  MANAGER: Khóa tài khoản nhân viên  -> 403 
+PASS  MANAGER: Báo cáo CN03 (không phân công)  -> 403 
+PASS  MANAGER: Nhập kho CN03  -> 403 
+PASS  MANAGER: Bán ở CN03  -> 403 
+PASS  OWNER cửa hàng khác: Xem đơn bán của DKat Fashion  -> 404 
+PASS  OWNER cửa hàng khác: Hoàn đơn của DKat Fashion  -> 404 
+PASS  OWNER cửa hàng khác: Xem tồn kho chi nhánh DKat  -> 403 
+PASS  OWNER cửa hàng khác: Nhập kho chi nhánh DKat  -> 403 
+PASS  Không đăng nhập: Tạo đơn POS  -> 401 
+PASS  Không đăng nhập: Xem báo cáo  -> 401 
+PASS  OWNER: Tạo cửa hàng qua API quản trị khi không có X-Admin-Token  -> 401 
+
+31/31 thao tác bị chặn đúng

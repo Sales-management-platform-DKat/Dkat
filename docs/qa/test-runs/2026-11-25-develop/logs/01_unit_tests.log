@@ -1,0 +1,468 @@
+<qa>\develop\backend\.venv\Lib\site-packages\fastapi\testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+  from starlette.testclient import TestClient as TestClient  # noqa
+test_admin_provisions_shop_and_owner_login (tests.test_auth_flow.AuthFlowTests.test_admin_provisions_shop_and_owner_login) ... ok
+test_customer_list_profile_update_and_purchase_history_routes (tests.test_auth_flow.AuthFlowTests.test_customer_list_profile_update_and_purchase_history_routes) ... ok
+test_each_role_uses_its_suffix_and_own_password (tests.test_auth_flow.AuthFlowTests.test_each_role_uses_its_suffix_and_own_password) ... ok
+test_expired_subscription_blocks_login_and_duplicate_owner (tests.test_auth_flow.AuthFlowTests.test_expired_subscription_blocks_login_and_duplicate_owner) ... ok
+test_health_rejects_database_without_user_id_column (tests.test_auth_flow.AuthFlowTests.test_health_rejects_database_without_user_id_column) ... ok
+test_health_reports_compatible_users_schema (tests.test_auth_flow.AuthFlowTests.test_health_reports_compatible_users_schema) ... ok
+test_non_owner_cannot_list_or_manage_store_users (tests.test_auth_flow.AuthFlowTests.test_non_owner_cannot_list_or_manage_store_users) ... ok
+test_owner_manages_employee_profile_status_password_and_branch_scope (tests.test_auth_flow.AuthFlowTests.test_owner_manages_employee_profile_status_password_and_branch_scope) ... ok
+test_refresh_rotation_remember_cookie_and_reuse_revokes_sessions (tests.test_auth_flow.AuthFlowTests.test_refresh_rotation_remember_cookie_and_reuse_revokes_sessions) ... ok
+test_revenue_reports_allow_owner_and_block_employee (tests.test_auth_flow.AuthFlowTests.test_revenue_reports_allow_owner_and_block_employee) ... ERROR
+test_unremembered_login_uses_session_cookie (tests.test_auth_flow.AuthFlowTests.test_unremembered_login_uses_session_cookie) ... ok
+test_admin_provisions_shop_and_owner_login (tests.test_catalog_auth.CatalogAuthTests.test_admin_provisions_shop_and_owner_login) ... ok
+test_catalog_uses_authenticated_store_role_and_creator (tests.test_catalog_auth.CatalogAuthTests.test_catalog_uses_authenticated_store_role_and_creator) ... ok
+test_customer_list_profile_update_and_purchase_history_routes (tests.test_catalog_auth.CatalogAuthTests.test_customer_list_profile_update_and_purchase_history_routes) ... ok
+test_each_role_uses_its_suffix_and_own_password (tests.test_catalog_auth.CatalogAuthTests.test_each_role_uses_its_suffix_and_own_password) ... ok
+test_expired_subscription_blocks_login_and_duplicate_owner (tests.test_catalog_auth.CatalogAuthTests.test_expired_subscription_blocks_login_and_duplicate_owner) ... ok
+test_health_rejects_database_without_user_id_column (tests.test_catalog_auth.CatalogAuthTests.test_health_rejects_database_without_user_id_column) ... ok
+test_health_reports_compatible_users_schema (tests.test_catalog_auth.CatalogAuthTests.test_health_reports_compatible_users_schema) ... ok
+test_non_owner_cannot_list_or_manage_store_users (tests.test_catalog_auth.CatalogAuthTests.test_non_owner_cannot_list_or_manage_store_users) ... ok
+test_owner_manages_employee_profile_status_password_and_branch_scope (tests.test_catalog_auth.CatalogAuthTests.test_owner_manages_employee_profile_status_password_and_branch_scope) ... ok
+test_product_cost_price_is_only_visible_to_owner (tests.test_catalog_auth.CatalogAuthTests.test_product_cost_price_is_only_visible_to_owner) ... ok
+test_product_image_upload_validates_type_and_is_owner_only (tests.test_catalog_auth.CatalogAuthTests.test_product_image_upload_validates_type_and_is_owner_only) ... ok
+test_refresh_rotation_remember_cookie_and_reuse_revokes_sessions (tests.test_catalog_auth.CatalogAuthTests.test_refresh_rotation_remember_cookie_and_reuse_revokes_sessions) ... ok
+test_revenue_reports_allow_owner_and_block_employee (tests.test_catalog_auth.CatalogAuthTests.test_revenue_reports_allow_owner_and_block_employee) ... ERROR
+test_unremembered_login_uses_session_cookie (tests.test_catalog_auth.CatalogAuthTests.test_unremembered_login_uses_session_cookie) ... ok
+test_development_keeps_sqlite_fallback (tests.test_database_config.DatabaseConfigTests.test_development_keeps_sqlite_fallback) ... ok
+test_production_accepts_mysql_database_url (tests.test_database_config.DatabaseConfigTests.test_production_accepts_mysql_database_url) ... ok
+test_production_accepts_mysql_environment_configuration (tests.test_database_config.DatabaseConfigTests.test_production_accepts_mysql_environment_configuration) ... ok
+test_production_rejects_non_mysql_database_url (tests.test_database_config.DatabaseConfigTests.test_production_rejects_non_mysql_database_url) ... ok
+test_production_rejects_sqlite_url (tests.test_database_config.DatabaseConfigTests.test_production_rejects_sqlite_url) ... ok
+test_production_requires_configured_server_database (tests.test_database_config.DatabaseConfigTests.test_production_requires_configured_server_database) ... ok
+
+======================================================================
+ERROR: test_revenue_reports_allow_owner_and_block_employee (tests.test_auth_flow.AuthFlowTests.test_revenue_reports_allow_owner_and_block_employee)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1977, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 1192, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: sales_orders
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<qa>\develop\backend\tests\test_auth_flow.py", line 194, in test_revenue_reports_allow_owner_and_block_employee
+    owner_result = self.client.get("/api/v1/reports/summary", headers=owner_headers)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\httpx\_client.py", line 1053, in get
+    return self.request(
+           ~~~~~~~~~~~~^
+        "GET",
+        ^^^^^^
+    ...<7 lines>...
+        extensions=extensions,
+        ^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\testclient.py", line 518, in request
+    return super().request(
+           ~~~~~~~~~~~~~~~^
+        method,
+        ^^^^^^^
+    ...<11 lines>...
+        extensions=extensions,
+        ^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\httpx\_client.py", line 825, in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\httpx\_client.py", line 928, in send
+    raise exc
+  File "<qa>\develop\backend\.venv\Lib\site-packages\httpx\_client.py", line 922, in send
+    response.read()
+    ~~~~~~~~~~~~~^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\httpx\_models.py", line 881, in read
+    self._content = b"".join(self.iter_bytes())
+                    ~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\httpx\_models.py", line 897, in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ~~~~~~~~~~~~~^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\httpx\_models.py", line 951, in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\httpx\_client.py", line 153, in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\testclient.py", line 384, in iter_body
+    exit_stack.close()
+    ~~~~~~~~~~~~~~~~^^
+  File "<python>\Lib\contextlib.py", line 627, in close
+    self.__exit__(None, None, None)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "<python>\Lib\contextlib.py", line 619, in __exit__
+    raise exc
+  File "<python>\Lib\contextlib.py", line 604, in __exit__
+    if cb(*exc_details):
+       ~~^^^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\testclient.py", line 399, in close_app
+    raise exception
+  File "<qa>\develop\backend\.venv\Lib\site-packages\anyio\from_thread.py", line 272, in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\testclient.py", line 366, in run_app
+    await self.app(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\applications.py", line 1224, in __call__
+    await super().__call__(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\telemetry\_asgi.py", line 151, in __call__
+    await self.app(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\_body_limit.py", line 80, in __call__
+    await self.app(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 91, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 149, in simple_response
+    await self.app(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\routing.py", line 683, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 2929, in app
+    await route.handle(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1916, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 3015, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1945, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1373, in handle
+    await effective_context.app(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 175, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 161, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 762, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 383, in run_endpoint_function
+    return await run_in_threadpool(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+        _run_sync_endpoint, function=dependant.call, arguments=values
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2779, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1124, in run
+    result = context.run(func, *args)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\telemetry\_api.py", line 244, in _run_sync_endpoint
+    return function(**arguments)
+  File "<qa>\develop\backend\app\modules\reports\router.py", line 18, in summary
+    return service.summary(actor,date_from,date_to,branch_id)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>\develop\backend\app\modules\reports\service.py", line 62, in summary
+    s,p,n=totals(start,end); ps,pp,pn=totals(prev_start,prev_end); rev=s+p; prev=ps+pp
+          ~~~~~~^^^^^^^^^^^
+  File "<qa>\develop\backend\app\modules\reports\service.py", line 61, in totals
+    days=_daily(actor,a,b,branch_id); sales=sum(v['sales'] for v in days.values()); pre=sum(v['preorders'] for v in days.values()); n=sum(v['sales_count']+v['preorder_count'] for v in days.values()); return sales,pre,n
+  File "<qa>\develop\backend\app\modules\reports\service.py", line 37, in _daily
+    for row in db.execute(text(sql),params).mappings():
+               ~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1494, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 534, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1714, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<9 lines>...
+        param_dict=param_dict,
+    )
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1868, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1996, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2351, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1977, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 1192, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such table: sales_orders
+[SQL: SELECT o.paid_at AS at,o.total_amount AS amount FROM sales_orders o JOIN branches b ON b.branch_id=o.branch_id AND b.store_id=? WHERE o.status='PAID' AND o.paid_at>=? AND o.paid_at<?]
+[parameters: (1, datetime.datetime(2026, 10, 26, 17, 0), datetime.datetime(2026, 11, 25, 17, 0))]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+
+======================================================================
+ERROR: test_revenue_reports_allow_owner_and_block_employee (tests.test_catalog_auth.CatalogAuthTests.test_revenue_reports_allow_owner_and_block_employee)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1977, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 1192, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: no such table: sales_orders
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "<qa>\develop\backend\tests\test_auth_flow.py", line 194, in test_revenue_reports_allow_owner_and_block_employee
+    owner_result = self.client.get("/api/v1/reports/summary", headers=owner_headers)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\httpx\_client.py", line 1053, in get
+    return self.request(
+           ~~~~~~~~~~~~^
+        "GET",
+        ^^^^^^
+    ...<7 lines>...
+        extensions=extensions,
+        ^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\testclient.py", line 518, in request
+    return super().request(
+           ~~~~~~~~~~~~~~~^
+        method,
+        ^^^^^^^
+    ...<11 lines>...
+        extensions=extensions,
+        ^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\httpx\_client.py", line 825, in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\httpx\_client.py", line 928, in send
+    raise exc
+  File "<qa>\develop\backend\.venv\Lib\site-packages\httpx\_client.py", line 922, in send
+    response.read()
+    ~~~~~~~~~~~~~^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\httpx\_models.py", line 881, in read
+    self._content = b"".join(self.iter_bytes())
+                    ~~~~~~~~^^^^^^^^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\httpx\_models.py", line 897, in iter_bytes
+    for raw_bytes in self.iter_raw():
+                     ~~~~~~~~~~~~~^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\httpx\_models.py", line 951, in iter_raw
+    for raw_stream_bytes in self.stream:
+                            ^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\httpx\_client.py", line 153, in __iter__
+    for chunk in self._stream:
+                 ^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\testclient.py", line 384, in iter_body
+    exit_stack.close()
+    ~~~~~~~~~~~~~~~~^^
+  File "<python>\Lib\contextlib.py", line 627, in close
+    self.__exit__(None, None, None)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "<python>\Lib\contextlib.py", line 619, in __exit__
+    raise exc
+  File "<python>\Lib\contextlib.py", line 604, in __exit__
+    if cb(*exc_details):
+       ~~^^^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\testclient.py", line 399, in close_app
+    raise exception
+  File "<qa>\develop\backend\.venv\Lib\site-packages\anyio\from_thread.py", line 272, in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\testclient.py", line 366, in run_app
+    await self.app(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\applications.py", line 1224, in __call__
+    await super().__call__(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\applications.py", line 96, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 186, in __call__
+    raise exc
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\middleware\errors.py", line 164, in __call__
+    await self.app(scope, receive, _send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\telemetry\_asgi.py", line 151, in __call__
+    await self.app(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\_body_limit.py", line 80, in __call__
+    await self.app(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 91, in __call__
+    await self.simple_response(scope, receive, send, request_headers=headers)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\middleware\cors.py", line 149, in simple_response
+    await self.app(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\middleware\exceptions.py", line 63, in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py", line 18, in __call__
+    await self.app(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\routing.py", line 683, in __call__
+    await self.middleware_stack(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 2929, in app
+    await route.handle(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1916, in handle
+    await self.original_router.handle(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 3015, in handle
+    await included_router._handle_selected(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1945, in _handle_selected
+    await original_route.handle(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 1373, in handle
+    await effective_context.app(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 175, in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 53, in wrapped_app
+    raise exc
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\_exception_handler.py", line 42, in wrapped_app
+    await app(scope, receive, sender)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 161, in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 762, in app
+    raw_response = await run_endpoint_function(
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\routing.py", line 383, in run_endpoint_function
+    return await run_in_threadpool(
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+        _run_sync_endpoint, function=dependant.call, arguments=values
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\starlette\concurrency.py", line 34, in run_in_threadpool
+    return await anyio.to_thread.run_sync(func)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\anyio\to_thread.py", line 65, in run_sync
+    return await get_async_backend().run_sync_in_worker_thread(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        func, args, abandon_on_cancel=abandon_on_cancel, limiter=limiter
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 2779, in run_sync_in_worker_thread
+    return await future
+           ^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\anyio\_backends\_asyncio.py", line 1124, in run
+    result = context.run(func, *args)
+  File "<qa>\develop\backend\.venv\Lib\site-packages\fastapi\telemetry\_api.py", line 244, in _run_sync_endpoint
+    return function(**arguments)
+  File "<qa>\develop\backend\app\modules\reports\router.py", line 18, in summary
+    return service.summary(actor,date_from,date_to,branch_id)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<qa>\develop\backend\app\modules\reports\service.py", line 62, in summary
+    s,p,n=totals(start,end); ps,pp,pn=totals(prev_start,prev_end); rev=s+p; prev=ps+pp
+          ~~~~~~^^^^^^^^^^^
+  File "<qa>\develop\backend\app\modules\reports\service.py", line 61, in totals
+    days=_daily(actor,a,b,branch_id); sales=sum(v['sales'] for v in days.values()); pre=sum(v['preorders'] for v in days.values()); n=sum(v['sales_count']+v['preorder_count'] for v in days.values()); return sales,pre,n
+  File "<qa>\develop\backend\app\modules\reports\service.py", line 37, in _daily
+    for row in db.execute(text(sql),params).mappings():
+               ~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1494, in execute
+    return meth(
+        self,
+        distilled_parameters,
+        execution_options or NO_OPTIONS,
+    )
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 534, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        self, distilled_params, execution_options
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1714, in _execute_clauseelement
+    ret = self._execute_context(
+        dialect,
+    ...<9 lines>...
+        param_dict=param_dict,
+    )
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1868, in _execute_context
+    return self._exec_single_context(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^
+        dialect, context, statement, parameters
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1996, in _exec_single_context
+    self._handle_dbapi_exception(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        e, str_statement, effective_parameters, cursor, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2351, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1977, in _exec_single_context
+    self.dialect.do_execute(
+    ~~~~~~~~~~~~~~~~~~~~~~~^
+        cursor, str_statement, effective_parameters, context
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "<qa>\develop\backend\.venv\Lib\site-packages\sqlalchemy\engine\default.py", line 1192, in do_execute
+    cursor.execute(statement, parameters)
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such table: sales_orders
+[SQL: SELECT o.paid_at AS at,o.total_amount AS amount FROM sales_orders o JOIN branches b ON b.branch_id=o.branch_id AND b.store_id=? WHERE o.status='PAID' AND o.paid_at>=? AND o.paid_at<?]
+[parameters: (1, datetime.datetime(2026, 10, 26, 17, 0), datetime.datetime(2026, 11, 25, 17, 0))]
+(Background on this error at: https://sqlalche.me/e/21/e3q8)
+
+----------------------------------------------------------------------
+Ran 31 tests in 39.951s
+
+FAILED (errors=2)
