@@ -2,7 +2,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends
 
-from app.core.permissions import Actor, require_auth, require_owner
+from app.core.permissions import Actor, require_auth, require_owner, require_owner_or_manager
 from app.modules.products import category_service
 from app.modules.products.catalog_transaction import catalog_transaction as category_transaction
 from app.modules.products.category_schemas import (
@@ -21,14 +21,14 @@ def get_categories(
 
 
 @router.post("", status_code=201)
-def create_category(data: CategoryInput, actor: Annotated[Actor, Depends(require_owner)]) -> Category:
+def create_category(data: CategoryInput, actor: Annotated[Actor, Depends(require_owner_or_manager)]) -> Category:
     with category_transaction() as db:
         return category_service.save_category(db, actor.store_id, data)
 
 
 @router.put("/{category_id}")
 def update_category(
-    category_id: CategoryId, data: CategoryInput, actor: Annotated[Actor, Depends(require_owner)]
+    category_id: CategoryId, data: CategoryInput, actor: Annotated[Actor, Depends(require_owner_or_manager)]
 ) -> Category:
     with category_transaction() as db:
         return category_service.save_category(db, actor.store_id, data, category_id)

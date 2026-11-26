@@ -312,10 +312,11 @@
 .dk-drawer .dk-dialog-body { padding-bottom: 16px; }
 
 .dk-toaster {
+  /* Always above dialogs (z-index 160+), independent of scroll position. */
   position: fixed;
-  z-index: 280;
+  z-index: 1000;
+  top: 16px;
   right: 16px;
-  bottom: 16px;
   display: grid;
   gap: 8px;
   width: min(380px, calc(100vw - 32px));
@@ -378,8 +379,10 @@
 .dk-meta-list div { display: flex; justify-content: space-between; gap: 12px; }
 .dk-meta-list span { color: var(--muted); }
 
-@keyframes dk-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
-@keyframes dk-toast-out { to { opacity: 0; transform: translateY(6px); } }
+.dk-toast-repeat { color: var(--muted); font-weight: 600; }
+
+@keyframes dk-toast-in { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+@keyframes dk-toast-out { to { opacity: 0; transform: translateX(16px); } }
 
 @media (max-width: 720px) {
   .dk-overlay { padding: 0; align-items: end; }

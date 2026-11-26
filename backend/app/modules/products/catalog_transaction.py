@@ -33,4 +33,4 @@ def catalog_transaction(*, read_committed: bool = False):
     except CatalogInvalid as error:
         raise HTTPException(422, str(error)) from None
     except SQLAlchemyError:
-        raise HTTPException(503, "Database unavailable") from None
+        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None

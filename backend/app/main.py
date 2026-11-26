@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -60,6 +61,28 @@ app.add_middleware(
     allow_headers=["Authorization", "Content-Type", "X-Admin-Token"],
     allow_credentials=True,
 )
+_error_logger = logging.getLogger("app.errors")
+
+
+@app.exception_handler(SQLAlchemyError)
+async def database_error_handler(request, exc: SQLAlchemyError):
+    # Full details (SQL, parameters, driver message) stay in the server log only.
+    _error_logger.exception("Database error on %s %s", request.method, request.url.path, exc_info=exc)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau."},
+    )
+
+
+@app.exception_handler(Exception)
+async def unexpected_error_handler(request, exc: Exception):
+    _error_logger.exception("Unhandled error on %s %s", request.method, request.url.path, exc_info=exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau."},
+    )
+
+
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(admin_router, prefix="/api/v1")
 app.include_router(users_router, prefix="/api/v1")

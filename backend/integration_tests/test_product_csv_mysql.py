@@ -139,8 +139,10 @@ class ProductCsvMySQLTests(unittest.TestCase):
     def test_authentication_owner_only_and_store_isolation(self):
         before = self.snapshot()
         self.submit(auth={}, status=401)
-        for role in self.roles:
-            self.submit(auth=role, status=403)
+        manager, staff = self.roles
+        # Catalog maintenance is owner + manager (docs/rbac-matrix.md); a dry run writes nothing.
+        self.submit(auth=manager, status=200)
+        self.submit(auth=staff, status=403)
         with TestClient(app) as client:
             r = client.post("/api/v1/products/import-csv", headers=self.owner)
         self.assertEqual(r.status_code, 422)

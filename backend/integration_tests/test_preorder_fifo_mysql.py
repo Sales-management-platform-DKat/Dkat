@@ -753,7 +753,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
 
     def test_stock_csv_rejects_file_limits_and_malformed_structure(self):
         for content, code, line in (
-            (b"\xff", "INVALID_UTF8", 1), ("sku,quantity,x\n", "INVALID_HEADER", 1),
+            (b"\xff", "INVALID_UTF8", 1), ("sku,amount,note\n", "INVALID_HEADER", 1),
             ("sku,quantity,note\n\n , , \n", "EMPTY_FILE", 4),
             (f'sku,quantity,note\n{self.sku()},1,"unfinished\n', "INVALID_CSV", 2),
         ):

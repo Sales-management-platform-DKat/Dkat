@@ -1,13 +1,18 @@
+import { friendlyMessage } from '../../lib/api-errors.js';
+
 const listeners = new Set();
 let items = [];
 let sequence = 0;
 
 const titles = {
-  success: 'Đã hoàn tất',
+  success: 'Thành công',
   error: 'Không thể hoàn tất',
   warning: 'Cần lưu ý',
   info: 'Thông báo',
 };
+
+const DURATIONS = { success: 4000, info: 4500, warning: 6500, error: 7000 };
+const DEDUPE_WINDOW_MS = 4000;
 
 function emit() {
   const snapshot = items;
@@ -23,14 +28,26 @@ export function subscribeToasts(listener) {
   return () => listeners.delete(listener);
 }
 
+// duration: milliseconds; 0 keeps the toast until the user closes it.
 export function pushToast({ message, kind = 'success', title, duration } = {}) {
+  const text = typeof message === 'string' ? message : friendlyMessage(message);
+  const now = Date.now();
+  const same = items.find((item) => item.kind === kind && item.message === text && now - item.createdAt < DEDUPE_WINDOW_MS);
+  if (same) {
+    // The same message again: restart its timer instead of stacking a copy.
+    items = items.map((item) => item.id === same.id ? { ...item, createdAt: now, repeat: (item.repeat || 1) + 1 } : item);
+    emit();
+    return same.id;
+  }
   const id = ++sequence;
   const item = {
     id,
     kind,
     title: title || titles[kind] || titles.info,
-    message: typeof message === 'string' ? message : message?.message || 'Đã xảy ra sự cố khi xử lý yêu cầu.',
-    duration: duration ?? (kind === 'error' ? 7000 : 4500),
+    message: text,
+    duration: duration ?? DURATIONS[kind] ?? DURATIONS.info,
+    createdAt: now,
+    repeat: 1,
   };
   items = [...items, item].slice(-4);
   emit();
@@ -41,3 +58,17 @@ export function dismissToast(id) {
   items = items.filter((item) => item.id !== id);
   emit();
 }
+
+export const notify = {
+  success: (message, options = {}) => pushToast({ ...options, message, kind: 'success' }),
+  info: (message, options = {}) => pushToast({ ...options, message, kind: 'info' }),
+  warning: (message, options = {}) => pushToast({ ...options, message, kind: 'warning' }),
+  // Server-side failures stay until dismissed so they are not missed.
+  error: (error, options = {}) => pushToast({
+    title: error?.status === 403 ? 'Không có quyền' : error?.status === 0 || error?.status >= 500 ? 'Lỗi kết nối' : undefined,
+    duration: error?.status === 0 || error?.status >= 500 ? 0 : undefined,
+    ...options,
+    message: friendlyMessage(error, options.fallback),
+    kind: 'error',
+  }),
+};

@@ -201,6 +201,14 @@ def save_variant(
     return list_variant_details(db, store_id, product_id, variant_id=variant_id)[0]
 
 
+def current_cost_price(db: Connection, store_id: int, variant_id: int) -> Decimal | None:
+    variant_product_id(db, store_id, variant_id)
+    return db.execute(
+        text("SELECT cost_price FROM product_variants WHERE variant_id = :variant"),
+        {"variant": variant_id},
+    ).scalar_one()
+
+
 def change_variant_status(db: Connection, store_id: int, variant_id: int, status: ProductStatus) -> VariantDetail:
     lock_store(db, store_id)
     product_id = variant_product_id(db, store_id, variant_id)

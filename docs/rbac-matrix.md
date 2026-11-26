@@ -1,4 +1,41 @@
-# Ma trận phân quyền RBAC (FR-01.4, NFR-02, BR-10)
+# Ma trận phân quyền RBAC (cập nhật 2026-11-27)
+
+Áp dụng cho backend **sync** trên nhánh `master` (FastAPI, `app/core/permissions.py`). Backend là nơi quyết định quyền; frontend chỉ ẩn nút cho gọn giao diện. Bản demo (`frontend/src/demo/demo-api.js`) dùng cùng quy tắc.
+
+Phạm vi chi nhánh: OWNER thấy mọi chi nhánh của cửa hàng mình. MANAGER và EMPLOYEE chỉ thấy các chi nhánh được phân công trong `user_branches`. Mọi `branchId` gửi lên đều được kiểm tra lại bằng `require_branch_access` (403 nếu nằm ngoài phạm vi). `store_id` luôn lấy từ phiên đăng nhập, không lấy từ request.
+
+| Chức năng | Endpoint chính | OWNER | MANAGER | EMPLOYEE |
+|---|---|---|---|---|
+| Xem chi nhánh | `GET /branches`, `GET /branches/{id}` | Tất cả | Chi nhánh được phân công | Chi nhánh được phân công |
+| Tạo / sửa / ngừng chi nhánh | `POST`, `PUT /branches`, `PATCH /branches/{id}/status` | ✓ | ✗ 403 | ✗ 403 |
+| Tạo tài khoản Manager/Employee | `POST /users` | ✓ | ✗ 403 | ✗ 403 |
+| Sửa, khóa, đặt lại mật khẩu, phân công chi nhánh | `PUT/PATCH/POST /users/{id}…` | ✓ | ✗ 403 | ✗ 403 |
+| Xem danh sách nhân viên | `GET /users` | Toàn cửa hàng | Chỉ Employee thuộc chi nhánh của mình (chỉ đọc) | ✗ 403 |
+| Xem sản phẩm, danh mục, tồn kho | `GET /products`, `/categories`, `/inventory` | ✓ | ✓ (tồn kho trong phạm vi) | ✓ (tồn kho trong phạm vi) |
+| Thêm / sửa sản phẩm, biến thể, danh mục, thuộc tính, ảnh, import CSV sản phẩm | `POST /products/full`, `POST/PUT /products…`, `/variants…`, `/categories…`, `/attributes`, `/products/images`, `/products/import-csv` | ✓ | ✓ | ✗ 403 |
+| Ngừng bán / mở bán sản phẩm, biến thể, danh mục | `PATCH …/status` | ✓ | ✗ 403 | ✗ 403 |
+| Giá vốn (cost price) | xem/ghi | ✓ | Ẩn; khi Manager sửa biến thể, giá vốn cũ được giữ nguyên | Ẩn |
+| Nhập / xuất / kiểm kê kho, nhập kho từ file CSV/XLSX | `POST /inventory/import|export|stocktake|import-csv` | ✓ | ✓ (chi nhánh của mình) | ✗ 403 (trừ khi `ALLOW_EMPLOYEE_STOCK=true`) |
+| Lịch sử biến động kho | `GET /inventory/movements` | ✓ | ✓ (phạm vi) | ✓ (phạm vi) |
+| Tạo đơn bán, thanh toán, hủy đơn chờ | `POST /sales-orders…` | ✓ | ✓ (phạm vi) | ✓ (phạm vi) |
+| Xem danh sách đơn bán | `GET /sales-orders` | Tất cả chi nhánh | Chi nhánh của mình | Chỉ đơn do chính mình tạo |
+| Hoàn tiền đơn đã thanh toán | `POST /sales-orders/{id}/refund` | ✓ | ✓ (phạm vi) | ✗ 403 |
+| Khách hàng: xem, tạo | `GET/POST /customers` | ✓ | ✓ | ✓ |
+| Khách hàng: sửa | `PUT /customers/{id}` | ✓ | ✓ | ✗ 403 |
+| Đơn đặt trước: xem, thu tiền, giao, hủy | `/preorders…` | ✓ | ✓ (phạm vi) | ✓ (phạm vi) |
+| Tạo đơn đặt trước (chỉ khi hết hàng) | `POST /preorders` (công khai) | ✓ | ✓ | ✓ |
+| Báo cáo doanh thu | `GET /reports/*` | Toàn chuỗi hoặc từng chi nhánh | Bắt buộc chọn chi nhánh của mình | ✗ 403 |
+
+Đăng nhập: tên đăng nhập không phân biệt hoa thường và là duy nhất. Hậu tố cũ `ten:manager` / `ten:staff` vẫn được chấp nhận nhưng phải khớp vai trò thật. Tài khoản `LOCKED`, phiên bị thu hồi hoặc gói đăng ký hết hạn đều trả 401.
+
+Kiểm thử tự động: `backend/integration_tests/test_system_audit_mysql.py` (chạy bằng `scripts/test_system_audit_mysql.ps1`) và `frontend/tests/system-audit.test.js` (bản demo).
+
+---
+
+# (Lưu trữ) Ma trận của backend async cũ
+
+> Phần dưới mô tả nhánh backend async (`tuan/*`) và các script `check_rbac.py` / `seed_auth.py` không còn chạy trên `master`. Chỉ giữ lại để tham khảo.
+
 
 Bảng này ghi **kết quả thực tế** khi chạy `python -m scripts.check_rbac` (thư mục `backend/`) ngày 2026-11-13: **41/41 trường hợp đạt**.
 Dữ liệu dùng để kiểm thử lấy từ `python -m scripts.seed_auth`.

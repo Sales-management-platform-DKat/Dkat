@@ -36,16 +36,30 @@ def subscription_is_active(shop: Shop, now: datetime | None = None) -> bool:
     return expires_at > current_time
 
 
-def parse_login_name(value: str) -> tuple[str, str]:
+def parse_login_name(value: str) -> tuple[str, str | None]:
+    """Split "name" or the legacy "name:manager" / "name:staff" form.
+
+    Usernames are unique across the platform, so the role suffix is optional.
+    When given it must match the account's role; an unknown suffix is rejected.
+    Returns ("", None) for input that cannot be a username.
+    """
     parts = value.strip().split(":")
     if len(parts) == 1:
-        username, role = parts[0], "owner"
+        username, role = parts[0], None
     elif len(parts) == 2:
         username, suffix = parts
-        role = {"manager": "manager", "staff": "staff"}.get(suffix.casefold(), "")
+        role = {"owner": "owner", "manager": "manager", "staff": "staff", "employee": "staff"}.get(
+            suffix.strip().casefold(), ""
+        )
+        if not role:
+            return "", None
     else:
-        return "", ""
-    return username.casefold(), role
+        return "", None
+    return username.strip().casefold(), role
+
+
+def normalize_username(value: str) -> str:
+    return value.strip().casefold()
 
 
 def user_info(user: User) -> dict:
@@ -79,7 +93,7 @@ def create_user(
     user = User(
         shop_id=shop.id,
         full_name=full_name.strip(),
-        username=username.strip(),
+        username=normalize_username(username),
         email=email.strip().casefold() if email else None,
         phone=None,
         password_hash=hash_password(password),
@@ -101,12 +115,17 @@ def authenticate(db: Session, username: str, password: str) -> User | None:
         user = users[0] if len(users) == 1 else None
     else:
         normalized_username, role = parse_login_name(login_value)
-        user = db.scalar(
-            select(User).where(
-                User.username == normalized_username,
-                User.role == STORAGE_ROLES.get(role, ""),
-            )
-        ) if normalized_username and role else None
+        user = None
+        if normalized_username:
+            # Compare case-insensitively in SQL so the result does not depend on
+            # the column collation (TiDB defaults to utf8mb4_bin).
+            matches = db.scalars(
+                select(User).where(func.lower(User.username) == normalized_username).limit(2)
+            ).all()
+            # Legacy rows that differ only by case are ambiguous: refuse to guess.
+            user = matches[0] if len(matches) == 1 else None
+        if user is not None and role is not None and user.role != STORAGE_ROLES[role]:
+            user = None
     if (
         user is None
         or user.status != "ACTIVE"

@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
@@ -9,7 +10,8 @@ from app.modules.products.schemas import (
     Product, ProductCreate, ProductDetail, ProductInput, ProductRecord, ProductSort,
     ProductStatus, ProductVariant,
 )
-from app.modules.products.variant_service import list_variant_details
+from app.modules.products.variant_service import list_variant_details, save_variant
+from app.modules.products.variant_schemas import ProductFullInput, VariantInput
 
 PRODUCT_ORDER = {
     "id": "p.product_id ASC",
@@ -153,3 +155,31 @@ def change_product_status(
         {"store": store_id, "id": product_id, "status": status},
     )
     return get_product_record(db, store_id, product_id)
+
+
+def create_product_with_variants(db: Connection, actor, data: ProductFullInput) -> ProductDetail:
+    # Imported here to avoid a module cycle (inventory imports product schemas).
+    from app.core.permissions import require_branch_access
+    from app.modules.inventory.schemas import StockImportInput, StockLineInput
+    from app.modules.inventory.service import change_stock
+
+    record = create_product(db, actor.store_id, actor.user_id, ProductCreate(
+        categoryId=data.categoryId, name=data.name, productCode=data.productCode,
+        description=data.description, imageUrl=data.imageUrl,
+    ))
+    opening = []
+    for variant in data.variants:
+        fields = variant.model_dump(exclude={"initialQuantity"})
+        if actor.role != "OWNER":
+            fields["costPrice"] = None
+        saved = save_variant(db, actor.store_id, VariantInput(**fields), product_id=record.productId)
+        if variant.initialQuantity:
+            opening.append(StockLineInput(variantId=saved.variant_id, quantity=variant.initialQuantity))
+    if opening:
+        if actor.role == "EMPLOYEE":
+            raise HTTPException(403, "Bạn không có quyền thay đổi tồn kho.")
+        require_branch_access(db, actor, data.stockBranchId)
+        change_stock(db, actor, StockImportInput(
+            branchId=data.stockBranchId, items=opening, note="Tồn đầu kỳ khi tạo sản phẩm",
+        ))
+    return get_product_detail(db, actor.store_id, record.productId)

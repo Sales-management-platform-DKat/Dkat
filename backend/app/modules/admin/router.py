@@ -84,6 +84,13 @@ def add_months(value: datetime, months: int) -> datetime:
     dependencies=[Depends(require_admin_token)],
 )
 def provision_account(payload: ProvisionAccountRequest, db: Session = Depends(get_db)):
+    # Usernames are compared case-insensitively at login, so reject case-only duplicates
+    # even where the column collation is case-sensitive (TiDB utf8mb4_bin).
+    if db.scalar(select(User.id).where(func.lower(User.username) == payload.owner_username.casefold())):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Tên đăng nhập chủ cửa hàng đã được sử dụng.",
+        )
     if payload.owner_email is not None:
         duplicate_email = db.scalar(
             select(User.id).where(func.lower(User.email) == payload.owner_email.casefold())

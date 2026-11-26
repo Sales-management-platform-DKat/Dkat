@@ -22,7 +22,7 @@ const en = JSON.parse(readFileSync(join(srcDir, 'locales/en.json'), 'utf8'));
 const vi = JSON.parse(readFileSync(join(srcDir, 'locales/vi.json'), 'utf8'));
 
 // Files that are data, not UI copy, or that only hold the i18n machinery itself.
-const SKIP = new Set(['i18n/index.js', 'i18n/locale.js', 'mocks/data.js', 'seed.js']);
+const SKIP = new Set(['i18n/index.js', 'i18n/locale.js', 'mocks/data.js', 'seed.js', 'demo/demo-seed.js']);
 // Literal arguments of these calls are never shown to users.
 const SILENT_CALLS = new Set(['console.log', 'console.warn', 'console.error', 'localStorage.setItem',
   'localStorage.getItem', 'sessionStorage.setItem', 'sessionStorage.getItem', 'apiRequest', 'fetch',

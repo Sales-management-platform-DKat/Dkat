@@ -1,6 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { acquireLayer, focusableElements, isTopLayer, lockScroll } from './layer.js';
+import { translate } from '../../i18n/index.js';
 
 function Presence({ present, children }) {
   const [shown, setShown] = useState(present);
@@ -125,7 +126,7 @@ export function Dialog({
                 <h2 id={titleId}>{title}</h2>
                 {description && <p id={descriptionId}>{description}</p>}
               </div>
-              <button type="button" className="dk-close" aria-label="Đóng" disabled={!canDismiss} onClick={onClose}>
+              <button type="button" className="dk-close" aria-label={translate('Đóng')} disabled={!canDismiss} onClick={onClose}>
                 <CloseIcon />
               </button>
             </header>
