@@ -18,6 +18,23 @@ for (const [source, english] of Object.entries(englishCatalog)) {
   }
 }
 
+// Movement notes the backend writes itself (sales/service.py, preorders/services/fulfillment.py) are
+// stored in Vietnamese; show them in the active language. Notes typed by users are left untouched.
+const SYSTEM_NOTES = [
+  [/^Bán đơn (\S+)$/, 'inventory.note.sale'],
+  [/^Hoàn đơn (\S+)$/, 'inventory.note.refund'],
+  [/^Giao đơn (\S+)$/, 'inventory.note.preorderFulfillment'],
+];
+
+export function systemNote(note) {
+  if (typeof note !== 'string') return note;
+  for (const [pattern, key] of SYSTEM_NOTES) {
+    const match = note.match(pattern);
+    if (match) return { key, values: { code: match[1] } };
+  }
+  return note;
+}
+
 export function demoVariantLabel(value, t) {
   return demoVariantLabels.has(value) ? t(value) : value;
 }

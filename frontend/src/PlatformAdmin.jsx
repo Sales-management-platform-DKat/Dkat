@@ -15,6 +15,14 @@ function planName(value) {
   return plans.find(([key]) => key === value)?.[1] || value || '—';
 }
 
+// The platform admin signs in with DKAT_ADMIN_TOKEN (X-Admin-Token), not a username/password.
+function adminConnectError(error) {
+  if (error?.status === 401) return 'admin.token.invalid';
+  if (error?.status === 503) return 'admin.token.notConfigured';
+  if (error instanceof TypeError) return 'admin.token.unreachable';
+  return errorMessage(error, 'Đã xảy ra sự cố khi kết nối hoặc xử lý yêu cầu. Vui lòng thử lại.');
+}
+
 export default function PlatformAdmin() {
   const { t, formatDate, formatNumber } = useLanguage();
   const dateLabel = (value) => value ? formatDate(new Date(value)) : '—';
@@ -36,10 +44,13 @@ export default function PlatformAdmin() {
     setBusy(true);
     setMessage('');
     setMessageKind('success');
+    // Pasted tokens often carry spaces or a trailing newline.
+    const token = adminToken.trim();
+    setAdminToken(token);
     try {
-      await loadAccounts(adminToken);
+      await loadAccounts(token);
     } catch (error) {
-      setMessage(errorMessage(error, 'Đã xảy ra sự cố khi kết nối hoặc xử lý yêu cầu. Vui lòng thử lại.'));
+      setMessage(adminConnectError(error));
       setMessageKind('error');
     } finally {
       setBusy(false);

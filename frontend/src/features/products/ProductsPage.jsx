@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { apiAssetUrl } from '../../auth-client.js';
 import { errorMessage, useLanguage } from '../../i18n/index.js';
+import { confirmAction } from '../../components/confirm.jsx';
 import { createCategory, listCategories, setCategoryStatus, updateCategory } from '../categories/api.js';
 import { listInventory } from '../inventory/api.js';
 import { createProduct, createProductVariant, deleteUnusedProductImage, getProduct, listProducts, setProductStatus, setVariantStatus, updateProduct, updateProductVariant, uploadProductImage } from './api.js';
@@ -85,7 +86,7 @@ function CategoryDialog({ categories, busy, onCancel, onCreate, onToggle, onEdit
 }
 
 export default function ProductsPage({ branchId, isOwner }) {
-  const { t, formatCurrency } = useLanguage();
+  const { t, formatCurrency, formatNumber } = useLanguage();
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [products, setProducts] = useState([]);
@@ -199,19 +200,26 @@ export default function ProductsPage({ branchId, isOwner }) {
   }
 
   async function editCategory(category) {
-    const name = window.prompt(t('Tên danh mục'), category.name);
-    if (!name?.trim() || name.trim() === category.name) return;
-    setBusy(true); setError('');
-    try { await updateCategory(category.categoryId, { name: name.trim(), parentCategoryId: category.parentCategoryId, description: category.description }); setNotice('Đã cập nhật danh mục.'); await reload(); }
-    catch (cause) { setError(errorMessage(cause, 'Không cập nhật được danh mục.')); }
-    finally { setBusy(false); }
+    setError('');
+    // The request runs inside the dialog: on failure it stays open with the typed name and the reason.
+    const answer = await confirmAction({
+      tone: 'info', title: 'Đổi tên danh mục', description: 'category.rename.description', confirmLabel: 'Lưu', cancelLabel: 'Hủy',
+      requireReason: true, reasonLabel: 'Tên danh mục', reasonPlaceholder: 'Ví dụ: Áo thun', initialValue: category.name,
+      onConfirm: async ({ reason: name }) => {
+        if (name === category.name) return;
+        await updateCategory(category.categoryId, { name, parentCategoryId: category.parentCategoryId, description: category.description });
+      },
+    });
+    if (!answer || answer.reason === category.name) return;
+    setNotice('Đã cập nhật danh mục.');
+    await reload();
   }
 
   const categoryName = (id) => flatCategories.find((category) => category.categoryId === id)?.name || '—';
   const stockByVariant = useMemo(() => new Map(stock.map((item) => [item.variantId, item])), [stock]);
 
   return <>
-    <div className="toolbar product-toolbar"><input aria-label={t('Tìm sản phẩm')} placeholder={t('Tìm theo tên hoặc SKU')} value={query} onChange={(event) => setQuery(event.target.value)} />{isOwner && <><button className="btn primary" onClick={() => setProductDialog({})}>{t('+ Thêm sản phẩm')}</button><button className="btn outline" onClick={() => setShowCategories(true)}>{t('Danh mục')}</button></>}<span className="muted small">{products.length} {t('sản phẩm')}</span></div>
+    <div className="toolbar product-toolbar"><input aria-label={t('Tìm sản phẩm')} placeholder={t('Tìm theo tên hoặc SKU')} value={query} onChange={(event) => setQuery(event.target.value)} />{isOwner && <><button className="btn primary" onClick={() => setProductDialog({})}>{t('+ Thêm sản phẩm')}</button><button className="btn outline" onClick={() => setShowCategories(true)}>{t('Danh mục')}</button></>}<span className="muted small">{t(products.length === 1 ? 'count.product.one' : 'count.product.other', { count: formatNumber(products.length) })}</span></div>
     {error && <div className="notice error-state" role="alert">{t(error)}</div>}{notice && <div className="notice success-state" role="status">{t(notice)}</div>}
     {selectedId && detail ? <section className="panel product-detail-panel">
       <div className="section-title"><div><button className="link" onClick={() => { setSelectedId(null); setDetail(null); }}>{`← ${t('Quay lại danh sách')}`}</button><h2>{detail.name}</h2><p className="muted">{detail.productCode} · {categoryName(detail.categoryId)}</p></div><div className="actions wrap">{isOwner && <><button className="btn outline" onClick={() => setProductDialog(detail)}>{t('Sửa sản phẩm')}</button><button className="btn outline" onClick={() => setVariantDialog({})}>{t('+ Thêm biến thể')}</button><button className="btn outline" disabled={busy} onClick={() => toggleProductStatus(detail)}>{detail.status === 'ACTIVE' ? t('Ngừng bán') : t('Kích hoạt')}</button></>}</div></div>

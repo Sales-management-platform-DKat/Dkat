@@ -28,13 +28,14 @@ async function readResponse(response) {
   return { data, response };
 }
 
-function responseError(data) {
+function responseError(data, status) {
   const apiError = data?.error;
   const detail = data?.detail;
   const message = apiError?.message || detail?.message || detail;
   const error = new Error(typeof message === 'string' ? message : undefined);
   error.code = apiError?.code || detail?.code || (Array.isArray(detail) ? 'VALIDATION_ERROR' : undefined);
   error.details = apiError?.details || detail;
+  error.status = status;
   return error;
 }
 
@@ -102,10 +103,10 @@ export async function apiRequest(path, { adminToken, token, ...options } = {}) {
       }
     } else {
       window.dispatchEvent(new Event('dkat-auth-expired'));
-      throw responseError(result.data);
+      throw responseError(result.data, result.response.status);
     }
   }
 
-  if (!result.response.ok) throw responseError(result.data);
+  if (!result.response.ok) throw responseError(result.data, result.response.status);
   return result.data;
 }

@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { errorMessage, useLanguage } from '../../i18n/index.js';
+import { confirmAction } from '../../components/confirm.jsx';
 import { quickSearchCustomers } from '../customers/api.js';
 import { listInventory } from '../inventory/api.js';
 import { listProducts } from '../products/api.js';
@@ -19,7 +20,15 @@ export default function PreordersPage({ branchId }) {
     setBusy(true); setError(''); try { const data = await createPreorder({ branchId: Number(branchId), customer: { fullName: form.fullName, phone: form.phone, email: form.email || null, address: form.address }, items: [{ variantId: variant.variant_id, quantity: Number(quantity) }], note: form.note || null }); setCreating(false); setPickedCustomer(null); setCustomerQuery(''); setNoticeValue(data.preorderCode); await reload(); } catch (e) { setError(errorMessage(e, 'Không tạo được đơn đặt trước.')); } finally { setBusy(false); }
   }
   const [notice, setNotice] = useState('');
-  async function action(row, kind) { let reason; if (kind === 'cancel') { reason = window.prompt(t('Nhập lý do hủy đơn')); if (!reason?.trim()) return; } if (kind === 'pay' && !window.confirm(t('Xác nhận đã nhận đủ tiền thực tế?'))) return; if (kind === 'fulfill' && !window.confirm(t('Xác nhận đã giao đủ hàng cho khách?'))) return;
+  async function action(row, kind) {
+    const prompts = {
+      cancel: { tone: 'danger', title: 'preorder.cancel.title', description: 'preorder.cancel.description', confirmLabel: 'Hủy đơn', cancelLabel: 'Giữ đơn', requireReason: true, reasonLabel: 'Lý do hủy', reasonPlaceholder: 'Ví dụ: khách đổi ý, sai sản phẩm…' },
+      pay: { tone: 'info', title: 'preorder.pay.title', description: 'Xác nhận đã nhận đủ tiền thực tế?', confirmLabel: 'Xác nhận thanh toán' },
+      fulfill: { tone: 'info', title: 'preorder.fulfill.title', description: 'Xác nhận đã giao đủ hàng cho khách?', confirmLabel: 'Xác nhận giao' },
+    };
+    const answer = await confirmAction({ ...prompts[kind], title: { key: prompts[kind].title, values: { code: row.preorderCode } } });
+    if (!answer) return;
+    const reason = answer.reason;
     setBusy(true); setError(''); try { if (kind === 'cancel') await cancelPreorder(row.preorderId, reason.trim()); if (kind === 'pay') await confirmPreorderPayment(row.preorderId, { paymentMethod: 'CASH', amount: Number(row.totalAmount) }); if (kind === 'fulfill') await fulfillPreorder(row.preorderId, {}); await reload(); } catch (e) { setError(errorMessage(e, 'Không cập nhật được đơn đặt trước.')); } finally { setBusy(false); }
   }
   const [history, setHistory] = useState(null);
