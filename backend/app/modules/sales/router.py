@@ -27,7 +27,7 @@ def create_order(order: SalesOrderInput, actor: Reader) -> PendingSalesOrder:
             return create_sales_order(db, actor, order)
     except SQLAlchemyError:
         logger.exception("Sales order creation failed")
-        raise HTTPException(503, "Database unavailable") from None
+        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
 
 
 @router.get("")
@@ -37,7 +37,7 @@ def list_orders(actor: Reader, filters: Annotated[SalesOrderFilters, Query()]) -
             return list_sales_orders(db, actor, filters)
     except SQLAlchemyError:
         logger.exception("Sales order list failed")
-        raise HTTPException(503, "Database unavailable") from None
+        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
 
 
 @router.get("/{order_id}")
@@ -47,7 +47,7 @@ def get_order(order_id: SalesId, actor: Reader) -> SalesOrderDetail:
             return get_sales_order(db, actor, order_id)
     except SQLAlchemyError:
         logger.exception("Sales order detail failed")
-        raise HTTPException(503, "Database unavailable") from None
+        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
 
 
 @router.post("/{order_id}/cancel")
@@ -57,7 +57,7 @@ def cancel_order(order_id: SalesId, data: CancelOrderInput, actor: Reader) -> Sa
             return cancel_sales_order(db, actor, order_id, data.reason)
     except SQLAlchemyError:
         logger.exception("Sales order cancellation failed")
-        raise HTTPException(503, "Database unavailable") from None
+        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
 
 
 @router.post("/{order_id}/confirm-payment")
@@ -67,7 +67,7 @@ def confirm_order_payment(order_id: SalesId, data: ConfirmPaymentInput, actor: R
             return confirm_payment(db, actor, order_id, data)
     except SQLAlchemyError:
         logger.exception("Sales order payment failed")
-        raise HTTPException(503, "Database unavailable") from None
+        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
 
 
 @router.post("/{order_id}/refund")
@@ -77,4 +77,4 @@ def refund_order(order_id: SalesId, data: RefundOrderInput, actor: RefundActor) 
             return refund_sales_order(db, actor, order_id, data.reason)
     except SQLAlchemyError:
         logger.exception("Sales order refund failed")
-        raise HTTPException(503, "Database unavailable") from None
+        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, Up
 from fastapi.responses import FileResponse
 from sqlalchemy import text
 
-from app.core.permissions import Actor, require_auth, require_owner
+from app.core.permissions import Actor, require_auth, require_owner, require_owner_or_manager
 from app.modules.products import service, variant_service
 from app.modules.products.catalog_transaction import catalog_transaction
 from app.modules.products.csv_parser import MAX_FILE_BYTES
@@ -15,10 +15,12 @@ from app.modules.products.schemas import (
     Product, ProductCreate, ProductDetail, ProductId, ProductInput, ProductRecord,
     ProductSort, ProductStatus, ProductStatusInput, VariantDetail,
 )
-from app.modules.products.variant_schemas import AttributeInput, AttributeRecord, VariantInput
+from app.modules.products.variant_schemas import AttributeInput, AttributeRecord, ProductFullInput, VariantInput
 
 router = APIRouter(tags=["products"])
 Owner = Annotated[Actor, Depends(require_owner)]
+# Catalog editors: OWNER and MANAGER (docs/rbac-matrix.md). Status changes stay owner-only.
+Editor = Annotated[Actor, Depends(require_owner_or_manager)]
 Reader = Annotated[Actor, Depends(require_auth)]
 
 
@@ -46,7 +48,7 @@ def get_products(
 
 @router.post("/products/import-csv", responses={201: {"model": CsvImportResult}})
 def import_product_csv(
-    actor: Owner, response: Response, file: Annotated[UploadFile, File()],
+    actor: Editor, response: Response, file: Annotated[UploadFile, File()],
     dry_run: bool = Query(default=True, alias="dryRun"),
 ) -> CsvImportResult:
     try:
@@ -62,7 +64,7 @@ def import_product_csv(
 
 
 @router.post("/products/images", status_code=201)
-def upload_product_image(actor: Owner, file: Annotated[UploadFile, File()]) -> dict:
+def upload_product_image(actor: Editor, file: Annotated[UploadFile, File()]) -> dict:
     try:
         content = file.file.read(MAX_PRODUCT_IMAGE_BYTES + 1)
         filename, content_type = save_product_image(content, file.content_type)
@@ -88,7 +90,7 @@ def get_product_image(filename: str) -> FileResponse:
 
 
 @router.delete("/products/images/{filename}", status_code=204, include_in_schema=False)
-def delete_unused_product_image(filename: str, actor: Owner) -> Response:
+def delete_unused_product_image(filename: str, actor: Editor) -> Response:
     path = product_image_path(filename)
     image_url = f"/products/images/{filename}"
     with catalog_transaction() as db:
@@ -113,14 +115,25 @@ def get_product(product_id: ProductId, actor: Reader) -> ProductDetail:
 
 
 @router.post("/products", status_code=201)
-def create_product(data: ProductCreate, actor: Owner) -> ProductRecord:
+def create_product(data: ProductCreate, actor: Editor) -> ProductRecord:
     # Read the sequence after acquiring the store lock, even after waiting for another writer.
     with catalog_transaction(read_committed=True) as db:
         return service.create_product(db, actor.store_id, actor.user_id, data)
 
 
+@router.post("/products/full", status_code=201)
+def create_product_full(data: ProductFullInput, actor: Editor) -> ProductDetail:
+    """Product + variants (+ optional opening stock) are saved together or not at all."""
+    with catalog_transaction(read_committed=True) as db:
+        product = service.create_product_with_variants(db, actor, data)
+    if actor.role != "OWNER":
+        for variant in product.variants:
+            variant.cost_price = None
+    return product
+
+
 @router.put("/products/{product_id}")
-def update_product(product_id: ProductId, data: ProductInput, actor: Owner) -> ProductRecord:
+def update_product(product_id: ProductId, data: ProductInput, actor: Editor) -> ProductRecord:
     with catalog_transaction() as db:
         return service.update_product(db, actor.store_id, product_id, data)
 
@@ -138,21 +151,32 @@ def get_attributes(actor: Reader) -> list[AttributeRecord]:
 
 
 @router.post("/attributes", status_code=201)
-def create_attribute(data: AttributeInput, actor: Owner) -> AttributeRecord:
+def create_attribute(data: AttributeInput, actor: Editor) -> AttributeRecord:
     with catalog_transaction() as db:
         return variant_service.create_attribute(db, actor.store_id, data)
 
 
 @router.post("/products/{product_id}/variants", status_code=201)
-def create_variant(product_id: ProductId, data: VariantInput, actor: Owner) -> VariantDetail:
+def create_variant(product_id: ProductId, data: VariantInput, actor: Editor) -> VariantDetail:
+    if actor.role != "OWNER":
+        data = data.model_copy(update={"costPrice": None})
     with catalog_transaction() as db:
-        return variant_service.save_variant(db, actor.store_id, data, product_id=product_id)
+        variant = variant_service.save_variant(db, actor.store_id, data, product_id=product_id)
+    if actor.role != "OWNER":
+        variant.cost_price = None
+    return variant
 
 
 @router.put("/variants/{variant_id}")
-def update_variant(variant_id: ProductId, data: VariantInput, actor: Owner) -> VariantDetail:
+def update_variant(variant_id: ProductId, data: VariantInput, actor: Editor) -> VariantDetail:
     with catalog_transaction() as db:
-        return variant_service.save_variant(db, actor.store_id, data, variant_id=variant_id)
+        if actor.role != "OWNER":
+            # Managers never see cost prices, so their edits must not overwrite them.
+            data = data.model_copy(update={"costPrice": variant_service.current_cost_price(db, actor.store_id, variant_id)})
+        variant = variant_service.save_variant(db, actor.store_id, data, variant_id=variant_id)
+    if actor.role != "OWNER":
+        variant.cost_price = None
+    return variant
 
 
 @router.patch("/variants/{variant_id}/status")

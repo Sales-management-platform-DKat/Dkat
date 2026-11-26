@@ -46,6 +46,10 @@ def list_sales_orders(db: Connection, actor: Actor, filters: SalesOrderFilters) 
         "store": actor.store_id, "branches": branches, "limit": filters.size,
         "offset": (filters.page - 1) * filters.size,
     }
+    if actor.role == "EMPLOYEE":
+        # Employees list the orders they created; managers/owners supervise the branch.
+        conditions.append("o.created_by = :creator")
+        params["creator"] = actor.user_id
     end_operator = "<" if filters.end_exclusive else "<="
     for name, clause, value in (
         ("status", "o.status = :status", filters.status),

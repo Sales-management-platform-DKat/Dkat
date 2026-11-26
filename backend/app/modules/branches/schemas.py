@@ -24,22 +24,30 @@ PHONE_PATTERN = r"^\+?[0-9][0-9 .-]{5,18}$"
 class BranchIn(CamelModel):
     """Body of POST /branches and PUT /branches/{id} (PUT replaces every field below)."""
 
-    branch_code: str = Field(min_length=1, max_length=30)
+    # Optional: POST generates the next free "CNxx" code, PUT keeps the current one.
+    branch_code: str | None = Field(default=None, max_length=30)
     name: str = Field(min_length=1, max_length=150)
     address: str = Field(min_length=1, max_length=255)
     phone: str | None = Field(default=None, max_length=20)
 
-    @field_validator("branch_code", "name", "address", mode="before")
+    @field_validator("name", "address", mode="before")
     @classmethod
     def strip_required(cls, v):
         # Strip first so "   " counts as missing (-> 422 like an absent field)
         return v.strip() if isinstance(v, str) else v
 
-    @field_validator("branch_code")
+    @field_validator("branch_code", mode="before")
     @classmethod
-    def check_code(cls, v: str) -> str:
+    def check_code(cls, v):
+        if v is None:
+            return None
+        if not isinstance(v, str):
+            raise ValueError("Mã chi nhánh phải là chuỗi ký tự")
+        v = v.strip()
+        if not v:
+            return None
         if not re.fullmatch(BRANCH_CODE_PATTERN, v):
-            raise ValueError("Only letters, digits, '-' and '_' (must start with a letter or digit)")
+            raise ValueError("Mã chi nhánh chỉ gồm chữ không dấu, số, '-' hoặc '_' và không có khoảng trắng")
         return v.upper()
 
     @field_validator("phone", mode="before")
@@ -48,12 +56,12 @@ class BranchIn(CamelModel):
         if v is None:
             return None
         if not isinstance(v, str):
-            raise ValueError("Phone must be a string")
+            raise ValueError("Số điện thoại không hợp lệ")
         v = v.strip()
         if not v:
             return None
         if not re.fullmatch(PHONE_PATTERN, v):
-            raise ValueError("Invalid phone number")
+            raise ValueError("Số điện thoại chỉ gồm chữ số (6–19 ký tự), có thể bắt đầu bằng +")
         return v
 
 

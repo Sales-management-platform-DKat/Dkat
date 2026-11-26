@@ -24,10 +24,10 @@ class SalesRefundMySQLTests(unittest.TestCase):
         cls.other_store, cls.other_owner, _ = cls.provision("other")
         cls.members = {}
         for label, role in (("manager", "manager"), ("staff", "staff"), ("unassigned", "manager")):
-            user = cls.request("POST", "/api/v1/users", 201, cls.owner, {
+            user = cls.request("POST", "/users", 201, cls.owner, {
                 "username": label + cls.suffix, "full_name": label, "role": role, "password": cls.password,
             })
-            login = cls.request("POST", "/api/v1/auth/login", 200, body={
+            login = cls.request("POST", "/auth/login", 200, body={
                 "username": label + cls.suffix + ":" + role, "password": cls.password,
             })
             cls.members[label] = ({"Authorization": "Bearer " + login["access_token"]}, user["id"])
@@ -56,7 +56,7 @@ class SalesRefundMySQLTests(unittest.TestCase):
 
     @classmethod
     def request(cls, method, path, status=200, auth=None, body=None, params=None):
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://testserver/api/v1") as client:
             response = client.request(method, path, headers=cls.owner if auth is None and hasattr(cls, "owner") else auth,
                                       json=body, params=params)
         if response.status_code != status:
@@ -66,11 +66,11 @@ class SalesRefundMySQLTests(unittest.TestCase):
     @classmethod
     def provision(cls, prefix):
         name = prefix + cls.suffix
-        shop = cls.request("POST", "/api/v1/admin/accounts", 201, {"X-Admin-Token": config.ADMIN_TOKEN}, {
-            "shop_name": name, "plan": "pro", "subscription_months": 12, "owner_username": name,
+        shop = cls.request("POST", "/admin/accounts", 201, {"X-Admin-Token": config.ADMIN_TOKEN}, {
+            "shop_name": name, "plan": "basic", "subscription_months": 12, "owner_username": name, "owner_email": name + "@example.test",
             "owner_full_name": name, "owner_password": cls.password,
         })
-        login = cls.request("POST", "/api/v1/auth/login", body={"username": name, "password": cls.password})
+        login = cls.request("POST", "/auth/login", body={"username": name, "password": cls.password})
         return shop["shop_id"], {"Authorization": "Bearer " + login["access_token"]}, login["user"]["id"]
 
     def setUp(self):
@@ -122,7 +122,7 @@ class SalesRefundMySQLTests(unittest.TestCase):
             return [future.result(timeout=30) for future in futures]
 
     def raw_refund(self, order):
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://testserver/api/v1") as client:
             return client.post(f"/sales-orders/{order['salesOrderId']}/refund", headers=self.owner,
                                json={"reason": "QA concurrent refund"}).status_code
 
@@ -299,7 +299,7 @@ class SalesRefundMySQLTests(unittest.TestCase):
         paid, competing = self.order(quantities=(1, 0), paid=False), self.order(quantities=(1, 0), paid=False)
         self.request("POST", f"/sales-orders/{paid['salesOrderId']}/confirm-payment", body={"paymentMethod": "CASH", "amount": paid["totalAmount"]})
         def sale():
-            with TestClient(app) as client:
+            with TestClient(app, base_url="http://testserver/api/v1") as client:
                 return client.post(f"/sales-orders/{competing['salesOrderId']}/confirm-payment", headers=self.owner,
                                    json={"paymentMethod": "CASH", "amount": competing["totalAmount"]}).status_code
         refund_status, sale_status = self.concurrent([lambda: self.raw_refund(paid), sale])

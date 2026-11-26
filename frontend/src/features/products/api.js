@@ -45,3 +45,35 @@ export function updateProductVariant(variantId, payload) {
 export function setVariantStatus(variantId, status) {
   return apiRequest(`/variants/${encodeURIComponent(variantId)}/status`, { method: 'PATCH', body: JSON.stringify({ status }) });
 }
+
+export function createProductFull(payload) {
+  return apiRequest('/products/full', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+export function listAttributes() {
+  return apiRequest('/attributes');
+}
+
+export function createAttribute(payload) {
+  return apiRequest('/attributes', { method: 'POST', body: JSON.stringify(payload) });
+}
+
+// Returns {color, size} attribute ids, creating the TEXT attributes on first use.
+export async function ensureVariantAttributes() {
+  const wanted = { color: 'Màu sắc', size: 'Kích thước' };
+  const existing = await listAttributes();
+  const result = {};
+  for (const [key, name] of Object.entries(wanted)) {
+    let attribute = (existing || []).find((item) => item.name.trim().toLowerCase() === name.toLowerCase());
+    if (!attribute) {
+      try {
+        attribute = await createAttribute({ name, dataType: 'TEXT' });
+      } catch (error) {
+        if (error.status !== 409) throw error;
+        attribute = (await listAttributes()).find((item) => item.name.trim().toLowerCase() === name.toLowerCase());
+      }
+    }
+    result[key] = attribute?.attributeId;
+  }
+  return result;
+}

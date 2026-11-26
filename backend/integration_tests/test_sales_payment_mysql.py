@@ -27,10 +27,10 @@ class SalesPaymentMySQLTests(unittest.TestCase):
         cls.roles = {}
         for role in ("manager", "staff"):
             username = role + cls.suffix
-            user = cls.request("POST", "/api/v1/users", 201, cls.owner, {
+            user = cls.request("POST", "/users", 201, cls.owner, {
                 "username": username, "full_name": role, "role": role, "password": cls.password,
             })
-            token = cls.request("POST", "/api/v1/auth/login", 200, body={
+            token = cls.request("POST", "/auth/login", 200, body={
                 "username": username + ":" + role, "password": cls.password,
             })["access_token"]
             cls.roles[role] = ({"Authorization": "Bearer " + token}, user["id"])
@@ -62,7 +62,7 @@ class SalesPaymentMySQLTests(unittest.TestCase):
 
     @classmethod
     def request(cls, method, path, expected, auth=None, body=None):
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://testserver/api/v1") as client:
             response = client.request(method, path, headers=auth, json=body)
         if response.status_code != expected:
             raise AssertionError((path, expected, response.status_code, response.text))
@@ -71,12 +71,12 @@ class SalesPaymentMySQLTests(unittest.TestCase):
     @classmethod
     def provision(cls, label):
         username = label + cls.suffix
-        shop = cls.request("POST", "/api/v1/admin/accounts", 201,
+        shop = cls.request("POST", "/admin/accounts", 201,
                            {"X-Admin-Token": config.ADMIN_TOKEN}, {
-            "shop_name": username, "plan": "pro", "subscription_months": 12,
-            "owner_username": username, "owner_full_name": username, "owner_password": cls.password,
+            "shop_name": username, "plan": "basic", "subscription_months": 12,
+            "owner_username": username, "owner_email": username + "@example.test", "owner_full_name": username, "owner_password": cls.password,
         })
-        login = cls.request("POST", "/api/v1/auth/login", 200, body={
+        login = cls.request("POST", "/auth/login", 200, body={
             "username": username, "password": cls.password,
         })
         return shop["shop_id"], {"Authorization": "Bearer " + login["access_token"]}, login["user"]["id"]
@@ -142,7 +142,7 @@ class SalesPaymentMySQLTests(unittest.TestCase):
             return [future.result(timeout=30) for future in futures]
 
     def raw_pay(self, order):
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://testserver/api/v1") as client:
             return client.post(f"/sales-orders/{order['salesOrderId']}/confirm-payment", headers=self.owner,
                                json={"paymentMethod": "CASH", "amount": order["totalAmount"]}).status_code
 
@@ -301,7 +301,7 @@ class SalesPaymentMySQLTests(unittest.TestCase):
     def test_payment_and_cancellation_are_serialized(self):
         order = self.order()
         def cancel():
-            with TestClient(app) as client:
+            with TestClient(app, base_url="http://testserver/api/v1") as client:
                 return client.post(f"/sales-orders/{order['salesOrderId']}/cancel", headers=self.owner,
                                    json={"reason": "QA race"}).status_code
         self.assertEqual(sorted(self.concurrent([lambda: self.raw_pay(order), cancel])), [200, 409])

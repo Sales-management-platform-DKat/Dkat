@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useId, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useId, useRef, useState } from 'react';
 import { Button } from '../ui.jsx';
 import { Dialog } from './Dialog.jsx';
+import { confirmAction } from './confirm.js';
 
 const FormContext = createContext({ errors: {} });
 
@@ -40,6 +41,22 @@ export function FormSection({ title, description, children }) {
   );
 }
 
+// Browser constraint checks (required, min, pattern...) shown inline instead of as browser bubbles.
+function nativeErrors(form) {
+  const result = {};
+  for (const element of form.elements) {
+    if (!element.name || element.disabled || element.validity?.valid !== false || result[element.name]) continue;
+    const v = element.validity;
+    result[element.name] = v.valueMissing ? 'Vui lòng nhập thông tin này.'
+      : v.typeMismatch ? 'Định dạng chưa đúng.'
+        : v.rangeUnderflow || v.rangeOverflow ? 'Giá trị nằm ngoài khoảng cho phép.'
+          : v.tooLong ? 'Nội dung quá dài.'
+            : v.patternMismatch ? (element.title || 'Định dạng chưa đúng.')
+              : v.stepMismatch || v.badInput ? 'Vui lòng nhập số hợp lệ.' : 'Giá trị chưa hợp lệ.';
+  }
+  return result;
+}
+
 export function FormDialog({
   open = true,
   title,
@@ -48,6 +65,7 @@ export function FormDialog({
   size = 'md',
   busy = false,
   error = '',
+  fieldErrors = null,
   submitLabel = 'Lưu',
   cancelLabel = 'Hủy',
   onClose,
@@ -55,16 +73,42 @@ export function FormDialog({
   validate,
   children,
   dismissible = true,
+  confirmDiscard = true,
+  footerExtra = null,
 }) {
   const formId = useId();
   const lock = useRef(false);
+  const formRef = useRef(null);
+  const dirty = useRef(false);
   const [errors, setErrors] = useState({});
+
+  // Server-side field errors (422) are shown next to the matching inputs.
+  useEffect(() => {
+    if (!fieldErrors || !Object.keys(fieldErrors).length) return;
+    setErrors(fieldErrors);
+    requestAnimationFrame(() => formRef.current?.querySelector('[aria-invalid="true"]')?.focus());
+  }, [fieldErrors]);
+
+  async function requestClose() {
+    if (busy) return;
+    if (confirmDiscard && dirty.current) {
+      const ok = await confirmAction({
+        title: 'Đóng biểu mẫu?',
+        description: 'Thông tin bạn vừa nhập chưa được lưu và sẽ bị mất.',
+        confirmLabel: 'Đóng, không lưu',
+        cancelLabel: 'Tiếp tục nhập',
+        tone: 'danger',
+      });
+      if (!ok) return;
+    }
+    onClose?.();
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
     if (busy || lock.current) return;
     const data = Object.fromEntries(new FormData(event.currentTarget));
-    const nextErrors = validate?.(data) || {};
+    const nextErrors = { ...nativeErrors(event.currentTarget), ...(validate?.(data) || {}) };
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
       const first = event.currentTarget.querySelector('[aria-invalid="true"], .is-invalid input, .is-invalid select, .is-invalid textarea');
@@ -74,7 +118,8 @@ export function FormDialog({
     setErrors({});
     lock.current = true;
     try {
-      await onSubmit?.(data, event);
+      const saved = await onSubmit?.(data, event);
+      if (saved !== false) dirty.current = false;
     } finally {
       lock.current = false;
     }
@@ -89,10 +134,11 @@ export function FormDialog({
       size={size}
       busy={busy}
       dismissible={dismissible}
-      onClose={onClose}
+      onClose={requestClose}
       footer={(
         <>
-          <Button variant="outline" type="button" disabled={busy} onClick={onClose}>{cancelLabel}</Button>
+          {footerExtra}
+          <Button variant="outline" type="button" disabled={busy} onClick={requestClose}>{cancelLabel}</Button>
           <Button variant="primary" type="submit" form={formId} loading={busy}>{busy ? 'Đang lưu…' : submitLabel}</Button>
         </>
       )}
@@ -100,9 +146,13 @@ export function FormDialog({
       <FormContext.Provider value={{ errors }}>
         <form
           id={formId}
+          ref={formRef}
           className="dk-form"
+          noValidate
           onSubmit={handleSubmit}
+          onChange={() => { dirty.current = true; }}
           onInput={(event) => {
+            dirty.current = true;
             const field = event.target?.name;
             if (!field || !errors[field]) return;
             setErrors((current) => {

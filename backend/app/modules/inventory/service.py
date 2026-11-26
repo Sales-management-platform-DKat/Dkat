@@ -247,6 +247,7 @@ def record_stocktake(
 def change_stock(
     db: Connection, actor: Actor, data: StockImportInput | StocktakeInput,
     *, notes_by_variant: dict[int, str | None] | None = None,
+    reference: tuple[str, int] | None = None,
 ) -> StockChangeResult:
     exporting = isinstance(data, StockExportInput)
     variant_ids = [item.variantId for item in data.items]
@@ -273,6 +274,8 @@ def change_stock(
         results.append(record_movement(
             db, actor, variant_id=item.variantId, inventory_id=inventory_id, before=before,
             after=after, movement_type=movement_type, reason=reason, note=notes.get(item.variantId, data.note),
+            reference_type=reference[0] if reference else None,
+            reference_id=reference[1] if reference else None,
         ))
 
     return StockChangeResult(branchId=data.branchId, movementType=movement_type, reason=reason, items=results)

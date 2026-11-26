@@ -29,13 +29,13 @@ class PreorderAdminMySQLTests(unittest.TestCase):
         cls.other_store, cls.other_owner, _ = cls.provision("other")
         cls.members = {}
         for name, role in (("manager", "manager"), ("staff", "staff"), ("unassigned", "staff")):
-            with TestClient(app) as client:
-                r = client.post("/api/v1/users", headers=cls.owner, json={
+            with TestClient(app, base_url="http://testserver/api/v1") as client:
+                r = client.post("/users", headers=cls.owner, json={
                     "username": name + cls.suffix, "full_name": name, "role": role, "password": cls.password,
                 })
                 assert r.status_code == 201, r.text
                 user_id = r.json()["id"]
-                r = client.post("/api/v1/auth/login", json={"username": name + cls.suffix + ":" + role, "password": cls.password})
+                r = client.post("/auth/login", json={"username": name + cls.suffix + ":" + role, "password": cls.password})
                 assert r.status_code == 200, r.text
                 cls.members[name] = ({"Authorization": "Bearer " + r.json()["access_token"]}, user_id)
         with engine.begin() as db:
@@ -64,14 +64,14 @@ class PreorderAdminMySQLTests(unittest.TestCase):
     @classmethod
     def provision(cls, prefix):
         name = prefix + cls.suffix
-        with TestClient(app) as client:
-            r = client.post("/api/v1/admin/accounts", headers={"X-Admin-Token": config.ADMIN_TOKEN}, json={
-                "shop_name": name, "plan": "pro", "subscription_months": 12, "owner_username": name,
+        with TestClient(app, base_url="http://testserver/api/v1") as client:
+            r = client.post("/admin/accounts", headers={"X-Admin-Token": config.ADMIN_TOKEN}, json={
+                "shop_name": name, "plan": "basic", "subscription_months": 12, "owner_username": name, "owner_email": name + "@example.test",
                 "owner_full_name": name, "owner_password": cls.password,
             })
             assert r.status_code == 201, r.text
             store = r.json()["shop_id"]
-            r = client.post("/api/v1/auth/login", json={"username": name, "password": cls.password})
+            r = client.post("/auth/login", json={"username": name, "password": cls.password})
             assert r.status_code == 200, r.text
             return store, {"Authorization": "Bearer " + r.json()["access_token"]}, r.json()["user"]["id"]
 
@@ -87,7 +87,7 @@ class PreorderAdminMySQLTests(unittest.TestCase):
                 db.execute(text("UPDATE product_variants SET price=:price WHERE variant_id=:v"), {"price": price, "v": variant})
 
     def request(self, method, path, expected=200, auth=None, body=None, params=None):
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://testserver/api/v1") as client:
             r = client.request(method, path, headers=self.owner if auth is None else auth, json=body, params=params)
         self.assertEqual(r.status_code, expected, r.text)
         return r.json()
@@ -103,7 +103,7 @@ class PreorderAdminMySQLTests(unittest.TestCase):
         if zero:
             with engine.begin() as db:
                 db.execute(text("UPDATE product_variants SET price=0 WHERE product_id=:p"), {"p": self.product})
-        with TestClient(app, client=(f"2001:db8:121::{sequence:x}", 50000)) as client:
+        with TestClient(app, base_url="http://testserver/api/v1", client=(f"2001:db8:121::{sequence:x}", 50000)) as client:
             r = client.post("/preorders", json=body)
         self.assertEqual(r.status_code, 201, r.text)
         order = r.json()
@@ -281,7 +281,7 @@ class PreorderAdminMySQLTests(unittest.TestCase):
         barrier = Barrier(2)
         def invoke():
             barrier.wait(timeout=10)
-            with TestClient(app) as client:
+            with TestClient(app, base_url="http://testserver/api/v1") as client:
                 return client.post(f"/preorders/{order['preorderId']}/confirm-payment", headers=self.owner,
                                    json={"paymentMethod": "CASH", "amount": order["totalAmount"]}).status_code
         with ThreadPoolExecutor(max_workers=2) as pool:
@@ -448,7 +448,7 @@ class PreorderAdminMySQLTests(unittest.TestCase):
         files = {"file": ("stock.csv", f"sku,quantity,note\n{sku},1,\n", "text/csv")}
         manager, _ = self.members["manager"]
         staff, _ = self.members["staff"]
-        with TestClient(app) as client, patch.object(config, "ALLOW_EMPLOYEE_STOCK", False):
+        with TestClient(app, base_url="http://testserver/api/v1") as client, patch.object(config, "ALLOW_EMPLOYEE_STOCK", False):
             for auth, branch, code in (
                 ({}, self.branch, 401), (staff, self.branch, 403), (manager, self.branches[1], 403),
                 (self.other_owner, self.branch, 403),
@@ -506,7 +506,7 @@ class PreorderAdminMySQLTests(unittest.TestCase):
 
         def invoke():
             barrier.wait(timeout=10)
-            with TestClient(app) as client:
+            with TestClient(app, base_url="http://testserver/api/v1") as client:
                 return client.post(path + "/fulfill", headers=self.owner, json={"paymentMethod": "CASH"}).status_code
 
         with ThreadPoolExecutor(max_workers=2) as pool:

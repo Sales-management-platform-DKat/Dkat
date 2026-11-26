@@ -22,7 +22,8 @@ DKat is a multi-branch store management platform (inventory, POS, sales orders, 
 ```
 
 - Unit tests (`tests/`) use `fastapi.testclient.TestClient` against SQLite. `SELECT ... FOR UPDATE` is faked there, so locking and concurrency are only exercised by the MySQL tests below.
-- `integration_tests/*_mysql.py` are skipped unless a gate env var is set (e.g. `DKAT_PAYMENT_TEST_DB=1`). They refuse to run unless the DB is a local, disposable schema (e.g. `dkat_pbi99_test`). Run them through `scripts/test_pbi<N>_mysql.ps1`, which sets that up. Never point them at team data.
+- `integration_tests/*_mysql.py` are skipped unless a gate env var is set (e.g. `DKAT_PAYMENT_TEST_DB=1`). They refuse to run unless the DB is a local, disposable schema (e.g. `dkat_pbi99_test`). Run them through `scripts/test_pbi<N>_mysql.ps1` or `scripts/test_system_audit_mysql.ps1`, which set that up. Never point them at team data.
+- `backend/.env` points at the **production TiDB**. For manual testing run `scripts/dev_isolated_mysql.ps1 -EnvFile <file>` (disposable mysqld with all schema scripts) and start the app with `DKAT_DATABASE_URL=mysql+pymysql://…` while masking `DB_*` (set them to a space; an empty value on Windows deletes the variable and `.env` refills it).
 - Postman collections for each PBI are in `backend/samples/`. Set `accessToken` from a login.
 
 ### Configuration and database
@@ -51,13 +52,14 @@ node --test --test-name-pattern "<name>" tests/live-api-flows.test.js   # single
 ```
 
 - Entry: `index.html` → `src/main.jsx`, with hash routes: `/` landing, `#/login`, `#/platform-admin`, `#/track/<token>` (public pre-order tracking), `#/catalog`, `#/demo`, `#/admin/<screen>`.
-- The app is half migrated from demo to API:
-  - **API-backed screens** are in `src/features/<feature>/*Page.jsx` with a `api.js` per feature. They call `apiRequest` from `src/auth-client.js`, which handles the bearer token and silent refresh, and parses errors from `detail`.
-  - **Legacy demo screens** use `src/domain.js` + `src/seed.js` and persist to localStorage key `dkat-demo-v1`.
-  - `src/api.js` is an older unused adapter.
+- Admin screens are `src/features/<feature>/*Page.jsx` with an `api.js` per feature, calling `apiRequest` from `src/auth-client.js` (bearer token, silent refresh; failures become `ApiError` with a friendly Vietnamese `message`, `status`, `code`, `fieldErrors` from `src/lib/api-errors.js`).
+  - **Demo mode uses the same screens**: `main.jsx` calls `setDemoApiHandler(createDemoApi(role))`, so every `apiRequest` goes to `src/demo/demo-api.js`, an in-browser backend (localStorage `dkat-demo-api-v2`) that mirrors the real response shapes and RBAC. When adding an endpoint used by a page, add it there too. `#/catalog` reads the same demo store.
+  - Customer Display: `#/pos/customer-display` (standalone, no auth) receives cart state from `POSPage` over BroadcastChannel/postMessage (`src/features/customer-display/`). Only display data is sent.
+  - `src/domain.js` + `src/seed.js` (localStorage `dkat-demo-v1`) now only back the demo Settings/notifications/track screens.
+  - `src/api.js` is an older unused adapter. The root-level `src/Live*.jsx`, `CsvStockImport.jsx`, `ProductsPage.jsx`, `CategoriesPage.jsx`, `ComponentDemo.jsx`, `BusinessAnalytics.jsx` and `src/branches/BranchContext.jsx` are earlier screens that nothing imports any more, so edit `features/` instead.
   - `src/mocks/api.js` (`mockApiRequest`) is a browser mock of the API used by `tests/live-api-flows.test.js`. The README mentions `VITE_USE_MOCK`, but nothing in `src/` reads that variable.
-- The `.ts/.tsx` files (`src/main.tsx`, `src/app/`, `src/lib/`, `features/*/api.ts|types.ts`) are empty placeholders for a planned TypeScript migration.
-- Shared UI: `src/components/ui.jsx` and `src/components/overlay/` (`Dialog`, `pushToast`, `confirmAction`). Use dialogs and toasts, not `window.confirm`.
+- The `.ts/.tsx` files (`src/main.tsx`, `src/app/`, `src/lib/`, `src/layouts/`, `features/*/api.ts|types.ts`) are empty placeholders for a planned TypeScript migration.
+- Shared UI: `src/components/ui.jsx`, `src/components/states.jsx` (loading/empty/error/status badge) and `src/components/overlay/` (`Dialog`, `Drawer`, `FormDialog`, `ConfirmDialog`, `pushToast`, `confirmAction`). `pushToast` and `confirmAction` (a promise, signalled by a `dkat-confirm` window event) only work because `main.jsx` mounts `<Toaster/>` and `<ConfirmHost/>` once at the root. Use them (`notify.success/error/warning` from the overlay index) and `FormDialog` + `FormField` for forms (inline + server field errors, unsaved-changes guard); never `window.confirm`/`prompt`. The landing CSS styles bare `footer` globally; `app-shared.css` resets it for dialog footers.
 - i18n: `src/i18n/` + `src/locales/{vi,en}.json`. `vite.config.js` uses the classic `React.createElement` JSX factory on purpose: the i18n layer hooks `createElement` to translate literal JSX text in the legacy screens. Don't switch to the automatic JSX runtime.
 
 ## QA and gotchas

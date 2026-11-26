@@ -44,3 +44,32 @@ class VariantInput(BaseModel):
         if len({item.attributeId for item in self.attributes}) != len(self.attributes):
             raise ValueError("Each attribute can appear only once per variant")
         return self
+
+
+class VariantWithStockInput(VariantInput):
+    """A variant in POST /products/full, with an optional opening quantity."""
+
+    initialQuantity: Annotated[int, Field(ge=0, le=2147483647)] = 0
+
+
+class ProductFullInput(BaseModel):
+    """Create a product, its variants and optional opening stock in one transaction."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    categoryId: ProductId
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+    productCode: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=50)] | None = None
+    description: str | None = Field(default=None, max_length=16000)
+    imageUrl: str | None = Field(default=None, max_length=500)
+    variants: list[VariantWithStockInput] = Field(min_length=1, max_length=50)
+    stockBranchId: ProductId | None = None
+
+    @model_validator(mode="after")
+    def check_variants(self):
+        skus = [variant.sku.casefold() for variant in self.variants if variant.sku]
+        if len(skus) != len(set(skus)):
+            raise ValueError("Each variant SKU must be unique")
+        if any(variant.initialQuantity for variant in self.variants) and self.stockBranchId is None:
+            raise ValueError("stockBranchId is required when an opening quantity is given")
+        return self

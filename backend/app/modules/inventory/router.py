@@ -39,7 +39,7 @@ def record_stock_change(actor: Actor, data: StockImportInput | StocktakeInput) -
             return change_stock(db, actor, data)
     except SQLAlchemyError:
         logger.exception("Stock change transaction failed")
-        raise HTTPException(503, "Database unavailable") from None
+        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
 
 
 @router.post("/import", status_code=201)
@@ -54,7 +54,9 @@ def import_inventory_csv(
     actor: StockWriter, response: Response, file: Annotated[UploadFile, File()],
     branch_id: Annotated[InventoryId, Query(alias="branchId")],
     dry_run: bool = Query(default=True, alias="dryRun"),
+    allow_duplicate: bool = Query(default=False, alias="allowDuplicate"),
 ) -> CsvStockImportResult:
+    """Accepts CSV (UTF-8, ',' ';' or tab separated) and Excel .xlsx files."""
     try:
         content = file.file.read(MAX_FILE_BYTES + 1)
     finally:
@@ -63,10 +65,12 @@ def import_inventory_csv(
         raise HTTPException(413, {"code": "CSV_FILE_TOO_LARGE", "maxBytes": MAX_FILE_BYTES})
     try:
         with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
-            result = import_stock_csv(db, actor, branch_id, content, dry_run)
+            result = import_stock_csv(
+                db, actor, branch_id, content, dry_run, filename=file.filename, allow_duplicate=allow_duplicate,
+            )
     except SQLAlchemyError:
         logger.exception("Stock CSV transaction failed")
-        raise HTTPException(503, "Database unavailable") from None
+        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
     if not dry_run:
         response.status_code = 201
         process_committed_stock_import(branch_id, [item.variantId for item in result.items])
@@ -105,7 +109,7 @@ def get_inventory(
             limit=size, offset=(page - 1) * size,
         )
     except SQLAlchemyError:
-        raise HTTPException(503, "Database unavailable") from None
+        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
 
 
 @router.get("/movements")
@@ -121,7 +125,7 @@ def get_inventory_movements(
             branches = [filters.branchId]
         return list_inventory_movements(db, actor.store_id, branches, filters)
     except SQLAlchemyError:
-        raise HTTPException(503, "Database unavailable") from None
+        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
 
 
 @router.get("/{branch_id}/{variant_id}")
@@ -133,7 +137,7 @@ def get_inventory_item(
         require_branch_access(db, actor, branch_id)
         rows = list_inventory(db, actor.store_id, [branch_id], variant_id=variant_id, limit=1)
     except SQLAlchemyError:
-        raise HTTPException(503, "Database unavailable") from None
+        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
     if not rows:
         raise HTTPException(404, "Inventory item not found")
     return rows[0]

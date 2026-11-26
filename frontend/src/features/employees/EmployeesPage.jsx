@@ -1,171 +1,228 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useLanguage } from '../../i18n/index.js';
 import { listBranches } from '../branches/api.js';
+import { listSalesOrders } from '../orders/api.js';
 import { assignEmployeeBranches, createEmployee, listEmployees, resetEmployeePassword, setEmployeeStatus, updateEmployee } from './api.js';
-import { Dialog } from '../../components/overlay/index.js';
+import { confirmAction, FormDialog, FormField, FormSection, notify } from '../../components/overlay/index.js';
+import { EmptyState, ErrorState, LoadingState, StatusBadge } from '../../components/states.jsx';
 
-const blankEmployee = { username: '', full_name: '', email: '', phone: '', role: 'staff', password: '', branch_ids: [] };
+const USERNAME = /^[A-Za-z0-9._-]{3,32}$/;
 
-function EmployeeDialog({ initial, branches, busy, onCancel, onSubmit, onBranchToggle, t }) {
-  const create = !initial?.id;
-  return <Dialog open title={create ? t('Thêm nhân viên') : t('Cập nhật nhân viên')} busy={busy} onClose={onCancel} className="employee-dialog">
-    <form className="dk-form" onSubmit={onSubmit}>
-      <div className="section-title"><h2 id="employee-form-title">{create ? t('Thêm nhân viên') : t('Cập nhật nhân viên')}</h2><button className="link" type="button" onClick={onCancel} aria-label={t('Đóng')}>×</button></div>
-      {create && <label className="field">{t('Tên đăng nhập')}<input name="username" required minLength={3} maxLength={32} pattern="[A-Za-z0-9._-]+" value={initial.username} onChange={(event) => onBranchToggle('username', event.target.value)} autoComplete="off" /></label>}
-      <label className="field">{t('Họ tên')}<input name="full_name" required maxLength={150} value={initial.full_name} onChange={(event) => onBranchToggle('full_name', event.target.value)} autoFocus /></label>
-      <label className="field">{t('Email')}<input name="email" type="email" maxLength={255} value={initial.email} onChange={(event) => onBranchToggle('email', event.target.value)} /></label>
-      <label className="field">{t('Số điện thoại')}<input name="phone" maxLength={20} value={initial.phone} onChange={(event) => onBranchToggle('phone', event.target.value)} /></label>
-      {create && <label className="field">{t('Vai trò')}<select name="role" value={initial.role} onChange={(event) => onBranchToggle('role', event.target.value)}><option value="staff">{t('Nhân viên')}</option><option value="manager">{t('Quản lý')}</option></select></label>}
-      {create && <label className="field">{t('Mật khẩu khởi tạo')}<input name="password" type="password" minLength={12} maxLength={128} required autoComplete="new-password" value={initial.password} onChange={(event) => onBranchToggle('password', event.target.value)} /><small className="muted">{t('Ít nhất 12 ký tự; mật khẩu được băm ở backend.')}</small></label>}
-      <fieldset className="employee-branches"><legend>{t('Chi nhánh được phân công')}</legend>{branches.length ? branches.map((branch) => { const checked=initial.branch_ids.includes(branch.id); const inactive=branch.status!=='ACTIVE'; return <label key={branch.id} className="employee-branch-option"><input type="checkbox" checked={checked} disabled={inactive&&!checked} onChange={() => onBranchToggle('branch_ids', branch.id)} /><span>{branch.name}</span><small>{branch.branchCode || branch.branch_code}</small></label>; }) : <p className="muted">{t('Chưa có chi nhánh đang hoạt động.')}</p>}</fieldset>
-      <div className="actions"><button className="btn primary" disabled={busy || initial.branch_ids.length === 0}>{busy ? t('Đang lưu…') : t('Lưu thay đổi')}</button><button className="btn outline" type="button" onClick={onCancel}>{t('Hủy')}</button></div>
-    </form>
-  </Dialog>;
+function EmployeeForm({ employee, branches, onClose, onSaved, t }) {
+  const creating = !employee?.id;
+  const [busy, setBusy] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState(null);
+  const [branchIds, setBranchIds] = useState(employee?.branches?.map((branch) => branch.id) || []);
+
+  function validate(data) {
+    const errors = {};
+    if (creating && !USERNAME.test(String(data.username || '').trim())) errors.username = t('3–32 ký tự: chữ không dấu, số, ".", "_" hoặc "-".');
+    if (!String(data.full_name || '').trim()) errors.full_name = t('Vui lòng nhập họ tên.');
+    if (data.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(data.email).trim())) errors.email = t('Email chưa đúng định dạng.');
+    if (creating && String(data.password || '').length < 12) errors.password = t('Mật khẩu cần ít nhất 12 ký tự.');
+    if (!branchIds.length) errors.branch_ids = t('Hãy phân công ít nhất một chi nhánh.');
+    return errors;
+  }
+
+  async function submit(data) {
+    setBusy(true);
+    setFieldErrors(null);
+    try {
+      if (creating) {
+        await createEmployee({
+          username: data.username.trim(), full_name: data.full_name.trim(), email: data.email.trim() || null,
+          phone: data.phone.trim() || null, password: data.password, role: data.role, branch_ids: branchIds,
+        });
+        notify.success(`${t('Đã tạo tài khoản')} ${data.username.trim().toLowerCase()}.`);
+      } else {
+        await updateEmployee(employee.id, { full_name: data.full_name.trim(), email: data.email.trim() || null, phone: data.phone.trim() || null });
+        await assignEmployeeBranches(employee.id, branchIds);
+        notify.success(t('Đã cập nhật nhân viên.'));
+      }
+      onSaved();
+      return true;
+    } catch (error) {
+      setFieldErrors(Object.keys(error.fieldErrors || {}).length ? error.fieldErrors : null);
+      notify.error(error, { title: creating ? t('Không thể tạo tài khoản') : t('Không thể cập nhật nhân viên') });
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return <FormDialog title={creating ? t('Thêm nhân viên') : t('Cập nhật nhân viên')} size="lg" busy={busy}
+    fieldErrors={fieldErrors} validate={validate} onClose={onClose} onSubmit={submit}
+    submitLabel={creating ? t('Tạo tài khoản') : t('Lưu thay đổi')}>
+    <FormSection title={t('Tài khoản')}>
+      {creating ? <FormField name="username" label={t('Tên đăng nhập')} required hint={t('Dùng để đăng nhập; không phân biệt hoa thường.')}><input name="username" maxLength={32} autoComplete="off" autoFocus /></FormField>
+        : <FormField label={t('Tên đăng nhập')}><input value={employee.username} disabled /></FormField>}
+      <FormField name="role" label={t('Vai trò')} required>
+        <select name="role" defaultValue={employee?.role === 'manager' ? 'manager' : 'staff'} disabled={!creating}>
+          <option value="staff">{t('Nhân viên bán hàng')}</option><option value="manager">{t('Quản lý chi nhánh')}</option>
+        </select>
+      </FormField>
+      {creating && <FormField name="password" label={t('Mật khẩu khởi tạo')} required hint={t('Ít nhất 12 ký tự.')}><input name="password" type="password" maxLength={128} autoComplete="new-password" /></FormField>}
+    </FormSection>
+    <FormSection title={t('Thông tin cá nhân')}>
+      <FormField name="full_name" label={t('Họ tên')} required><input name="full_name" maxLength={150} defaultValue={employee?.full_name || ''} autoFocus={!creating} /></FormField>
+      <FormField name="phone" label={t('Số điện thoại')}><input name="phone" type="tel" maxLength={20} defaultValue={employee?.phone || ''} /></FormField>
+      <FormField name="email" label={t('Email')}><input name="email" type="email" maxLength={255} defaultValue={employee?.email || ''} /></FormField>
+    </FormSection>
+    <FormSection title={t('Chi nhánh được phân công')}>
+      <FormField name="branch_ids" label={t('Chọn chi nhánh')} required>
+        <div className="employee-branches" role="group">
+          {branches.length ? branches.map((branch) => {
+            const checked = branchIds.includes(branch.id);
+            return <label key={branch.id} className="employee-branch-option">
+              <input type="checkbox" checked={checked} disabled={branch.status !== 'ACTIVE' && !checked}
+                onChange={() => setBranchIds((ids) => checked ? ids.filter((id) => id !== branch.id) : [...ids, branch.id])} />
+              <span>{branch.name}</span><small>{branch.branchCode}</small>
+            </label>;
+          }) : <p className="muted">{t('Chưa có chi nhánh đang hoạt động.')}</p>}
+        </div>
+      </FormField>
+    </FormSection>
+  </FormDialog>;
 }
 
-function PasswordDialog({ busy, onCancel, onSubmit, t }) {
-  return <Dialog open title={t('Đặt lại mật khẩu')} size="sm" busy={busy} onClose={onCancel} className="employee-dialog">
-    <form className="dk-form" onSubmit={onSubmit}>
-      <div className="section-title"><h2 id="employee-password-title">{t('Đặt lại mật khẩu')}</h2><button className="link" type="button" onClick={onCancel} aria-label={t('Đóng')}>×</button></div>
-      <label className="field">{t('Mật khẩu mới')}<input name="new_password" type="password" minLength={12} maxLength={128} required autoComplete="new-password" autoFocus /></label>
-      <p className="muted small">{t('Các phiên đăng nhập hiện tại của nhân viên sẽ bị thu hồi.')}</p>
-      <div className="actions"><button className="btn primary" disabled={busy}>{busy ? t('Đang lưu…') : t('Đặt lại')}</button><button className="btn outline" type="button" onClick={onCancel}>{t('Hủy')}</button></div>
-    </form>
-  </Dialog>;
+function PasswordForm({ employee, onClose, t }) {
+  const [busy, setBusy] = useState(false);
+  return <FormDialog title={t('Đặt lại mật khẩu')} description={`${employee.full_name} · ${employee.username}`} size="sm" busy={busy}
+    submitLabel={t('Đặt lại')} onClose={onClose}
+    validate={(data) => String(data.new_password || '').length < 12 ? { new_password: t('Mật khẩu cần ít nhất 12 ký tự.') } : {}}
+    onSubmit={async (data) => {
+      setBusy(true);
+      try {
+        await resetEmployeePassword(employee.id, data.new_password);
+        notify.success(t('Đã đặt lại mật khẩu và thu hồi phiên đăng nhập.'));
+        onClose();
+        return true;
+      } catch (error) {
+        notify.error(error, { title: t('Không đặt lại được mật khẩu') });
+        return false;
+      } finally { setBusy(false); }
+    }}>
+    <FormField name="new_password" label={t('Mật khẩu mới')} required hint={t('Các phiên đăng nhập hiện tại của nhân viên sẽ bị thu hồi.')}><input name="new_password" type="password" maxLength={128} autoComplete="new-password" autoFocus /></FormField>
+  </FormDialog>;
 }
 
-export default function EmployeesPage() {
-  const { t } = useLanguage();
+// Paid orders of the last 30 days per employee (managers monitor their branch).
+function usePerformance(branchId) {
+  const [stats, setStats] = useState(new Map());
+  useEffect(() => {
+    let active = true;
+    if (!branchId) { setStats(new Map()); return undefined; }
+    listSalesOrders({ branchId, status: 'PAID', size: 100 }).then((orders) => {
+      if (!active) return;
+      const since = Date.now() - 30 * 86400000;
+      const map = new Map();
+      for (const order of orders || []) {
+        if (new Date(order.paidAt || order.createdAt).getTime() < since) continue;
+        const entry = map.get(order.createdBy) || { count: 0, revenue: 0 };
+        entry.count += 1;
+        entry.revenue += Number(order.totalAmount || 0);
+        map.set(order.createdBy, entry);
+      }
+      setStats(map);
+    }).catch(() => active && setStats(new Map()));
+    return () => { active = false; };
+  }, [branchId]);
+  return stats;
+}
+
+export default function EmployeesPage({ canManage = false, branchId }) {
+  const { t, formatCurrency } = useLanguage();
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [employees, setEmployees] = useState([]);
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
-  const [notice, setNotice] = useState('');
+  const [loadError, setLoadError] = useState(null);
+  const [busyId, setBusyId] = useState(null);
   const [editing, setEditing] = useState(null);
   const [passwordTarget, setPasswordTarget] = useState(null);
+  const performance = usePerformance(branchId);
 
-  useEffect(() => {
-    const timer = setTimeout(() => setSearch(query.trim()), 250);
-    return () => clearTimeout(timer);
-  }, [query]);
+  useEffect(() => { const timer = setTimeout(() => setSearch(query.trim()), 250); return () => clearTimeout(timer); }, [query]);
 
   async function reload(term = search) {
     setLoading(true);
-    setError('');
+    setLoadError(null);
     try {
       const [usersResult, branchesResult] = await Promise.all([
-        listEmployees({ query: term, page: 1, pageSize: 100 }),
+        listEmployees({ query: term, page: 1, pageSize: 100, branchId: canManage ? undefined : branchId }),
         listBranches(),
       ]);
       setEmployees(Array.isArray(usersResult?.items) ? usersResult.items : []);
       setBranches(Array.isArray(branchesResult) ? branchesResult : []);
-    } catch (cause) {
+    } catch (error) {
       setEmployees([]);
-      setError(cause.message || t('Không tải được danh sách nhân viên.'));
+      setLoadError(error);
     } finally {
       setLoading(false);
     }
   }
-
-  useEffect(() => { reload(); }, [search]);
-
-  function updateFormField(field, value) {
-    setEditing((current) => {
-      if (!current) return current;
-      if (field === 'branch_ids') {
-        const selected = current.branch_ids.includes(value)
-          ? current.branch_ids.filter((id) => id !== value)
-          : [...current.branch_ids, value];
-        return { ...current, branch_ids: selected };
-      }
-      return { ...current, [field]: value };
-    });
-  }
-
-  async function saveEmployee(event) {
-    event.preventDefault();
-    if (!editing?.branch_ids.length) {
-      setError(t('Hãy phân công ít nhất một chi nhánh.'));
-      return;
-    }
-    setBusy(true);
-    setError('');
-    try {
-      if (editing.id) {
-        await updateEmployee(editing.id, {
-          full_name: editing.full_name.trim(), email: editing.email.trim() || null, phone: editing.phone.trim() || null,
-        });
-        await assignEmployeeBranches(editing.id, editing.branch_ids);
-      } else {
-        await createEmployee({
-          username: editing.username.trim(), full_name: editing.full_name.trim(),
-          email: editing.email.trim() || null, phone: editing.phone.trim() || null,
-          password: editing.password, role: editing.role, branch_ids: editing.branch_ids,
-        });
-      }
-      setEditing(null);
-      setNotice(t('Đã lưu thông tin nhân viên.'));
-      await reload();
-    } catch (cause) {
-      setError(cause.message || t('Không lưu được nhân viên.'));
-    } finally {
-      setBusy(false);
-    }
-  }
+  useEffect(() => { reload(); }, [search, branchId, canManage]);
 
   async function toggleStatus(employee) {
-    const next = employee.status === 'ACTIVE' ? 'LOCKED' : 'ACTIVE';
-    setError('');
+    const locking = employee.status === 'ACTIVE';
+    const ok = await confirmAction({
+      title: locking ? t('Khóa tài khoản?') : t('Mở khóa tài khoản?'),
+      description: locking ? `${employee.full_name} ${t('sẽ bị đăng xuất và không thể đăng nhập cho đến khi được mở khóa.')}` : employee.full_name,
+      confirmLabel: locking ? t('Khóa tài khoản') : t('Mở khóa'),
+      tone: locking ? 'danger' : 'primary',
+    });
+    if (!ok) return;
+    setBusyId(employee.id);
     try {
-      await setEmployeeStatus(employee.id, next);
-      setNotice(next === 'LOCKED' ? t('Đã khóa tài khoản và thu hồi phiên đăng nhập.') : t('Đã mở khóa tài khoản.'));
+      await setEmployeeStatus(employee.id, locking ? 'LOCKED' : 'ACTIVE');
+      notify.success(locking ? t('Đã khóa tài khoản và thu hồi phiên đăng nhập.') : t('Đã mở khóa tài khoản.'));
       await reload();
-    } catch (cause) {
-      setError(cause.message || t('Không cập nhật được trạng thái.'));
+    } catch (error) {
+      notify.error(error, { title: t('Không cập nhật được trạng thái') });
+    } finally {
+      setBusyId(null);
     }
   }
 
-  async function savePassword(event) {
-    event.preventDefault();
-    const newPassword = new FormData(event.currentTarget).get('new_password');
-    setBusy(true);
-    setError('');
-    try {
-      await resetEmployeePassword(passwordTarget.id, newPassword);
-      setPasswordTarget(null);
-      setNotice(t('Đã đặt lại mật khẩu và thu hồi phiên đăng nhập.'));
-    } catch (cause) {
-      setError(cause.message || t('Không đặt lại được mật khẩu.'));
-    } finally {
-      setBusy(false);
-    }
-  }
+  const summary = useMemo(() => ({
+    total: employees.length,
+    active: employees.filter((employee) => employee.status === 'ACTIVE').length,
+    managers: employees.filter((employee) => employee.role === 'manager').length,
+  }), [employees]);
 
   return <>
     <div className="toolbar employee-toolbar">
       <input aria-label={t('Tìm nhân viên')} placeholder={t('Tìm theo tên, username, email hoặc điện thoại')} value={query} onChange={(event) => setQuery(event.target.value)} />
-      <button className="btn primary" onClick={() => { setNotice(''); setEditing({ ...blankEmployee, branch_ids: [] }); }}>{t('+ Thêm nhân viên')}</button>
-      <span className="muted small" aria-live="polite">{t('Nhân viên')}: {employees.length}</span>
+      {canManage && <button className="btn primary" onClick={() => setEditing({})}>{t('+ Thêm nhân viên')}</button>}
+      <span className="muted small" aria-live="polite">{summary.active}/{summary.total} {t('đang hoạt động')}{canManage ? ` · ${summary.managers} ${t('quản lý')}` : ''}</span>
     </div>
-    {error && <div className="notice error-state" role="alert">{error}</div>}
-    {notice && <div className="notice success-state" role="status">{notice}</div>}
+    {!canManage && <div className="notice">{t('Bạn đang xem nhân viên thuộc chi nhánh được phân công. Việc tạo, khóa tài khoản và phân quyền do chủ cửa hàng thực hiện.')}</div>}
     <section className="panel">
-      {loading ? <p className="muted" role="status">{t('Đang tải nhân viên…')}</p> : employees.length === 0 ? <div className="empty"><h3>{t('Chưa có nhân viên')}</h3><p>{query ? t('Thử từ khóa tìm kiếm khác.') : t('Tài khoản nhân viên được tạo sẽ hiển thị tại đây.')}</p></div> :
-        <div className="table-wrap"><table><thead><tr><th>{t('Nhân viên')}</th><th>{t('Tài khoản')}</th><th>{t('Vai trò')}</th><th>{t('Chi nhánh')}</th><th>{t('Trạng thái')}</th><th>{t('Thao tác')}</th></tr></thead><tbody>
-          {employees.map((employee) => <tr key={employee.id}>
-            <td><strong>{employee.full_name}</strong><small className="block muted">{employee.phone || '—'}</small></td>
-            <td>{employee.username}<small className="block muted">{employee.email || '—'}</small></td>
-            <td>{employee.role === 'manager' ? t('Quản lý') : t('Nhân viên')}</td>
-            <td>{employee.branches?.map((branch) => branch.name).join(', ') || '—'}</td>
-            <td><span className={`badge ${employee.status === 'ACTIVE' ? 'green' : 'amber'}`}>{employee.status === 'ACTIVE' ? t('Đang hoạt động') : t('Đã khóa')}</span></td>
-            <td><div className="actions wrap"><button className="link" onClick={() => { setNotice(''); setEditing({ id: employee.id, full_name: employee.full_name, email: employee.email || '', phone: employee.phone || '', role: employee.role, branch_ids: employee.branches?.map((branch) => branch.id) || [] }); }}>{t('Sửa')}</button><button className="link" onClick={() => toggleStatus(employee)}>{employee.status === 'ACTIVE' ? t('Khóa') : t('Mở khóa')}</button><button className="link" onClick={() => setPasswordTarget(employee)}>{t('Đặt lại mật khẩu')}</button></div></td>
-          </tr>)}
-        </tbody></table></div>}
+      {loading ? <LoadingState label={t('Đang tải nhân viên…')} />
+        : loadError ? <ErrorState error={loadError} onRetry={() => reload()} />
+          : !employees.length ? <EmptyState title={t('Chưa có nhân viên')} description={query ? t('Thử từ khóa tìm kiếm khác.') : canManage ? t('Tạo tài khoản quản lý hoặc nhân viên và phân công chi nhánh.') : t('Chưa có nhân viên nào được phân công vào chi nhánh này.')}
+            action={canManage && !query && <button className="btn primary" onClick={() => setEditing({})}>{t('+ Thêm nhân viên')}</button>} />
+            : <div className="table-wrap"><table><thead><tr><th>{t('Nhân viên')}</th><th>{t('Tài khoản')}</th><th>{t('Vai trò')}</th><th>{t('Chi nhánh')}</th>{branchId && <th>{t('Đơn đã thu (30 ngày)')}</th>}<th>{t('Trạng thái')}</th>{canManage && <th>{t('Thao tác')}</th>}</tr></thead><tbody>
+              {employees.map((employee) => {
+                const stat = performance.get(employee.id);
+                return <tr key={employee.id}>
+                  <td><strong>{employee.full_name}</strong><small className="block muted">{employee.phone || '—'}</small></td>
+                  <td>{employee.username}<small className="block muted">{employee.email || '—'}</small></td>
+                  <td>{employee.role === 'manager' ? t('Quản lý') : t('Nhân viên')}</td>
+                  <td>{employee.branches?.map((branch) => branch.name).join(', ') || '—'}</td>
+                  {branchId && <td>{stat ? <><b>{stat.count}</b><small className="block muted">{formatCurrency(stat.revenue)}</small></> : <span className="muted">0</span>}</td>}
+                  <td><StatusBadge status={employee.status} /></td>
+                  {canManage && <td><div className="actions wrap">
+                    <button className="link" onClick={() => setEditing(employee)}>{t('Sửa')}</button>
+                    <button className={`link${employee.status === 'ACTIVE' ? ' danger' : ''}`} disabled={busyId === employee.id} onClick={() => toggleStatus(employee)}>{employee.status === 'ACTIVE' ? t('Khóa') : t('Mở khóa')}</button>
+                    <button className="link" onClick={() => setPasswordTarget(employee)}>{t('Đặt lại mật khẩu')}</button>
+                  </div></td>}
+                </tr>;
+              })}
+            </tbody></table></div>}
     </section>
-    {editing && <EmployeeDialog initial={editing} branches={branches} busy={busy} onCancel={() => setEditing(null)} onSubmit={saveEmployee} onBranchToggle={updateFormField} t={t} />}
-    {passwordTarget && <PasswordDialog busy={busy} onCancel={() => setPasswordTarget(null)} onSubmit={savePassword} t={t} />}
+    {editing && <EmployeeForm employee={editing.id ? editing : null} branches={branches} t={t} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
+    {passwordTarget && <PasswordForm employee={passwordTarget} t={t} onClose={() => setPasswordTarget(null)} />}
   </>;
 }

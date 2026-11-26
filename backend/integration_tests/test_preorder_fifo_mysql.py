@@ -31,14 +31,14 @@ class PreorderFifoMySQLTests(unittest.TestCase):
         if engine.url.host not in {"127.0.0.1", "localhost"} or engine.url.database != "dkat_pbi129_test":
             raise RuntimeError("Use a local, disposable dkat_pbi129_test schema only")
         suffix = uuid4().hex[:10]
-        with TestClient(app) as client:
-            r = client.post("/api/v1/admin/accounts", headers={"X-Admin-Token": config.ADMIN_TOKEN}, json={
-                "shop_name": "FIFO129", "plan": "pro", "subscription_months": 12,
-                "owner_username": "fifo" + suffix, "owner_full_name": "FIFO129", "owner_password": "fifo129-password-123",
+        with TestClient(app, base_url="http://testserver/api/v1") as client:
+            r = client.post("/admin/accounts", headers={"X-Admin-Token": config.ADMIN_TOKEN}, json={
+                "shop_name": "FIFO129", "plan": "basic", "subscription_months": 12,
+                "owner_username": "fifo" + suffix, "owner_email": "fifo" + suffix + "@example.test", "owner_full_name": "FIFO129", "owner_password": "fifo129-password-123",
             })
             assert r.status_code == 201, r.text
             cls.store = r.json()["shop_id"]
-            r = client.post("/api/v1/auth/login", json={"username": "fifo" + suffix, "password": "fifo129-password-123"})
+            r = client.post("/auth/login", json={"username": "fifo" + suffix, "password": "fifo129-password-123"})
             assert r.status_code == 200, r.text
             cls.owner = {"Authorization": "Bearer " + r.json()["access_token"]}
             user = r.json()["user"]["id"]
@@ -336,7 +336,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
 
     def test_stock_import_existing_hook_and_expiry_visible_in_detail(self):
         a,b,c = [self.order(q) for q in (2,3,4)]
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://testserver/api/v1") as client:
             with patch.dict("sys.modules", {"app.modules.notifications.service": None}):
                 with self.assertLogs("app.modules.preorders.services.notifications", level="WARNING"):
                     response = client.post('/inventory/import',headers=self.owner,json={'branchId':self.branch,'items':[{'variantId':self.variant,'quantity':6}]})
@@ -358,7 +358,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
             """)
         try:
             with self.assertLogs('app.modules.inventory.post_import',level='ERROR'):
-                with TestClient(app) as client:
+                with TestClient(app, base_url="http://testserver/api/v1") as client:
                     response = client.post('/inventory/import',headers=self.owner,json={'branchId':self.branch,'items':[{'variantId':self.variant,'quantity':6}]})
             self.assertEqual(response.status_code,201,response.text)
             self.assertEqual(self.state(order)[1][0].allocated_quantity,0)
@@ -394,7 +394,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
                 raise RuntimeError("Test channel unavailable")
             self.record_notification(preorder_id, "EMAIL", "PENDING" if preorder_id == pending else "SENT")
 
-        with TestClient(app) as client, patch(
+        with TestClient(app, base_url="http://testserver/api/v1") as client, patch(
             "app.modules.notifications.service.NotificationService", create=True,
         ) as service:
             service.notifyPreorder.side_effect = notify
@@ -438,7 +438,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
                            {"id": preorder_id, "status": orders[preorder_id]})
             self.record_notification(preorder_id, "EMAIL", "SENT")
 
-        with TestClient(app) as client, patch(
+        with TestClient(app, base_url="http://testserver/api/v1") as client, patch(
             "app.modules.notifications.service.NotificationService", create=True,
         ) as service:
             service.notifyPreorder.side_effect = notify
@@ -462,11 +462,11 @@ class PreorderFifoMySQLTests(unittest.TestCase):
         self.assertEqual(tuple(row), ("Legacy before FIFO", "READY", datetime(2026, 1, 1), None, None, None))
 
     def cancel_order(self, order, reason="Khách không nhận"):
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://testserver/api/v1") as client:
             return client.post(f"/preorders/{order}/cancel", headers=self.owner, json={"reason": reason})
 
     def pay_order(self, order, amount):
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://testserver/api/v1") as client:
             response = client.post(f"/preorders/{order}/confirm-payment", headers=self.owner,
                                    json={"paymentMethod": "CASH", "amount": amount})
         self.assertEqual(response.status_code, 200, response.text)
@@ -536,7 +536,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
                          ["EXPIRED", "EXPIRED", "READY", "READY", "READY"])
         self.assertEqual([self.state(order)[1][0].allocated_quantity for order in (due, notified_due, legacy, future, successor)],
                          [0, 0, 1, 1, 2])
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://testserver/api/v1") as client:
             detail = client.get(f"/preorders/{notified_due}", headers=self.owner).json()
         self.assertEqual((detail["paymentStatus"], detail["payments"], detail["cancelledAt"]),
                          ("PAID", [original_payment], None))
@@ -563,7 +563,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
             with self.assertLogs("app.workers.preorder_expiry", level="ERROR"):
                 self.assertEqual(preorder_expiry.expire_due_preorders(), 0)
             self.assertEqual([self.state(order) for order in (first, successor)], before)
-            with TestClient(app) as client:
+            with TestClient(app, base_url="http://testserver/api/v1") as client:
                 detail = client.get(f"/preorders/{first}", headers=self.owner).json()
             self.assertEqual((detail["payments"], detail["cancelReason"]), ([original_payment], None))
         finally:
@@ -598,7 +598,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
         with patch.object(preorder_expiry, "RUN_INTERVAL_SECONDS", 0.01), patch.object(
             preorder_expiry, "expire_due_preorders", side_effect=run_and_signal,
         ):
-            with TestClient(app):
+            with TestClient(app, base_url="http://testserver/api/v1"):
                 self.assertTrue(completed.wait(timeout=5))
         self.assertEqual(self.state(order)[0].status, "EXPIRED")
 
@@ -608,14 +608,14 @@ class PreorderFifoMySQLTests(unittest.TestCase):
                               {"id": variant or self.variant}).scalar_one()
 
     def import_csv(self, content, *, dry_run=True):
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://testserver/api/v1") as client:
             return client.post("/inventory/import-csv", headers=self.owner,
                                params={"branchId": self.branch, "dryRun": dry_run},
                                files={"file": ("stock.csv", content, "text/csv")})
 
     def test_stock_csv_sample_twenty_lines_preview_and_import(self):
         data_dir = Path(__file__).resolve().parents[2] / "data"
-        with TestClient(app) as client:
+        with TestClient(app, base_url="http://testserver/api/v1") as client:
             seeded = client.post("/products/import-csv", headers=self.owner, params={"dryRun": False}, files={
                 "file": ("sample-products.csv", (data_dir / "sample-products.csv").read_bytes(), "text/csv"),
             })
@@ -753,7 +753,7 @@ class PreorderFifoMySQLTests(unittest.TestCase):
 
     def test_stock_csv_rejects_file_limits_and_malformed_structure(self):
         for content, code, line in (
-            (b"\xff", "INVALID_UTF8", 1), ("sku,quantity,x\n", "INVALID_HEADER", 1),
+            (b"\xff", "INVALID_UTF8", 1), ("sku,amount,note\n", "INVALID_HEADER", 1),
             ("sku,quantity,note\n\n , , \n", "EMPTY_FILE", 4),
             (f'sku,quantity,note\n{self.sku()},1,"unfinished\n', "INVALID_CSV", 2),
         ):

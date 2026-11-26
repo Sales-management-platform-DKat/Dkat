@@ -72,8 +72,15 @@ class CatalogAuthTests(test_auth_flow.AuthFlowTests):
             role_headers = {"Authorization": "Bearer " + login.json()["access_token"]}
             product_list = self.client.get("/api/v1/products", headers=role_headers)
             self.assertEqual(product_list.status_code, 200, product_list.text)
-            self.assertEqual(self.client.post("/api/v1/products", headers=role_headers, json=payload).status_code, 403)
-            self.assertEqual(self.client.post("/api/v1/categories", headers=role_headers, json={"name": "Denied"}).status_code, 403)
+            # Owner and manager both maintain the catalog; employees only read it.
+            expected = 201 if role == "manager" else 403
+            role_payload = {**payload, "productCode": "P-" + role}
+            self.assertEqual(self.client.post("/api/v1/products", headers=role_headers, json=role_payload).status_code, expected)
+            self.assertEqual(self.client.post("/api/v1/categories", headers=role_headers, json={"name": "By " + role}).status_code, expected)
+            self.assertEqual(self.client.patch(
+                "/api/v1/products/" + str(created.json()["productId"]) + "/status",
+                headers=role_headers, json={"status": "INACTIVE"},
+            ).status_code, 403)
         self.assertEqual(self.provision("owner2").status_code, 201)
         token2 = self.login("owner2", "owner-password-123").json()["access_token"]
         headers2 = {"Authorization": "Bearer " + token2}

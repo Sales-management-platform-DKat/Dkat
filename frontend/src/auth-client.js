@@ -1,3 +1,5 @@
+import { ApiError, errorFromResponse, networkError } from './lib/api-errors.js';
+
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || '/api/v1'
 ).replace(/\/$/, '');
@@ -10,9 +12,19 @@ export function apiAssetUrl(path) {
 
 let accessToken = null;
 let refreshPromise = null;
+// When set (demo mode), every request goes to this in-browser handler instead of the server.
+let demoHandler = null;
 
 export function setAccessToken(token) {
   accessToken = token || null;
+}
+
+export function setDemoApiHandler(handler) {
+  demoHandler = handler || null;
+}
+
+export function isDemoApi() {
+  return !!demoHandler;
 }
 
 async function readResponse(response) {
@@ -22,17 +34,11 @@ async function readResponse(response) {
     try {
       data = JSON.parse(text);
     } catch {
-      throw new Error('Máy chủ trả về dữ liệu không hợp lệ.');
+      // Proxies return HTML error pages; never show them to the user.
+      data = null;
     }
   }
   return { data, response };
-}
-
-function responseError(data) {
-  const detail = Array.isArray(data?.detail)
-    ? data.detail.map((issue) => issue.msg).join(' ')
-    : data?.detail;
-  return new Error(typeof detail === 'string' ? detail : 'Không thể xử lý yêu cầu.');
 }
 
 async function requestRefresh() {
@@ -67,17 +73,35 @@ async function send(path, options, token) {
   }
   if (token) headers.set('Authorization', `Bearer ${token}`);
   if (options.adminToken) headers.set('X-Admin-Token', options.adminToken);
-  const { response, data } = await readResponse(await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    credentials: 'include',
-    headers,
-  }));
-  return { response, data };
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      credentials: 'include',
+      headers,
+    });
+  } catch (cause) {
+    if (cause?.name === 'AbortError') throw cause;
+    throw networkError(cause);
+  }
+  return readResponse(response);
+}
+
+async function demoRequest(path, options) {
+  try {
+    return await demoHandler(path, options);
+  } catch (error) {
+    if (error instanceof ApiError) throw error;
+    throw errorFromResponse(error?.status || 400, error?.details
+      ? { detail: { code: error.code, message: error.message }, details: error.details }
+      : { detail: error?.code ? { code: error.code, message: error.message } : error?.message });
+  }
 }
 
 export async function apiRequest(path, { adminToken, token, ...options } = {}) {
+  if (demoHandler && !adminToken) return demoRequest(path, options);
   const requestToken = token || accessToken;
-  let result = await send(path, options, requestToken);
+  let result = await send(path, { ...options, adminToken }, requestToken);
   const canRefresh = requestToken
     && result.response.status === 401
     && !path.startsWith('/auth/');
@@ -89,20 +113,25 @@ export async function apiRequest(path, { adminToken, token, ...options } = {}) {
     } catch (error) {
       setAccessToken(null);
       window.dispatchEvent(new Event('dkat-auth-expired'));
-      throw error;
+      throw error instanceof ApiError ? error : networkError(error);
     }
     if (session?.access_token) {
-      result = await send(path, options, session.access_token);
+      result = await send(path, { ...options, adminToken }, session.access_token);
       if (result.response.status === 401) {
         setAccessToken(null);
         window.dispatchEvent(new Event('dkat-auth-expired'));
       }
     } else {
       window.dispatchEvent(new Event('dkat-auth-expired'));
-      throw responseError(result.data);
+      throw errorFromResponse(401, result.data);
     }
   }
 
-  if (!result.response.ok) throw responseError(result.data);
+  if (!result.response.ok) {
+    const error = errorFromResponse(result.response.status, result.data);
+    if (result.response.status >= 500) console.error('API error', result.response.status, path, result.data);
+    throw error;
+  }
   return result.data;
 }
+

@@ -68,12 +68,34 @@ def list_store_users(
     branch_id: int | None = Query(default=None, alias="branchId", gt=0),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
-    owner: User = Depends(require_roles("owner")),
+    owner: User = Depends(require_roles("owner", "manager")),
     db: Session = Depends(get_db),
 ):
+    # Owners see every account in the store. Managers get a read-only view of the
+    # employees assigned to their own branches (they never see other managers).
     stmt = select(User).where(User.shop_id == owner.shop_id, User.role != "OWNER")
+    manager_branch_ids: list[int] | None = None
+    if owner.role == "MANAGER":
+        manager_branch_ids = list(db.execute(
+            text("""
+                SELECT ub.branch_id FROM user_branches ub
+                JOIN branches b ON b.branch_id = ub.branch_id AND b.store_id = :store
+                WHERE ub.user_id = :user
+            """),
+            {"store": owner.shop_id, "user": owner.id},
+        ).scalars())
+        if branch_id is not None and branch_id not in manager_branch_ids:
+            raise HTTPException(status_code=403, detail="Bạn không có quyền truy cập chi nhánh này.")
+        # Managers only supervise employees; asking for managers yields nothing.
+        stmt = stmt.where(User.role == "EMPLOYEE")
+        visible_ids = db.execute(
+            text("SELECT DISTINCT user_id FROM user_branches WHERE branch_id IN :branch_ids")
+            .bindparams(bindparam("branch_ids", expanding=True)),
+            {"branch_ids": manager_branch_ids or [-1]},
+        ).scalars().all()
+        stmt = stmt.where(User.id.in_(visible_ids))
     if role:
-        stmt = stmt.where(User.role == role.upper())
+        stmt = stmt.where(User.role == {"manager": "MANAGER", "staff": "EMPLOYEE"}[role])
     if account_status:
         stmt = stmt.where(User.status == account_status)
     if q.strip():
@@ -117,6 +139,8 @@ def list_store_users(
             {"user_ids": user_ids, "store": owner.shop_id},
         ).mappings()
         for branch in assignments:
+            if manager_branch_ids is not None and branch["id"] not in manager_branch_ids:
+                continue
             branch_map[branch["user_id"]].append(
                 {"id": branch["id"], "branch_code": branch["branch_code"],
                  "name": branch["name"], "status": branch["status"]}
@@ -136,7 +160,7 @@ def add_store_user(
     owner: User = Depends(require_roles("owner")),
     db: Session = Depends(get_db),
 ):
-    duplicate = db.scalar(select(User.id).where(User.username == payload.username.casefold()))
+    duplicate = db.scalar(select(User.id).where(func.lower(User.username) == payload.username.casefold()))
     if duplicate is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Tên đăng nhập này đã được sử dụng.")
 

@@ -27,6 +27,34 @@ Owner = Annotated[Actor, Depends(require_owner)]
 Database = Annotated[Session, Depends(get_db)]
 
 
+DUPLICATE_CODE = "Mã chi nhánh đã tồn tại trong cửa hàng"
+DUPLICATE_NAME = "Tên chi nhánh đã tồn tại trong cửa hàng"
+
+
+def _next_branch_code(db, store_id: int) -> str:
+    codes = {
+        code.upper() for code in db.execute(
+            text("SELECT branch_code FROM branches WHERE store_id = :store_id"), {"store_id": store_id}
+        ).scalars()
+    }
+    number = len(codes) + 1
+    while f"CN{number:02d}" in codes:
+        number += 1
+    return f"CN{number:02d}"
+
+
+def _check_duplicate_name(db, store_id: int, name: str, branch_id: int | None = None) -> None:
+    if db.execute(
+        text("""
+            SELECT 1 FROM branches
+            WHERE store_id = :store_id AND LOWER(TRIM(name)) = :name
+              AND (:branch_id IS NULL OR branch_id <> :branch_id)
+        """),
+        {"store_id": store_id, "name": name.strip().casefold(), "branch_id": branch_id},
+    ).first():
+        raise HTTPException(409, DUPLICATE_NAME)
+
+
 def _out(row) -> BranchOut:
     return BranchOut(
         id=row["branch_id"],
@@ -83,11 +111,17 @@ def get_branch(branch_id: int, actor: Reader, db: Database) -> BranchOut:
 def create_branch(body: BranchIn, actor: Owner) -> BranchCreatedOut:
     try:
         with engine.begin() as db:
+            # Serialize branch creation per store so generated codes cannot collide.
+            if db.dialect.name == "mysql":
+                db.execute(text("SELECT store_id FROM stores WHERE store_id = :store_id FOR UPDATE"),
+                           {"store_id": actor.store_id})
+            code = body.branch_code or _next_branch_code(db, actor.store_id)
             if db.execute(
-                text("SELECT 1 FROM branches WHERE store_id = :store_id AND branch_code = :code"),
-                {"store_id": actor.store_id, "code": body.branch_code},
+                text("SELECT 1 FROM branches WHERE store_id = :store_id AND UPPER(branch_code) = :code"),
+                {"store_id": actor.store_id, "code": code},
             ).first():
-                raise HTTPException(409, "Mã chi nhánh đã tồn tại trong cửa hàng")
+                raise HTTPException(409, DUPLICATE_CODE)
+            _check_duplicate_name(db, actor.store_id, body.name)
             result = db.execute(
                 text("""
                     INSERT INTO branches (store_id, branch_code, name, address, phone, status)
@@ -95,7 +129,7 @@ def create_branch(body: BranchIn, actor: Owner) -> BranchCreatedOut:
                 """),
                 {
                     "store_id": actor.store_id,
-                    "code": body.branch_code,
+                    "code": code,
                     "name": body.name,
                     "address": body.address,
                     "phone": body.phone,
@@ -121,7 +155,7 @@ def create_branch(body: BranchIn, actor: Owner) -> BranchCreatedOut:
                 {"branch_id": branch_id},
             ).mappings().one()
     except IntegrityError:
-        raise HTTPException(409, "Mã chi nhánh đã tồn tại trong cửa hàng") from None
+        raise HTTPException(409, DUPLICATE_CODE) from None
     return BranchCreatedOut(**_out(row).model_dump(), inventory_rows_created=inventory_rows)
 
 
@@ -129,21 +163,23 @@ def create_branch(body: BranchIn, actor: Owner) -> BranchCreatedOut:
 def update_branch(branch_id: int, body: BranchIn, actor: Owner) -> BranchOut:
     try:
         with engine.begin() as db:
-            row = db.execute(
-                text("SELECT 1 FROM branches WHERE store_id = :store_id AND branch_id = :branch_id"),
+            current_code = db.execute(
+                text("SELECT branch_code FROM branches WHERE store_id = :store_id AND branch_id = :branch_id"),
                 {"store_id": actor.store_id, "branch_id": branch_id},
-            ).first()
-            if row is None:
+            ).scalar_one_or_none()
+            if current_code is None:
                 raise HTTPException(404, "Không tìm thấy chi nhánh")
+            code = body.branch_code or current_code
             duplicate = db.execute(
                 text("""
                     SELECT 1 FROM branches
-                    WHERE store_id = :store_id AND branch_code = :code AND branch_id <> :branch_id
+                    WHERE store_id = :store_id AND UPPER(branch_code) = :code AND branch_id <> :branch_id
                 """),
-                {"store_id": actor.store_id, "code": body.branch_code, "branch_id": branch_id},
+                {"store_id": actor.store_id, "code": code.upper(), "branch_id": branch_id},
             ).first()
             if duplicate:
-                raise HTTPException(409, "Mã chi nhánh đã tồn tại trong cửa hàng")
+                raise HTTPException(409, DUPLICATE_CODE)
+            _check_duplicate_name(db, actor.store_id, body.name, branch_id)
             db.execute(
                 text("""
                     UPDATE branches SET branch_code = :code, name = :name, address = :address, phone = :phone
@@ -152,7 +188,7 @@ def update_branch(branch_id: int, body: BranchIn, actor: Owner) -> BranchOut:
                 {
                     "store_id": actor.store_id,
                     "branch_id": branch_id,
-                    "code": body.branch_code,
+                    "code": code,
                     "name": body.name,
                     "address": body.address,
                     "phone": body.phone,
@@ -166,7 +202,7 @@ def update_branch(branch_id: int, body: BranchIn, actor: Owner) -> BranchOut:
                 {"branch_id": branch_id},
             ).mappings().one()
     except IntegrityError:
-        raise HTTPException(409, "Mã chi nhánh đã tồn tại trong cửa hàng") from None
+        raise HTTPException(409, DUPLICATE_CODE) from None
     return _out(result)
 
 

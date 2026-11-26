@@ -24,13 +24,16 @@ function ToastCard({ item }) {
   function schedule(delay) {
     clearTimeout(timer.current);
     started.current = Date.now();
-    timer.current = setTimeout(close, delay);
+    // duration 0: important errors stay until the user closes them.
+    if (item.duration > 0) timer.current = setTimeout(close, delay);
   }
 
   useEffect(() => {
+    // A repeated message restarts the countdown (see pushToast de-duplication).
+    remaining.current = item.duration;
     schedule(remaining.current);
     return () => clearTimeout(timer.current);
-  }, [item.id]);
+  }, [item.id, item.createdAt]);
 
   function close() {
     if (leaving) return;
@@ -48,7 +51,7 @@ function ToastCard({ item }) {
     >
       <span className="dk-toast-mark" aria-hidden="true">{item.kind === 'error' ? '!' : item.kind === 'warning' ? '!' : item.kind === 'info' ? 'i' : '✓'}</span>
       <div>
-        <strong>{item.title}</strong>
+        <strong>{item.title}{item.repeat > 1 && <span className="dk-toast-repeat"> ×{item.repeat}</span>}</strong>
         <p>{item.message}</p>
       </div>
       <button type="button" aria-label="Đóng thông báo" onClick={close}>×</button>
