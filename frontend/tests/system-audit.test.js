@@ -122,11 +122,41 @@ test('demo: pre-order only for out-of-stock items, FIFO allocation on import', a
   const created = await owner('/preorders', 'POST', { branchId: 1, customer, items: [{ variantId: out.variantId, quantity: 2 }] });
   assert.match(created.preorderCode, /^PD-/);
   assert.equal(created.status, 'WAITING_STOCK');
-  await owner('/inventory/import', 'POST', { branchId: 1, items: [{ variantId: out.variantId, quantity: 2 }] });
-  const [ready] = await owner('/preorders?branchId=1');
-  assert.equal(ready.status, 'READY');
+  // Older seeded pre-orders for the same variant are served first (FIFO).
+  const before = (await owner('/preorders?branchId=1&status=WAITING_STOCK')).filter((order) => order.preorderId !== created.preorderId
+    && order.items.some((line) => line.variantId === out.variantId));
+  const olderNeed = before.reduce((sum, order) => sum + order.items.find((line) => line.variantId === out.variantId).quantity, 0);
+  await owner('/inventory/import', 'POST', { branchId: 1, items: [{ variantId: out.variantId, quantity: olderNeed + 1 }] });
+  assert.equal((await owner(`/preorders/${created.preorderId}`)).status, 'WAITING_STOCK', 'not enough left after older orders');
+  for (const order of before) assert.notEqual((await owner(`/preorders/${order.preorderId}`)).status, 'WAITING_STOCK');
+  await owner('/inventory/import', 'POST', { branchId: 1, items: [{ variantId: out.variantId, quantity: 1 }] });
+  const ready = await owner(`/preorders/${created.preorderId}`);
+  // Ready + the customer has a phone: the "goods arrived" SMS is recorded, so the order is NOTIFIED.
+  assert.equal(ready.status, 'NOTIFIED');
+  assert.ok(ready.expiresAt);
   assert.equal(ready.items[0].allocatedQuantity, 2);
   assert.equal((await owner('/inventory?branchId=1')).find((item) => item.variantId === out.variantId).available, 0);
+  const history = await owner(`/preorders/${created.preorderId}/notifications`);
+  assert.deepEqual(history.items.map((item) => [item.channel, item.status, item.recipient]), [['SMS', 'SENT', '0911***333']]);
+});
+
+test('demo: failed "goods arrived" notifications can be resent once, customer totals include fulfilled pre-orders', async () => {
+  const owner = as('OWNER');
+  const failedOrder = (await owner('/preorders?branchId=1&status=READY'))[0];
+  const history = await owner(`/preorders/${failedOrder.preorderId}/notifications`);
+  const failed = history.items.find((item) => item.canResend);
+  assert.equal(failed.status, 'FAILED');
+  const outcome = await owner(`/notifications/${failed.id}/resend`, 'POST');
+  assert.equal(outcome.result, 'SENT');
+  assert.equal(outcome.notification.retryCount, 1);
+  assert.equal((await owner(`/preorders/${failedOrder.preorderId}`)).status, 'NOTIFIED');
+  await rejects(owner(`/notifications/${failed.id}/resend`, 'POST'), 409);
+  const customers = await owner('/customers?q=&limit=100');
+  const fulfilled = (await owner('/preorders?branchId=1&status=FULFILLED')).filter((order) => order.customerId === customers[0].customerId);
+  const sales = (await owner('/sales-orders?branchId=1')).concat(await owner('/sales-orders?branchId=2'))
+    .filter((order) => order.status === 'PAID' && order.customerId === customers[0].customerId);
+  assert.equal(customers[0].orderCount, sales.length + fulfilled.length);
+  assert.equal(Number(customers[0].totalSpent), [...sales, ...fulfilled].reduce((sum, order) => sum + Number(order.totalAmount), 0));
 });
 
 test('demo: CSV stock import validates rows, blocks invalid files and duplicate imports', async () => {

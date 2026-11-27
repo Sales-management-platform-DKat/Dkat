@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { errorMessage, useLanguage } from '../../i18n/index.js';
-import { confirmAction } from '../../components/confirm.jsx';
+import { confirmAction } from '../../components/overlay/index.js';
 import { cancelSalesOrder, confirmSalesOrderPayment, getSalesOrder, listSalesOrders, refundSalesOrder } from './api.js';
 
 const stateText = { PENDING: 'Chờ thanh toán', PAID: 'Đã thanh toán', CANCELLED: 'Đã hủy', REFUNDED: 'Đã hoàn tiền' };

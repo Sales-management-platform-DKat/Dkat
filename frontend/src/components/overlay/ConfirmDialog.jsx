@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '../ui.jsx';
 import { Dialog } from './Dialog.jsx';
+import { useLanguage } from '../../i18n/index.js';
 
 function ToneIcon({ tone }) {
   if (tone === 'danger') {
@@ -27,6 +28,7 @@ export function ConfirmDialog({
   onClose,
   onConfirm,
 }) {
+  const { t } = useLanguage();
   const [reason, setReason] = useState('');
   const [reasonError, setReasonError] = useState('');
   const working = busy;
@@ -45,8 +47,8 @@ export function ConfirmDialog({
   return (
     <Dialog
       open={open}
-      title={title}
-      description={description}
+      title={t(title)}
+      description={description ? t(description) : description}
       size="sm"
       role="alertdialog"
       busy={working}
@@ -56,20 +58,20 @@ export function ConfirmDialog({
       initialFocus="[data-dialog-cancel]"
       footer={(
         <>
-          <Button variant="outline" type="button" data-dialog-cancel disabled={working} onClick={onClose}>{cancelLabel}</Button>
-          <Button variant={tone === 'danger' ? 'destructive' : 'primary'} type="button" loading={working} onClick={confirm}>{working ? 'Đang xử lý…' : confirmLabel}</Button>
+          <Button variant="outline" type="button" data-dialog-cancel disabled={working} onClick={onClose}>{t(cancelLabel)}</Button>
+          <Button variant={tone === 'danger' ? 'destructive' : 'primary'} type="button" loading={working} onClick={confirm}>{working ? t('Đang xử lý…') : t(confirmLabel)}</Button>
         </>
       )}
     >
       <div className={`dk-confirm dk-confirm-${tone}`}>
         <span className="dk-confirm-icon"><ToneIcon tone={tone} /></span>
         <div>
-          {error && <p className="dk-form-error" role="alert">{error}</p>}
+          {error && <p className="dk-form-error" role="alert">{t(error)}</p>}
           {requireReason && (
             <label className={`dk-field${reasonError ? ' is-invalid' : ''}`}>
-              <span className="dk-field-label">{reasonLabel}<i aria-hidden="true">*</i></span>
-              <textarea value={reason} rows={3} placeholder={reasonPlaceholder} onChange={(event) => { setReason(event.target.value); setReasonError(''); }} />
-              {reasonError && <small className="dk-field-error" role="alert">{reasonError}</small>}
+              <span className="dk-field-label">{t(reasonLabel)}<i aria-hidden="true">*</i></span>
+              <textarea value={reason} rows={3} maxLength={255} disabled={working} placeholder={t(reasonPlaceholder)} aria-invalid={reasonError ? true : undefined} onChange={(event) => { setReason(event.target.value); setReasonError(''); }} />
+              {reasonError && <small className="dk-field-error" role="alert">{t(reasonError)}</small>}
             </label>
           )}
         </div>

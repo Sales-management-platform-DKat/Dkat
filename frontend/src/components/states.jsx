@@ -15,7 +15,7 @@ export function EmptyState({ title, description, action, icon = '◇' }) {
 
 export function ErrorState({ error, onRetry }) {
   const { t } = useLanguage();
-  return <div className="empty error-block" role="alert"><span aria-hidden="true">!</span><h3>{t('Không tải được dữ liệu')}</h3><p>{friendlyMessage(error)}</p>{onRetry && <button className="btn outline" type="button" onClick={onRetry}>{t('Thử lại')}</button>}</div>;
+  return <div className="empty error-block" role="alert"><span aria-hidden="true">!</span><h3>{t('Không tải được dữ liệu')}</h3><p>{t(friendlyMessage(error))}</p>{onRetry && <button className="btn outline" type="button" onClick={onRetry}>{t('Thử lại')}</button>}</div>;
 }
 
 const STATUS = {

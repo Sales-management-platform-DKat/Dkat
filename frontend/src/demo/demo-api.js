@@ -9,6 +9,9 @@ import { DEMO_ATTRIBUTES, DEMO_BRANCHES, DEMO_CATALOG, DEMO_CATEGORIES, DEMO_CUS
 export const DEMO_STORE_KEY = 'dkat-demo-api-v2';
 const ROLE_USERS = { OWNER: 1, MANAGER: 2, EMPLOYEE: 3 };
 const OPEN_PREORDER = ['WAITING_STOCK', 'READY', 'NOTIFIED'];
+// Bump when seed() changes shape, so browsers holding older demo data start again.
+const DEMO_DATA_VERSION = 3;
+const PREORDER_READY_DAYS = 7;
 
 class DemoError extends Error {
   constructor(status, message, details = null, code = '') {
@@ -26,7 +29,8 @@ const fold = (value) => String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g,
 
 function seed() {
   const s = {
-    next: { branch: 3, user: 4, category: 4, product: 5, variant: 9, attribute: 3, movement: 1, order: 1, preorder: 1, customer: 3, payment: 1 },
+    version: DEMO_DATA_VERSION,
+    next: { branch: 3, user: 4, category: 4, product: 5, variant: 9, attribute: 3, movement: 1, order: 1, preorder: 1, customer: 3, payment: 1, notification: 1 },
     store: { id: 1, name: DEMO_STORE_NAME },
     branches: DEMO_BRANCHES.map(({ ageDays, ...branch }) => ({ ...branch, storeId: 1, status: 'ACTIVE', createdAt: daysAgo(ageDays) })),
     users: DEMO_USERS.map(({ ageDays, ...user }) => ({ ...user, status: 'ACTIVE', created_at: daysAgo(ageDays) })),
@@ -37,6 +41,7 @@ function seed() {
     movements: [],
     orders: [],
     preorders: [],
+    notifications: [],
     customers: structuredClone(DEMO_CUSTOMERS),
   };
   const catalog = DEMO_CATALOG;
@@ -60,13 +65,36 @@ function seed() {
     order.payments = [{ paymentId: s.next.payment++, paymentMethod: 'CASH', amount: order.totalAmount, status: 'SUCCESS', confirmedAt: order.paidAt }];
     s.orders.push(order);
   });
+  seedPreorders(s);
   return s;
+}
+
+// A few pre-orders at branch 1 covering the main states, so the screen and the
+// notification history are not empty: [days ago, customer, variant, qty, state].
+function seedPreorders(s) {
+  [[3, 1, 2, 1, 'WAITING_STOCK'], [2, 2, 3, 2, 'NOTIFIED'], [1, 1, 8, 1, 'READY'], [8, 1, 6, 1, 'FULFILLED']].forEach(([days, customerId, variantId, quantity, state]) => {
+    const order = buildPreorder(s, s.branches[0], s.customers.find((item) => item.customerId === customerId), [{ variantId, quantity }], null, daysAgo(days, 9));
+    if (state !== 'WAITING_STOCK') {
+      order.items.forEach((line) => { line.allocatedQuantity = line.quantity; });
+      order.readyAt = daysAgo(Math.max(days - 1, 0), 14);
+      order.expiresAt = new Date(new Date(order.readyAt).getTime() + PREORDER_READY_DAYS * 86400000).toISOString();
+      order.status = 'READY';
+    }
+    if (state === 'NOTIFIED') { recordReadyNotifications(s, order, { at: order.readyAt }); order.paymentStatus = 'PAID'; }
+    // Seeded as "the provider was not reachable", so the resend flow can be tried.
+    if (state === 'READY') recordReadyNotifications(s, order, { at: order.readyAt, failed: true });
+    if (state === 'FULFILLED') {
+      recordReadyNotifications(s, order, { at: order.readyAt });
+      Object.assign(order, { status: 'FULFILLED', paymentStatus: 'PAID', fulfilledAt: daysAgo(days - 2, 16) });
+    }
+    s.preorders.push(order);
+  });
 }
 
 function load() {
   try {
     const saved = JSON.parse(localStorage.getItem(DEMO_STORE_KEY));
-    if (saved?.next && saved.products) return saved;
+    if (saved?.version === DEMO_DATA_VERSION && saved.next && saved.products) return saved;
   } catch { /* corrupt demo data: start again */ }
   return seed();
 }
@@ -134,8 +162,51 @@ function allocate(s, branchId, variantIds) {
       const free = available(s, branchId, line.variantId);
       if (free > 0) line.allocatedQuantity += Math.min(free, line.quantity - line.allocatedQuantity);
     }
-    if (order.items.every((line) => line.allocatedQuantity >= line.quantity)) { order.status = 'READY'; order.readyAt = now(); }
+    if (order.items.every((line) => line.allocatedQuantity >= line.quantity)) {
+      order.status = 'READY'; order.readyAt = now();
+      order.expiresAt = new Date(Date.now() + PREORDER_READY_DAYS * 86400000).toISOString();
+      recordReadyNotifications(s, order);
+    }
   }
+}
+
+function buildPreorder(s, branch, customer, lines, note, createdAt = now()) {
+  const items = lines.map((line) => {
+    const { product, variant } = findVariant(s, line.variantId);
+    return { variantId: variant.variant_id, productName: product.name, sku: variant.sku, unitPrice: variant.price, quantity: line.quantity, allocatedQuantity: 0, lineTotal: String(Number(variant.price) * line.quantity) };
+  });
+  const id = s.next.preorder++;
+  return {
+    preorderId: id, preorderCode: `PD-DEMO-${String(id).padStart(5, '0')}`, branchId: branch.id, branchName: branch.name, customerId: customer.customerId,
+    customer: { fullName: customer.fullName, phone: customer.phone, email: customer.email || null, address: customer.address },
+    totalAmount: String(items.reduce((sum, item) => sum + Number(item.lineTotal), 0)), status: 'WAITING_STOCK', paymentStatus: 'UNPAID',
+    note: note || null, createdAt, readyAt: null, expiresAt: null, fulfilledAt: null, cancelReason: null, cancelledAt: null, items,
+  };
+}
+
+// "Goods have arrived" messages (FR-09). The demo never contacts an SMS/email
+// provider: a delivery is recorded as simulated, which the message says.
+const maskPhone = (phone) => (phone && phone.length > 6 ? `${phone.slice(0, 4)}***${phone.slice(-3)}` : phone);
+const maskEmail = (email) => { const [name, domain] = String(email).split('@'); return domain ? `${name[0]}***@${domain}` : email; };
+function recordReadyNotifications(s, order, { at = now(), failed = false } = {}) {
+  s.notifications ||= [];
+  s.next.notification ||= 1;
+  const products = order.items.map((line) => `${line.productName} x${line.quantity}`).join(', ');
+  const until = order.expiresAt ? new Date(order.expiresAt).toLocaleDateString('vi-VN') : '';
+  const message = `DKat: Chào ${order.customer.fullName}, ${products} (đơn ${order.preorderCode}) đã có hàng tại ${order.branchName}. Mời bạn đến nhận trước ${until}.`;
+  const channels = [['SMS', order.customer.phone], ['EMAIL', order.customer.email]].filter(([, recipient]) => recipient);
+  for (const [channel, recipient] of channels) {
+    s.notifications.push({
+      id: s.next.notification++, preorderId: order.preorderId, branchId: order.branchId, eventType: 'PREORDER_READY', channel, recipient, message,
+      status: failed ? 'FAILED' : 'SENT', retryCount: 0, providerMessageId: failed ? null : 'DEMO-SIMULATED',
+      errorMessage: failed ? 'DEMO_PROVIDER_OFFLINE: simulated provider did not respond' : null,
+      sentAt: failed ? null : at, lastAttemptAt: at, createdAt: at,
+    });
+  }
+  if (!failed && channels.length && order.status === 'READY') order.status = 'NOTIFIED';
+}
+function notificationOut(item) {
+  return { ...item, recipient: item.channel === 'SMS' ? maskPhone(item.recipient) : maskEmail(item.recipient), canResend: item.status === 'FAILED', branchId: undefined };
 }
 
 function buildOrder(s, branchId, lines, discount, customerId, actorId, createdAt = now()) {
@@ -637,14 +708,15 @@ export function createDemoApi(role = 'OWNER') {
       if (details.length) fail(422, 'Đơn đặt trước không hợp lệ', details, 'INVALID_PREORDER');
       const branch = s.branches.find((item) => item.id === Number(body.branchId) && item.status === 'ACTIVE') || fail(404, 'Không tìm thấy chi nhánh đang hoạt động', null, 'BRANCH_NOT_FOUND');
       const items = (body.items || []).map((line) => {
-        const entry = findVariant(s, line.variantId) || fail(404, 'Không tìm thấy biến thể trong cửa hàng', null, 'VARIANT_NOT_FOUND');
+        if (!findVariant(s, line.variantId)) fail(404, 'Không tìm thấy biến thể trong cửa hàng', null, 'VARIANT_NOT_FOUND');
         if (available(s, branch.id, line.variantId) >= line.quantity) fail(409, 'Hàng còn đủ; vui lòng mua trực tiếp tại cửa hàng', null, 'VARIANT_IN_STOCK');
-        return { variantId: entry.variant.variant_id, productName: entry.product.name, sku: entry.variant.sku, unitPrice: entry.variant.price, quantity: line.quantity, allocatedQuantity: 0, lineTotal: String(Number(entry.variant.price) * line.quantity) };
+        return { variantId: Number(line.variantId), quantity: line.quantity };
       });
       let customer = s.customers.find((item) => item.phone === body.customer.phone.trim());
       if (!customer) { customer = { customerId: s.next.customer++, fullName: body.customer.fullName.trim(), phone: body.customer.phone.trim(), email: body.customer.email || null, address: body.customer.address.trim(), note: null }; s.customers.push(customer); }
-      const id = s.next.preorder++;
-      const order = { preorderId: id, preorderCode: `PD-DEMO-${String(id).padStart(5, '0')}`, branchId: branch.id, branchName: branch.name, customerId: customer.customerId, customer: { fullName: body.customer.fullName.trim(), phone: body.customer.phone.trim(), email: body.customer.email || null, address: body.customer.address.trim() }, totalAmount: String(items.reduce((sum, item) => sum + Number(item.lineTotal), 0)), status: 'WAITING_STOCK', paymentStatus: 'UNPAID', note: body.note || null, createdAt: now(), readyAt: null, expiresAt: null, fulfilledAt: null, cancelReason: null, cancelledAt: null, items };
+      // The order keeps what the customer typed (a snapshot), like the backend.
+      const snapshot = { ...customer, fullName: body.customer.fullName.trim(), phone: body.customer.phone.trim(), email: body.customer.email || null, address: body.customer.address.trim() };
+      const order = buildPreorder(s, branch, snapshot, items, body.note);
       s.preorders.push(order);
       return commit(order);
     }
@@ -655,6 +727,29 @@ export function createDemoApi(role = 'OWNER') {
       const keyword = fold(params.get('keyword') || '');
       return clone(s.preorders.filter((order) => ids.includes(order.branchId) && (!params.get('status') || order.status === params.get('status'))
         && (!keyword || fold(`${order.preorderCode} ${order.customer.fullName} ${order.customer.phone}`).includes(keyword))).sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
+    }
+    if ((match = m(/^\/preorders\/(\d+)$/)) && method === 'GET') {
+      const order = s.preorders.find((item) => item.preorderId === Number(match[1])) || fail(404, 'Không tìm thấy đơn đặt trước.', null, 'PREORDER_NOT_FOUND');
+      requireBranch(s, actor, order.branchId);
+      const notifications = (s.notifications || []).filter((item) => item.preorderId === order.preorderId).reverse()
+        .map((item) => ({ notificationId: item.id, channel: item.channel, recipient: notificationOut(item).recipient, message: item.message, status: item.status, providerMessageId: item.providerMessageId, errorMessage: item.errorMessage, sentAt: item.sentAt, createdAt: item.createdAt }));
+      return clone({ ...order, payments: [], fulfillment: null, notifications });
+    }
+    if ((match = m(/^\/preorders\/(\d+)\/notifications$/)) && method === 'GET') {
+      const order = s.preorders.find((item) => item.preorderId === Number(match[1])) || fail(404, 'Không tìm thấy đơn đặt trước.', null, 'PREORDER_NOT_FOUND');
+      requireBranch(s, actor, order.branchId);
+      return clone({ preorderId: order.preorderId, preorderCode: order.preorderCode, maxAutoRetries: 3,
+        items: (s.notifications || []).filter((item) => item.preorderId === order.preorderId).map(notificationOut) });
+    }
+    if ((match = m(/^\/notifications\/(\d+)\/resend$/)) && method === 'POST') {
+      const item = (s.notifications || []).find((entry) => entry.id === Number(match[1])) || fail(404, 'Không tìm thấy thông báo.', null, 'NOTIFICATION_NOT_FOUND');
+      requireBranch(s, actor, item.branchId);
+      if (item.status !== 'FAILED') fail(409, 'Thông báo đang được gửi lại hoặc đã gửi thành công.', null, 'NOTIFICATION_NOT_FAILED');
+      const at = now();
+      Object.assign(item, { status: 'SENT', retryCount: item.retryCount + 1, providerMessageId: 'DEMO-SIMULATED', errorMessage: null, sentAt: at, lastAttemptAt: at });
+      const order = s.preorders.find((entry) => entry.preorderId === item.preorderId);
+      if (order?.status === 'READY') order.status = 'NOTIFIED';
+      return commit({ result: 'SENT', notification: notificationOut(item) });
     }
     if ((match = m(/^\/preorders\/(\d+)\/(confirm-payment|fulfill|cancel)$/)) && method === 'POST') {
       const order = s.preorders.find((item) => item.preorderId === Number(match[1])) || fail(404, 'Không tìm thấy đơn đặt trước.');
@@ -676,10 +771,15 @@ export function createDemoApi(role = 'OWNER') {
     // Customers
     if ((route === '/customers' || route === '/customers/quick-search') && method === 'GET') {
       const q = fold(params.get('q') || '');
+      // Same rule as the backend: paid sales + fulfilled pre-orders, in branches the user can see.
+      const visible = accessibleBranches(s, actor);
       const rows = s.customers.filter((customer) => !q || [customer.fullName, customer.phone, customer.email].some((value) => fold(value).includes(q)))
         .map((customer) => {
-          const orders = s.orders.filter((order) => order.customerId === customer.customerId && order.status === 'PAID');
-          return { ...customer, orderCount: orders.length, totalSpent: String(orders.reduce((sum, order) => sum + Number(order.totalAmount), 0)) };
+          const purchases = [
+            ...s.orders.filter((order) => order.status === 'PAID'),
+            ...s.preorders.filter((order) => order.status === 'FULFILLED'),
+          ].filter((order) => order.customerId === customer.customerId && visible.includes(order.branchId));
+          return { ...customer, orderCount: purchases.length, totalSpent: String(purchases.reduce((sum, order) => sum + Number(order.totalAmount), 0)) };
         });
       return clone(route.endsWith('quick-search') ? rows.slice(0, Number(params.get('limit') || 10)) : rows);
     }
@@ -694,9 +794,11 @@ export function createDemoApi(role = 'OWNER') {
     if ((match = m(/^\/customers\/(\d+)(?:\/(history))?$/))) {
       const customer = s.customers.find((item) => item.customerId === Number(match[1])) || fail(404, 'Không tìm thấy khách hàng.');
       if (match[2]) {
+        const visible = accessibleBranches(s, actor);
+        const mine = (order) => order.customerId === customer.customerId && visible.includes(order.branchId);
         return clone([
-          ...s.orders.filter((order) => order.customerId === customer.customerId).map((order) => ({ id: order.salesOrderId, type: 'SALE', orderCode: order.orderCode, branchName: order.branchName, createdAt: order.createdAt, status: order.status, totalAmount: order.totalAmount })),
-          ...s.preorders.filter((order) => order.customerId === customer.customerId).map((order) => ({ id: order.preorderId, type: 'PREORDER', orderCode: order.preorderCode, branchName: order.branchName, createdAt: order.createdAt, status: order.status, totalAmount: order.totalAmount })),
+          ...s.orders.filter(mine).map((order) => ({ id: order.salesOrderId, type: 'SALE', orderCode: order.orderCode, branchName: order.branchName, createdAt: order.createdAt, status: order.status, totalAmount: order.totalAmount })),
+          ...s.preorders.filter(mine).map((order) => ({ id: order.preorderId, type: 'PREORDER', orderCode: order.preorderCode, branchName: order.branchName, createdAt: order.createdAt, status: order.status, totalAmount: order.totalAmount })),
         ].sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
       }
       if (method === 'GET') return clone(customer);
