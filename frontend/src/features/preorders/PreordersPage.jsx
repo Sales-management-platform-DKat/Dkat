@@ -6,6 +6,7 @@ import { listInventory } from '../inventory/api.js';
 import { listProducts } from '../products/api.js';
 import { cancelPreorder, confirmPreorderPayment, fulfillPreorder, listPreorderNotifications, listPreorders, resendNotification } from './api.js';
 import PreorderDialog from './PreorderDialog.jsx';
+import { deliveryErrorKey } from './notification-errors.js';
 
 const STATUS_OPTIONS = ['WAITING_STOCK', 'READY', 'NOTIFIED', 'FULFILLED', 'CANCELLED', 'EXPIRED'];
 const STATUS_LABELS = { WAITING_STOCK: 'Chờ hàng', READY: 'Sẵn sàng', NOTIFIED: 'Đã thông báo', FULFILLED: 'Đã nhận hàng', CANCELLED: 'Đã hủy', EXPIRED: 'Hết hạn' };
@@ -69,7 +70,7 @@ export default function PreordersPage({ branchId, branch }) {
       if (kind === 'cancel') await cancelPreorder(row.preorderId, reason);
       if (kind === 'pay') await confirmPreorderPayment(row.preorderId, { paymentMethod: 'CASH', amount: Number(row.totalAmount) });
       if (kind === 'fulfill') await fulfillPreorder(row.preorderId, {});
-      notify.success({ cancel: t('Đã hủy đơn đặt trước.'), pay: t('Đã ghi nhận thanh toán.'), fulfill: t('Đã xác nhận giao hàng.') }[kind]);
+      notify.success({ key: { cancel: 'preorder.toast.cancelled', pay: 'preorder.toast.paid', fulfill: 'preorder.toast.fulfilled' }[kind], values: { code: row.preorderCode } });
       await reload();
     } catch (error) {
       notify.error(error, { title: t('Không cập nhật được đơn đặt trước') });
@@ -93,8 +94,14 @@ export default function PreordersPage({ branchId, branch }) {
   async function resend(item) {
     setBusyId(history.row.preorderId);
     try {
-      await resendNotification(item.id);
-      notify.success(t('Đã gửi lại thông báo.'));
+      // The backend answers 200 for a resend that failed again: check the result.
+      const outcome = await resendNotification(item.id);
+      if (outcome?.result === 'SENT') {
+        notify.success({ key: 'preorder.toast.resent', values: { channel: item.channel === 'SMS' ? 'SMS' : 'Email', recipient: item.recipient } });
+      } else {
+        notify.error({ key: deliveryErrorKey(outcome?.notification?.errorMessage) || 'preorder.notification.error.unknown' },
+          { title: t('Gửi lại không thành công') });
+      }
     } catch (error) {
       notify.error(error, { title: t('Không gửi lại được thông báo') });
     } finally {
@@ -139,9 +146,9 @@ export default function PreordersPage({ branchId, branch }) {
         : <div className="table-wrap"><table><thead><tr>{['Kênh', 'Người nhận', 'Trạng thái', 'Thời gian', 'Ghi chú', ''].map((x) => <th key={x}>{t(x)}</th>)}</tr></thead><tbody>
           {history.items.map((n) => <tr key={n.id}>
             <td>{n.channel === 'SMS' ? 'SMS' : 'Email'}</td><td>{n.recipient}</td>
-            <td>{n.status === 'SENT' ? t('Đã gửi') : n.status === 'FAILED' ? t('Lỗi') : t('Đang gửi')}{n.retryCount ? ` · ${t('gửi lại')} ${n.retryCount}` : ''}</td>
+            <td>{n.status === 'SENT' ? t('Đã gửi') : n.status === 'FAILED' ? t('Gửi lỗi') : t('Đang gửi')}{n.retryCount ? ` · ${t('preorder.notification.retries', { count: n.retryCount })}` : ''}</td>
             <td>{formatDateTime(new Date(n.sentAt || n.lastAttemptAt || n.createdAt))}</td>
-            <td><small className="muted">{n.errorMessage ? n.errorMessage.split(':')[0] : ''}</small></td>
+            <td><small className="muted" title={n.errorMessage || undefined}>{n.status === 'FAILED' ? t(deliveryErrorKey(n.errorMessage) || 'preorder.notification.error.unknown') : ''}</small></td>
             <td>{n.canResend && <button className="link" disabled={busyId === history.row.preorderId} onClick={() => resend(n)}>{t('Gửi lại')}</button>}</td>
           </tr>)}
         </tbody></table></div>}

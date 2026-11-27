@@ -19,8 +19,8 @@ function CustomerForm({ initial, busy, onCancel, onSubmit, t }) {
 }
 
 const statusLabels = {
-  PAID: 'Đã thanh toán', UNPAID: 'Chưa trả', PROCESSING: 'Đang xử lý', COMPLETED: 'Hoàn tất',
-  FULFILLED: 'Đã nhận', READY: 'Sẵn sàng', WAITING_STOCK: 'Chờ hàng', CANCELLED: 'Đã hủy',
+  PAID: 'Đã thanh toán', UNPAID: 'Chưa thanh toán', PENDING: 'Chờ thanh toán', PROCESSING: 'Đang xử lý', COMPLETED: 'Hoàn tất',
+  FULFILLED: 'Đã nhận hàng', READY: 'Sẵn sàng', NOTIFIED: 'Đã thông báo', WAITING_STOCK: 'Chờ hàng', CANCELLED: 'Đã hủy',
   REFUNDED: 'Đã hoàn tiền', EXPIRED: 'Hết hạn',
 };
 
@@ -68,10 +68,20 @@ export default function CustomersPage({ canEdit = true }) {
     setBusy(true);
     setError('');
     try {
-      if (editing?.customerId) await updateCustomer(editing.customerId, payload);
-      else await createCustomer(payload);
+      if (editing?.customerId) {
+        const saved = await updateCustomer(editing.customerId, payload);
+        setNotice({ key: 'customer.notice.updated', values: { name: saved?.fullName || payload.fullName } });
+      } else {
+        // The backend returns the existing profile (and creates nothing) when the phone
+        // number is already registered, so say that instead of "added".
+        const known = new Set(customers.map((item) => item.customerId));
+        const saved = await createCustomer(payload);
+        const existed = saved?.customerId && (known.has(saved.customerId) || (payload.phone && saved.fullName !== payload.fullName));
+        setNotice(existed
+          ? { key: 'customer.notice.phoneExists', values: { phone: saved.phone || payload.phone, name: saved.fullName } }
+          : { key: 'customer.notice.created', values: { name: saved?.fullName || payload.fullName } });
+      }
       setEditing(null);
-      setNotice('Đã lưu khách hàng.');
       await reload();
     } catch (cause) {
       setError(errorMessage(cause, 'Không lưu được khách hàng.'));
@@ -102,10 +112,10 @@ export default function CustomersPage({ canEdit = true }) {
       <span className="muted small" aria-live="polite">{t('Khách hàng')}: {customers.length}</span>
     </div>
     {error && <div className="notice error-state" role="alert">{t(error)}</div>}
-    {notice && <div className="notice success-state" role="status">{t(notice)}</div>}
+    {notice && <div className={`notice ${notice.key === 'customer.notice.phoneExists' ? 'warning-state' : 'success-state'}`} role="status">{t(notice)}</div>}
     <section className="panel">
       {loading ? <p className="muted" role="status">{t('Đang tải khách hàng…')}</p> : customers.length === 0 ? <div className="empty"><h3>{t('Chưa có khách hàng')}</h3><p>{query ? t('Thử từ khóa tìm kiếm khác.') : t('Khách hàng được tạo sẽ hiển thị tại đây.')}</p></div> :
-        <div className="table-wrap"><table><thead><tr><th>{t('Khách hàng')}</th><th>{t('Điện thoại')}</th><th>{t('Email')}</th><th>{t('Số đơn')}</th><th>{t('Tổng đã mua')}</th><th>{t('Thao tác')}</th></tr></thead><tbody>
+        <div className="table-wrap"><table><thead><tr><th>{t('Khách hàng')}</th><th>{t('Điện thoại')}</th><th>{t('Email')}</th><th title={t('customer.stats.hint')}>{t('Số đơn')}</th><th title={t('customer.stats.hint')}>{t('Tổng đã mua')}</th><th>{t('Thao tác')}</th></tr></thead><tbody>
           {customers.map((customer) => <tr key={customer.customerId}>
             <td><strong>{customer.fullName}</strong><small className="block muted">{customer.address || '—'}</small></td>
             <td>{customer.phone || '—'}</td><td>{customer.email || '—'}</td><td>{customer.orderCount ?? 0}</td>
@@ -119,7 +129,7 @@ export default function CustomersPage({ canEdit = true }) {
     {historyCustomer && <div className="overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && setHistoryCustomer(null)}>
       <section className="dialog customer-dialog" role="dialog" aria-modal="true" aria-labelledby="customer-history-title">
         <div className="section-title"><div><h2 id="customer-history-title">{t('Lịch sử mua')}</h2><p className="muted">{historyCustomer.fullName}</p></div><button className="link" onClick={() => setHistoryCustomer(null)} aria-label={t('Đóng')}>×</button></div>
-        {historyLoading ? <p className="muted" role="status">{t('Đang tải lịch sử…')}</p> : history.length === 0 ? <div className="empty"><h3>{t('Chưa có giao dịch')}</h3><p>{t('Giao dịch đã thanh toán hoặc đơn đặt trước hoàn tất sẽ hiển thị tại đây.')}</p></div> :
+        {historyLoading ? <p className="muted" role="status">{t('Đang tải lịch sử…')}</p> : history.length === 0 ? <div className="empty"><h3>{t('Chưa có giao dịch')}</h3><p>{t('customer.history.emptyHint')}</p></div> :
           <div className="table-wrap"><table><thead><tr><th>{t('Mã đơn')}</th><th>{t('Loại')}</th><th>{t('Chi nhánh')}</th><th>{t('Thời gian')}</th><th>{t('Trạng thái')}</th><th>{t('Giá trị')}</th></tr></thead><tbody>
             {history.map((item) => <tr key={`${item.type}-${item.id}`}><td>{item.orderCode}</td><td>{item.type === 'SALE' ? t('Bán hàng') : t('Đặt trước')}</td><td>{item.branchName}</td><td>{item.createdAt ? formatDateTime(new Date(item.createdAt)) : '—'}</td><td>{t(statusLabels[item.status] || item.status)}</td><td>{formatCurrency(Number(item.totalAmount || 0))}</td></tr>)}
           </tbody></table></div>}

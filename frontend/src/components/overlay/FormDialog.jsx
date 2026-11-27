@@ -2,12 +2,15 @@ import React, { createContext, useContext, useEffect, useId, useRef, useState } 
 import { Button } from '../ui.jsx';
 import { Dialog } from './Dialog.jsx';
 import { confirmAction } from './confirm.js';
+import { useLanguage } from '../../i18n/index.js';
 
 const FormContext = createContext({ errors: {} });
 
 export function FormField({ name, label, hint, required = false, children }) {
   const { errors } = useContext(FormContext);
-  const error = name ? errors[name] : '';
+  const { t } = useLanguage();
+  // Messages are kept in their source form and translated here, so they follow a language switch.
+  const error = name && errors[name] ? t(errors[name]) : '';
   const fieldId = name ? `dk-${name}` : undefined;
   const describedBy = error ? `${fieldId}-error` : hint ? `${fieldId}-hint` : undefined;
   const control = React.isValidElement(children)
@@ -76,6 +79,7 @@ export function FormDialog({
   confirmDiscard = true,
   footerExtra = null,
 }) {
+  const { t } = useLanguage();
   const formId = useId();
   const lock = useRef(false);
   const formRef = useRef(null);
@@ -138,8 +142,8 @@ export function FormDialog({
       footer={(
         <>
           {footerExtra}
-          <Button variant="outline" type="button" disabled={busy} onClick={requestClose}>{cancelLabel}</Button>
-          <Button variant="primary" type="submit" form={formId} loading={busy}>{busy ? 'Đang lưu…' : submitLabel}</Button>
+          <Button variant="outline" type="button" disabled={busy} onClick={requestClose}>{t(cancelLabel)}</Button>
+          <Button variant="primary" type="submit" form={formId} loading={busy}>{busy ? t('Đang lưu…') : t(submitLabel)}</Button>
         </>
       )}
     >
@@ -162,7 +166,7 @@ export function FormDialog({
             });
           }}
         >
-          {error && <div className="dk-form-error" role="alert">{error}</div>}
+          {error && <div className="dk-form-error" role="alert">{t(error)}</div>}
           {children}
         </form>
       </FormContext.Provider>

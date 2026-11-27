@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { errorMessage, useLanguage } from '../../i18n/index.js';
 import { Button, Select } from '../../components/ui.jsx';
-import { confirmAction } from '../../components/confirm.jsx';
+import { confirmAction } from '../../components/overlay/index.js';
 import { changePassword, getMyStore, getSessionSummary, revokeOtherSessions, updateMyStore, updateProfile } from './api.js';
 
 const EMAIL = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;

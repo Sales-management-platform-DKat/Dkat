@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ConfirmDialog } from './ConfirmDialog.jsx';
 import { dismissToast, subscribeToasts } from './toast.js';
-import { translate } from '../../i18n/index.js';
+import { errorMessage, useLanguage } from '../../i18n/index.js';
 
 export function Toaster() {
   const [items, setItems] = useState([]);
@@ -16,6 +16,9 @@ export function Toaster() {
 }
 
 function ToastCard({ item }) {
+  // Titles and messages stay in their source form (Vietnamese or a key) until here,
+  // so a toast that is already on screen follows a language switch.
+  const { t } = useLanguage();
   const [leaving, setLeaving] = useState(false);
   const paused = useRef(false);
   const remaining = useRef(item.duration);
@@ -52,28 +55,36 @@ function ToastCard({ item }) {
     >
       <span className="dk-toast-mark" aria-hidden="true">{item.kind === 'error' ? '!' : item.kind === 'warning' ? '!' : item.kind === 'info' ? 'i' : '✓'}</span>
       <div>
-        <strong>{item.title}{item.repeat > 1 && <span className="dk-toast-repeat"> ×{item.repeat}</span>}</strong>
-        <p>{item.message}</p>
+        <strong>{t(item.title)}{item.repeat > 1 && <span className="dk-toast-repeat"> ×{item.repeat}</span>}</strong>
+        <p>{t(item.message)}</p>
       </div>
-      <button type="button" aria-label={translate('Đóng thông báo')} onClick={close}>×</button>
+      <button type="button" aria-label={t('Đóng thông báo')} onClick={close}>×</button>
     </article>
   );
 }
+
+let requestSequence = 0;
 
 export function ConfirmHost() {
   const [request, setRequest] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const queue = useRef([]);
+  // Keyed by the last request: a new confirmation starts with an empty reason,
+  // while closing keeps the same instance so the exit animation still plays.
+  const shownId = useRef(0);
+  if (request) shownId.current = request.id;
 
   useEffect(() => {
     function onConfirm(event) {
+      // Each request gets its own id so the dialog (and a typed reason) starts fresh.
+      const next = { ...event.detail, id: ++requestSequence };
       setRequest((current) => {
         if (current) {
-          queue.current.push(event.detail);
+          queue.current.push(next);
           return current;
         }
-        return event.detail;
+        return next;
       });
     }
     window.addEventListener('dkat-confirm', onConfirm);
@@ -89,6 +100,7 @@ export function ConfirmHost() {
 
   return (
     <ConfirmDialog
+      key={shownId.current}
       open={!!request}
       busy={busy}
       error={error}
@@ -103,7 +115,7 @@ export function ConfirmHost() {
           settle(result);
         } catch (cause) {
           setBusy(false);
-          setError(cause?.message || 'Không thực hiện được thao tác. Dữ liệu bạn nhập vẫn được giữ.');
+          setError(errorMessage(cause, 'Không thực hiện được thao tác. Dữ liệu bạn nhập vẫn được giữ.'));
         }
       }}
     />

@@ -35,6 +35,34 @@ export function systemNote(note) {
   return note;
 }
 
+// Backend messages that carry values (codes, SKUs, counts). Each maps to a key in both
+// catalogs so the message shows in the active language; captured groups fill the key.
+const DYNAMIC_MESSAGES = [
+  [/^Mã chi nhánh '(?<code>.+)' đã tồn tại trong cửa hàng\.?$/, 'api.message.branchCodeExists'],
+  [/^Không thể ngừng hoạt động: chi nhánh còn (?<count>\d+) đơn đặt trước chưa hoàn tất\.?$/, 'api.message.branchHasOpenPreorders'],
+  [/^Tên đăng nhập '(?<username>.+)' đã được sử dụng\.?$/, 'api.message.usernameTaken'],
+  [/^File chỉ được chứa tối đa (?<count>\d+) dòng dữ liệu\.?$/, 'api.message.csvTooManyRows'],
+  [/^(?:Cần đúng các cột|Dòng tiêu đề cần các cột): (?<columns>.+)$/, 'api.message.csvColumns'],
+  [/^SKU "(?<sku>.+)" đang ngừng kinh doanh\.?$/, 'api.message.skuInactive'],
+  [/^SKU "(?<sku>.+)" đã có ở dòng (?<line>\d+); số lượng sẽ được cộng dồn\.?$/, 'api.message.skuRepeated'],
+  [/^SKU "(?<sku>.+)" chưa có trong cửa hàng; chỉ chủ cửa hàng hoặc quản lý được tạo sản phẩm mới\.?$/, 'api.message.skuUnknownNoRights'],
+  [/^SKU "(?<sku>.+)" chưa có trong cửa hàng\. Điền cột (?<columns>.+) để tạo sản phẩm mới\.?$/, 'api.message.skuUnknownFill'],
+  [/^SKU "(?<sku>.+)" đã được sử dụng, hãy chọn SKU khác\.?$/, 'api.message.skuTaken'],
+  [/^SKU "(?<sku>.+)" ở dòng (?<line>\d+) có tên, giá hoặc danh mục khác\.?$/, 'api.message.skuConflict'],
+  [/^Danh mục "(?<name>.+)" đang ngừng hoạt động\.?$/, 'api.message.categoryInactive'],
+  [/^SKU trùng dòng (?<line>\d+) trong file\.?$/, 'api.message.skuDuplicateLine'],
+  [/^Biến thể (?<id>\d+) còn đủ (?<count>\d+) hàng khả dụng\.?$/, 'api.message.variantInStock'],
+  [/^Chỉ gửi lại được thông báo FAILED \(hiện tại: (?<status>\w+)\)\.?$/, 'api.message.notificationNotFailed'],
+];
+
+function dynamicMessage(text, language) {
+  for (const [pattern, key] of DYNAMIC_MESSAGES) {
+    const match = text.match(pattern);
+    if (match) return translate(key, language, match.groups);
+  }
+  return null;
+}
+
 export function demoVariantLabel(value, t) {
   return demoVariantLabels.has(value) ? t(value) : value;
 }
@@ -52,8 +80,13 @@ export function translate(value, language = getLanguage(), values) {
     return new Intl.NumberFormat(LOCALES.en, { style: 'currency', currency: 'VND' }).format(amount);
   }
   const catalog = catalogs[language];
+  const known = catalog && Object.hasOwn(catalog, repaired);
+  if (!known && !values && !vietnameseByEnglish.has(repaired)) {
+    const dynamic = dynamicMessage(repaired, language);
+    if (dynamic) return dynamic;
+  }
   const fallback = language === 'vi' ? vietnameseByEnglish.get(repaired) ?? repaired : repaired;
-  const template = catalog && Object.hasOwn(catalog, repaired) ? catalog[repaired] : fallback;
+  const template = known ? catalog[repaired] : fallback;
   return values
     ? template.replace(/\{(\w+)\}/g, (placeholder, name) => Object.hasOwn(values, name) ? String(values[name]) : placeholder)
     : template;
@@ -64,9 +97,14 @@ export function errorMessage(error, fallback = 'Đã xảy ra sự cố khi xử
   if (error?.translation) return error.translation;
   const message = typeof error === 'string' ? error : error?.message;
   if (message && (Object.hasOwn(catalogs.en, message) || Object.hasOwn(catalogs.vi, message))) return message;
+  if (message && dynamicMessage(message, 'en')) return message;
   const code = error?.code;
   const key = `api.error.${code}`;
-  return Object.hasOwn(catalogs.en, key) ? key : fallback;
+  if (Object.hasOwn(catalogs.en, key)) return key;
+  // An ApiError message is already user-facing (lib/api-errors.js keeps raw server text
+  // out of it): keep the specific reason rather than replacing it with the fallback.
+  if (message && error?.name === 'ApiError' && /[À-ỹđĐ]/.test(message)) return message;
+  return fallback;
 }
 
 function repairMojibake(value) {

@@ -155,7 +155,7 @@ export default function ImportDialog({ branch, onClose, onImported, t }) {
         : <div className="notice error-state" role="alert">{t('File còn lỗi nên chưa thể nhập. Sửa các dòng tô đỏ (hoặc tải báo cáo lỗi), lưu file và chọn lại. Hệ thống không nhập một phần dữ liệu.')}</div>}
       {preview.duplicateOfImportAt && <label className="notice warning-state duplicate-confirm"><input type="checkbox" checked={confirmDuplicate} onChange={(event) => setConfirmDuplicate(event.target.checked)} />
         <span>{t('Dữ liệu giống hệt đã được nhập vào chi nhánh lúc')} <b>{new Date(preview.duplicateOfImportAt).toLocaleString('vi-VN')}</b>. {t('Đánh dấu nếu đây là một lô hàng mới và bạn muốn nhập thêm lần nữa.')}</span></label>}
-      {fileLevelErrors.map((issue) => <p key={issue.code + issue.line} className="dk-field-error" role="alert">{issue.message}</p>)}
+      {fileLevelErrors.map((issue) => <p key={issue.code + issue.line} className="dk-field-error" role="alert">{t(issue.message)}</p>)}
       {lines.length > 0 && <div className="table-wrap import-table"><table><thead><tr><th>{t('Dòng')}</th><th>SKU</th><th>{t('Trạng thái')}</th><th>{t('Sản phẩm')}</th><th>{t('Tồn hiện tại')}</th><th>{t('Nhập')}</th><th>{t('Tồn sau nhập')}</th><th>{t('Ghi chú / Lỗi')}</th></tr></thead><tbody>
         {lines.map((entry) => <tr key={entry.line} className={entry.errors.length ? 'row-error' : entry.warnings.length ? 'row-warning' : ''}>
           <td>{entry.line}</td>
@@ -165,7 +165,7 @@ export default function ImportDialog({ branch, onClose, onImported, t }) {
           <td>{entry.row?.quantityBefore ?? '—'}</td>
           <td>{entry.row ? `+${entry.row.quantity}` : '—'}</td>
           <td>{entry.row ? entry.row.quantityBefore + entry.row.quantity : '—'}</td>
-          <td>{entry.errors.map((issue) => <small key={issue.field + issue.code} className="block dk-field-error">{issue.message}</small>)}{entry.warnings.map((issue) => <small key={issue.code} className="block warning-text">{issue.message}</small>)}{!entry.errors.length && !entry.warnings.length && (entry.row?.note || '')}</td>
+          <td>{entry.errors.map((issue) => <small key={issue.field + issue.code} className="block dk-field-error">{t(issue.message)}</small>)}{entry.warnings.map((issue) => <small key={issue.code} className="block warning-text">{t(issue.message)}</small>)}{!entry.errors.length && !entry.warnings.length && (entry.row?.note || '')}</td>
         </tr>)}
       </tbody></table></div>}
     </div>}

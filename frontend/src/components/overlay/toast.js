@@ -29,10 +29,12 @@ export function subscribeToasts(listener) {
 }
 
 // duration: milliseconds; 0 keeps the toast until the user closes it.
+// message/title: text, a catalog key, or { key, values }; the Toaster translates them on render.
 export function pushToast({ message, kind = 'success', title, duration } = {}) {
-  const text = typeof message === 'string' ? message : friendlyMessage(message);
+  const text = typeof message === 'string' || typeof message?.key === 'string' ? message : friendlyMessage(message);
   const now = Date.now();
-  const same = items.find((item) => item.kind === kind && item.message === text && now - item.createdAt < DEDUPE_WINDOW_MS);
+  const signature = JSON.stringify(text);
+  const same = items.find((item) => item.kind === kind && JSON.stringify(item.message) === signature && now - item.createdAt < DEDUPE_WINDOW_MS);
   if (same) {
     // The same message again: restart its timer instead of stacking a copy.
     items = items.map((item) => item.id === same.id ? { ...item, createdAt: now, repeat: (item.repeat || 1) + 1 } : item);
@@ -68,7 +70,7 @@ export const notify = {
     title: error?.status === 403 ? 'Không có quyền' : error?.status === 0 || error?.status >= 500 ? 'Lỗi kết nối' : undefined,
     duration: error?.status === 0 || error?.status >= 500 ? 0 : undefined,
     ...options,
-    message: friendlyMessage(error, options.fallback),
+    message: typeof error?.key === 'string' ? error : friendlyMessage(error, options.fallback),
     kind: 'error',
   }),
 };
