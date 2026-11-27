@@ -47,7 +47,11 @@ const CODE_MESSAGES = {
   ORDER_NOT_PENDING: 'Đơn hàng không còn ở trạng thái chờ thanh toán.',
   DUPLICATE_SKU: 'SKU đã được sử dụng, hãy chọn SKU khác.',
   RATE_LIMITED: 'Bạn thao tác quá nhanh. Vui lòng thử lại sau ít phút.',
+  DATABASE_SCHEMA_OUTDATED: 'Cơ sở dữ liệu chưa được cập nhật cho phiên bản này. Vui lòng báo quản trị viên chạy migration.',
 };
+
+// 5xx codes whose own message is more useful than the generic "server error" text.
+const SERVER_CODES_WITH_MESSAGE = new Set(['DATABASE_SCHEMA_OUTDATED']);
 
 // Known English messages from older endpoints.
 const TEXT_MESSAGES = [
@@ -120,7 +124,8 @@ export function errorFromResponse(status, data) {
     const [name, text] = Object.entries(fieldErrors)[0];
     message = FIELD_LABELS[name] ? `${FIELD_LABELS[name]}: ${text}` : STATUS_MESSAGES[422];
   }
-  if (!message || status >= 500) message = STATUS_MESSAGES[status] || STATUS_MESSAGES[status >= 500 ? 500 : 400];
+  if (status >= 500 && SERVER_CODES_WITH_MESSAGE.has(code)) message = CODE_MESSAGES[code];
+  else if (!message || status >= 500) message = STATUS_MESSAGES[status] || STATUS_MESSAGES[status >= 500 ? 500 : 400];
   return new ApiError(message, { status, code, detail, fieldErrors });
 }
 

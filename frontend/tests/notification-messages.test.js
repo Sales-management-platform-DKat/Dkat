@@ -46,6 +46,14 @@ test('a specific API reason is kept instead of the generic fallback', () => {
   assert.ok(error instanceof ApiError);
 });
 
+test('an outdated database schema is not reported as a connection failure', () => {
+  const schema = errorFromResponse(503, { detail: { code: 'DATABASE_SCHEMA_OUTDATED', message: 'raw' } });
+  assert.match(schema.message, /chưa được cập nhật/);
+  assert.match(translate(schema.message, 'en'), /hasn't been updated/);
+  // Other 5xx keep the generic text (raw server text is never shown).
+  assert.match(errorFromResponse(503, { detail: 'boom' }).message, /Không thể kết nối/);
+});
+
 test('provider error codes become a reason staff can act on, in both languages', () => {
   const cases = {
     'NOT_CONFIGURED: thiếu ESMS_API_KEY': 'preorder.notification.error.notConfigured',

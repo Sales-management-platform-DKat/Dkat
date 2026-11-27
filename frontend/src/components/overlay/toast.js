@@ -67,7 +67,8 @@ export const notify = {
   warning: (message, options = {}) => pushToast({ ...options, message, kind: 'warning' }),
   // Server-side failures stay until dismissed so they are not missed.
   error: (error, options = {}) => pushToast({
-    title: error?.status === 403 ? 'Không có quyền' : error?.status === 0 || error?.status >= 500 ? 'Lỗi kết nối' : undefined,
+    title: error?.status === 403 ? 'Không có quyền' : error?.code === 'DATABASE_SCHEMA_OUTDATED' ? 'Hệ thống cần cập nhật'
+      : error?.status === 0 || error?.status >= 500 ? 'Lỗi kết nối' : undefined,
     duration: error?.status === 0 || error?.status >= 500 ? 0 : undefined,
     ...options,
     message: typeof error?.key === 'string' ? error : friendlyMessage(error, options.fallback),

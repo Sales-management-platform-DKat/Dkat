@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.exc import SQLAlchemyError
+from app.core.db_errors import database_error
 
 from app.core.config import settings
 from app.core.mailer import mask_email
@@ -36,8 +37,8 @@ def _check_branch(actor: Actor, branch_id: int, store_id: int, not_found_code: s
     try:
         with engine.connect() as db:
             require_branch_access(db, actor, branch_id)
-    except SQLAlchemyError:
-        raise HTTPException(503, "Database unavailable") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc) from None
 
 
 @router.get("/preorders/{preorder_id}/notifications")

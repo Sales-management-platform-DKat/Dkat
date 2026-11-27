@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import SQLAlchemyError
+from app.core.db_errors import database_error
 
 from app.core.permissions import Actor, require_auth, require_owner_or_manager
 from app.db.session import engine
@@ -25,9 +26,8 @@ def create_order(order: SalesOrderInput, actor: Reader) -> PendingSalesOrder:
     try:
         with engine.begin() as db:
             return create_sales_order(db, actor, order)
-    except SQLAlchemyError:
-        logger.exception("Sales order creation failed")
-        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc, "Sales order creation failed", logger) from None
 
 
 @router.get("")
@@ -35,9 +35,8 @@ def list_orders(actor: Reader, filters: Annotated[SalesOrderFilters, Query()]) -
     try:
         with engine.connect() as db:
             return list_sales_orders(db, actor, filters)
-    except SQLAlchemyError:
-        logger.exception("Sales order list failed")
-        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc, "Sales order list failed", logger) from None
 
 
 @router.get("/{order_id}")
@@ -45,9 +44,8 @@ def get_order(order_id: SalesId, actor: Reader) -> SalesOrderDetail:
     try:
         with engine.connect() as db:
             return get_sales_order(db, actor, order_id)
-    except SQLAlchemyError:
-        logger.exception("Sales order detail failed")
-        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc, "Sales order detail failed", logger) from None
 
 
 @router.post("/{order_id}/cancel")
@@ -55,9 +53,8 @@ def cancel_order(order_id: SalesId, data: CancelOrderInput, actor: Reader) -> Sa
     try:
         with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
             return cancel_sales_order(db, actor, order_id, data.reason)
-    except SQLAlchemyError:
-        logger.exception("Sales order cancellation failed")
-        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc, "Sales order cancellation failed", logger) from None
 
 
 @router.post("/{order_id}/confirm-payment")
@@ -65,9 +62,8 @@ def confirm_order_payment(order_id: SalesId, data: ConfirmPaymentInput, actor: R
     try:
         with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
             return confirm_payment(db, actor, order_id, data)
-    except SQLAlchemyError:
-        logger.exception("Sales order payment failed")
-        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc, "Sales order payment failed", logger) from None
 
 
 @router.post("/{order_id}/refund")
@@ -75,6 +71,5 @@ def refund_order(order_id: SalesId, data: RefundOrderInput, actor: RefundActor) 
     try:
         with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
             return refund_sales_order(db, actor, order_id, data.reason)
-    except SQLAlchemyError:
-        logger.exception("Sales order refund failed")
-        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc, "Sales order refund failed", logger) from None
