@@ -19,6 +19,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
 from sqlalchemy import bindparam, text
 from sqlalchemy.exc import SQLAlchemyError
+from app.core.db_errors import database_error
 
 from app.db.session import engine
 
@@ -84,8 +85,8 @@ def public_branches(request: Request, store_id: StoreId) -> list[PublicBranch]:
     try:
         with engine.connect() as db:
             return [PublicBranch(**b) for b in _branches(db, store_id)]
-    except SQLAlchemyError:
-        raise HTTPException(503, "Database unavailable") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc) from None
 
 
 @router.get("/products")
@@ -126,8 +127,8 @@ def public_products(
                     bindparam("branches", expanding=True), bindparam("variants", expanding=True)),
                     {"branches": branch_ids, "variants": variant_ids}).mappings()
                 available = {(s["branch_id"], s["variant_id"]): int(s["available"]) for s in stock}
-    except SQLAlchemyError:
-        raise HTTPException(503, "Database unavailable") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc) from None
 
     products: dict[int, PublicProduct] = {}
     for r in rows:

@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import SQLAlchemyError
+from app.core.db_errors import database_error
 
 from app.core.permissions import Actor, require_auth
 from app.db.session import engine
@@ -27,9 +28,8 @@ def get_preorders(actor: Reader, filters: Annotated[PreorderFilters, Query()]) -
     try:
         with engine.connect() as db:
             return list_preorders(db, actor, filters)
-    except SQLAlchemyError:
-        logger.exception("Preorder list failed")
-        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc, "Preorder list failed", logger) from None
 
 
 @router.get("/{preorder_id}")
@@ -37,9 +37,8 @@ def get_preorder_detail(preorder_id: PreorderRecordId, actor: Reader) -> Preorde
     try:
         with engine.connect() as db:
             return get_preorder(db, actor, preorder_id)
-    except SQLAlchemyError:
-        logger.exception("Preorder detail failed")
-        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc, "Preorder detail failed", logger) from None
 
 
 @router.post("/{preorder_id}/confirm-payment")
@@ -47,9 +46,8 @@ def confirm_payment(preorder_id: PreorderRecordId, data: ConfirmPaymentInput, ac
     try:
         with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
             return confirm_preorder_payment(db, actor, preorder_id, data)
-    except SQLAlchemyError:
-        logger.exception("Preorder payment failed")
-        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc, "Preorder payment failed", logger) from None
 
 
 @router.put("/{preorder_id}/fulfillment")
@@ -57,9 +55,8 @@ def set_fulfillment(preorder_id: PreorderRecordId, data: FulfillmentInput, actor
     try:
         with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
             return set_preorder_fulfillment(db, actor, preorder_id, data)
-    except SQLAlchemyError:
-        logger.exception("Preorder fulfillment choice failed")
-        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc, "Preorder fulfillment choice failed", logger) from None
 
 
 @router.post("/{preorder_id}/fulfill")
@@ -67,9 +64,8 @@ def fulfill(preorder_id: PreorderRecordId, actor: Reader, data: FulfillInput | N
     try:
         with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
             return fulfill_preorder(db, actor, preorder_id, data.paymentMethod if data else None)
-    except SQLAlchemyError:
-        logger.exception("Preorder fulfillment failed")
-        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc, "Preorder fulfillment failed", logger) from None
 
 
 @router.post("/{preorder_id}/cancel")

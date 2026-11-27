@@ -9,7 +9,9 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import CORS_ORIGINS, settings
+from app.core.db_errors import SCHEMA_OUTDATED, is_schema_error
 from app.db.base import Base
+from app.db.schema_check import find_schema_drift, missing_scripts
 from app.db.session import engine
 from app.modules.admin.router import router as admin_router
 from app.modules.auth.router import router as auth_router
@@ -31,9 +33,28 @@ from app.modules.users.router import router as users_router
 from app.workers.preorder_expiry import run_preorder_expiry
 
 
+_startup_logger = logging.getLogger("app.startup")
+
+
+def check_schema_on_startup() -> None:
+    try:
+        with engine.connect() as db:
+            missing = find_schema_drift(db)
+    except SQLAlchemyError:
+        _startup_logger.exception("Could not check the database schema")
+        return
+    if missing:
+        _startup_logger.error(
+            "Database schema is behind the code. Missing: %s. Apply %s (python -m scripts.db_migrate).",
+            ", ".join(item.describe() for item in missing), ", ".join(missing_scripts(missing)),
+        )
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    # create_all() never alters an existing table: report a schema that lags behind database/.
+    check_schema_on_startup()
     # PBI 140: expire READY / NOTIFIED pre-orders past their hold deadline and hand the stock to the
     # next customers (FIFO). Lost in merge 9cc2512, restored for BUG-006.
     stop = asyncio.Event()
@@ -68,6 +89,8 @@ _error_logger = logging.getLogger("app.errors")
 async def database_error_handler(request, exc: SQLAlchemyError):
     # Full details (SQL, parameters, driver message) stay in the server log only.
     _error_logger.exception("Database error on %s %s", request.method, request.url.path, exc_info=exc)
+    if is_schema_error(exc):
+        return JSONResponse(status_code=503, content={"detail": SCHEMA_OUTDATED})
     return JSONResponse(
         status_code=503,
         content={"detail": "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau."},
@@ -106,11 +129,16 @@ def health():
     try:
         with engine.connect() as db:
             db.execute(text("SELECT user_id FROM users LIMIT 0"))
+            missing = find_schema_drift(db)
     except SQLAlchemyError:
         return JSONResponse(
             status_code=503,
             content={"status": "error", "database": "unavailable_or_incompatible"},
         )
+    if missing:
+        # Still 200: most of the app works, and failing the health check could make the
+        # platform restart or roll back an instance that a migration would fix.
+        return {"status": "degraded", "database": "schema_outdated", "pendingMigrations": missing_scripts(missing)}
     return {"status": "ok", "database": "up"}
 
 

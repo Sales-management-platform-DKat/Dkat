@@ -3,6 +3,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from sqlalchemy.exc import SQLAlchemyError
+from app.core.db_errors import database_error
 from sqlalchemy.orm import Session
 
 from app.core import config
@@ -37,9 +38,8 @@ def record_stock_change(actor: Actor, data: StockImportInput | StocktakeInput) -
         # Read the latest reservation totals after acquiring the inventory locks.
         with engine.execution_options(isolation_level="READ COMMITTED").begin() as db:
             return change_stock(db, actor, data)
-    except SQLAlchemyError:
-        logger.exception("Stock change transaction failed")
-        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc, "Stock change transaction failed", logger) from None
 
 
 @router.post("/import", status_code=201)
@@ -68,9 +68,8 @@ def import_inventory_csv(
             result = import_stock_csv(
                 db, actor, branch_id, content, dry_run, filename=file.filename, allow_duplicate=allow_duplicate,
             )
-    except SQLAlchemyError:
-        logger.exception("Stock CSV transaction failed")
-        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc, "Stock CSV transaction failed", logger) from None
     if not dry_run:
         response.status_code = 201
         process_committed_stock_import(branch_id, [item.variantId for item in result.items])
@@ -108,8 +107,8 @@ def get_inventory(
             db, actor.store_id, branches, keyword=keyword, low_stock=low_stock,
             limit=size, offset=(page - 1) * size,
         )
-    except SQLAlchemyError:
-        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc, log=logger) from None
 
 
 @router.get("/movements")
@@ -124,8 +123,8 @@ def get_inventory_movements(
             require_branch_access(db, actor, filters.branchId)
             branches = [filters.branchId]
         return list_inventory_movements(db, actor.store_id, branches, filters)
-    except SQLAlchemyError:
-        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc, log=logger) from None
 
 
 @router.get("/{branch_id}/{variant_id}")
@@ -136,8 +135,8 @@ def get_inventory_item(
         db = session.connection()
         require_branch_access(db, actor, branch_id)
         rows = list_inventory(db, actor.store_id, [branch_id], variant_id=variant_id, limit=1)
-    except SQLAlchemyError:
-        raise HTTPException(503, "Không thể kết nối cơ sở dữ liệu. Vui lòng thử lại sau.") from None
+    except SQLAlchemyError as exc:
+        raise database_error(exc, log=logger) from None
     if not rows:
         raise HTTPException(404, "Inventory item not found")
     return rows[0]

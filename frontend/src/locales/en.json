@@ -1687,5 +1687,7 @@
   "Không thể khóa chủ cửa hàng duy nhất đang hoạt động": "You can't lock the only active store owner.",
   "Chỉ được phân công vào chi nhánh bạn quản lý": "You can only assign people to branches you manage.",
   "Chủ cửa hàng luôn được truy cập mọi chi nhánh, không cần phân công": "The store owner can always access every branch; no assignment is needed.",
-  "Hãy dùng chức năng đổi mật khẩu (/auth/change-password)": "Use Change password to update the password."
+  "Hãy dùng chức năng đổi mật khẩu (/auth/change-password)": "Use Change password to update the password.",
+  "Cơ sở dữ liệu chưa được cập nhật cho phiên bản này. Vui lòng báo quản trị viên chạy migration.": "The database hasn't been updated for this version yet. Ask your administrator to run the migration.",
+  "Hệ thống cần cập nhật": "System update required"
 }
